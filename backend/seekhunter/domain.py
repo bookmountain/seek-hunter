@@ -7,7 +7,7 @@ from selectolax.lexbor import LexborHTMLParser
 WORK_TYPES = ("full_time", "part_time", "contract", "casual", "unknown")
 FLEXIBLE_WORK_TYPES = {"part_time", "contract", "casual"}
 
-_COMPANY_SUFFIXES = re.compile(r"\b(pty|ltd|limited|inc|group|australia|au)\b")
+_COMPANY_SUFFIXES = re.compile(r"\b(pty|ltd|limited|inc|group|australia|au|sa|nsw|vic|qld|wa|tas|act|nt)\b")
 
 
 def normalize_work_type(label: str | None) -> str:

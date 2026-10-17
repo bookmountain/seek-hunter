@@ -81,3 +81,9 @@ def test_negation_does_not_leak_across_bullets_or_sentences(j, reason):
 def test_genuine_negation_still_suppresses_exclusion(j):
     r = evaluate_exclusions(j, AppSettings())
     assert not r.excluded, r.reasons
+
+
+def test_any_bank_employer_excluded_but_not_inside_words():
+    assert "bank" in evaluate_exclusions(job(company="People First Bank"), AppSettings()).reasons
+    assert "bank" in evaluate_exclusions(job(company="Some Regional Bank Ltd"), AppSettings()).reasons
+    assert not evaluate_exclusions(job(company="Peoplebank"), AppSettings()).excluded

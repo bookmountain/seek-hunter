@@ -45,3 +45,8 @@ def test_jobdata_filter_text_uses_lines_and_falls_back_to_teaser():
     job2 = JobData(source="seek", external_id="2", title="Dev", company="A", location="",
                    work_type="unknown", url="u", teaser="short")
     assert job2.filter_text == "short"
+
+
+def test_dedupe_key_strips_state_suffix():
+    key = dedupe_key("Azure Cloud Developer", "Peoplebank Australia SA")
+    assert key == dedupe_key("Azure Cloud Developer", "Peoplebank")

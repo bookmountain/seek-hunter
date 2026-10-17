@@ -25,6 +25,7 @@ class AppSettings(BaseModel):
         "St George Bank", "Bank of Melbourne", "Macquarie Group", "Macquarie Bank", "Bendigo Bank",
         "Bendigo and Adelaide Bank", "Adelaide Bank", "BOQ", "Bank of Queensland", "ING",
         "Suncorp Bank", "HSBC", "Citi", "Bankwest", "People's Choice", "Beyond Bank",
+        "People First Bank", "Heritage Bank", "Bank",
     ])
     employer_allowlist: list[str] = Field(default_factory=list)
     clearance_patterns: list[str] = Field(default_factory=lambda: [
