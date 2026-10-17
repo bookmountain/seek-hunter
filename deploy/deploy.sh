@@ -3,7 +3,7 @@ set -euo pipefail
 cd /opt/seek-hunter/app/backend
 /root/.local/bin/uv sync --frozen --no-dev
 install -m 755 /opt/seek-hunter/app/deploy/bin/seekhunter-api /usr/local/bin/seekhunter-api
-openclaw skills install /opt/seek-hunter/app/openclaw-skill/seekhunter --as seekhunter --force \
+openclaw skills install /opt/seek-hunter/app/openclaw-skill/seekhunter --as seekhunter --force --agent main \
   --acknowledge-install-policy-warning || echo "WARN: openclaw skill install failed"
 install -m 644 /opt/seek-hunter/app/deploy/systemd/*.service /opt/seek-hunter/app/deploy/systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
