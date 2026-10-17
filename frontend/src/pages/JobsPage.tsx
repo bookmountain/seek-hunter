@@ -126,8 +126,8 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
       >
         <div className="paper sticky top-0 z-10 border-b border-ink px-5 py-3 lg:top-0 lg:px-6">
           <div className="flex items-baseline justify-between gap-4 pb-3">
-            <h1 className="display text-[26px] leading-none font-semibold tracking-[-0.01em]">
-              {view === "excluded" ? "Excluded" : "Situations vacant"}
+            <h1 className="display text-[28px] leading-none">
+              {view === "excluded" ? "Excluded" : "Jobs"}
             </h1>
             <span className="num text-[12px] text-ink-muted" aria-live="polite">
               {isLoading ? "Loading…" : `${data.length} ${data.length === 1 ? "job" : "jobs"}`}
@@ -148,9 +148,9 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
           </div>
         </div>
         {error ? (
-          <p className="px-6 py-16 text-center text-signal">{errMsg(error)}</p>
+          <p className="px-6 py-16 text-center text-ink">{errMsg(error)}</p>
         ) : isLoading ? (
-          <p className="kicker px-6 py-16 text-center text-ink-muted">Setting type…</p>
+          <p className="kicker px-6 py-16 text-center text-ink-muted">Loading…</p>
         ) : (
           <JobList
             jobs={data}
@@ -171,7 +171,7 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
         {selectedId !== null ? (
           <>
             <div className="paper sticky top-0 z-10 border-b border-ink px-5 py-2.5 sm:px-8 lg:hidden">
-              <button type="button" onClick={close} className="kicker py-1 text-ink hover:text-signal">
+              <button type="button" onClick={close} className="kicker py-1 text-blue hover:underline">
                 <span aria-hidden>←</span> Back to list
               </button>
             </div>

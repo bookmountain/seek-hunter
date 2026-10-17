@@ -87,7 +87,7 @@ export function SettingsPage() {
   return (
     <Page>
       <PageHead
-        kicker="House rules"
+        kicker="Configuration"
         title="Settings"
         dek="How jobs are filtered, scored and announced. Changes apply from the next run."
         actions={

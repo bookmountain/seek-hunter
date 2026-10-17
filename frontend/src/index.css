@@ -1,8 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/fraunces/full.css";
-@import "@fontsource-variable/fraunces/full-italic.css";
+@import "@fontsource-variable/archivo/wdth.css";
 @import "@fontsource/ibm-plex-sans/400.css";
 @import "@fontsource/ibm-plex-sans/400-italic.css";
 @import "@fontsource/ibm-plex-sans/500.css";
@@ -15,19 +14,21 @@
 @theme inline {
   --font-sans: "IBM Plex Sans", ui-sans-serif, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --font-display: "Fraunces Variable", Georgia, serif;
+  --font-display: "Archivo Variable", "IBM Plex Sans", sans-serif;
   --font-heading: var(--font-display);
 
   --color-paper: var(--paper);
-  --color-paper-deep: var(--paper-deep);
-  --color-paper-lift: var(--paper-lift);
+  --color-chip: var(--chip);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-mark: var(--mark);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-ink-faint: var(--ink-faint);
+  --color-ink-low: var(--ink-low);
   --color-rule: var(--rule);
   --color-rule-strong: var(--rule-strong);
-  --color-signal: var(--signal);
-  --color-olive: var(--olive);
+  --color-blue: var(--blue);
 
   /* shadcn token names, remapped onto the newsprint palette */
   --color-ring: var(--ring);
@@ -59,39 +60,38 @@
 }
 
 :root {
-  --paper: #f3efe6;
-  --paper-deep: #ebe5d8;
-  --paper-lift: #f8f5ee;
-  --ink: #161412;
-  --ink-muted: #5c564d;
-  --ink-faint: #8a8276;
-  --rule: rgb(22 20 18 / 0.15);
-  --rule-strong: rgb(22 20 18 / 0.55);
-  --signal: #b83c0b;
-  --olive: #4b5a1e;
+  --paper: #ffffff;
+  --chip: #f2f2f2;
+  --hover: #fafafa;
+  --selected: #f5f7ff;
+  --mark: #e6edff;
+  --ink: #0a0a0a;
+  --ink-muted: #6b6b6b; /* 5.3:1 on white */
+  --ink-faint: #a3a3a3; /* decorative separators only (2.5:1) */
+  --ink-low: #8c8c8c; /* low scores, placeholders: 3.4:1, passes AA for large text */
+  --rule: #e5e5e5;
+  --rule-strong: #0a0a0a;
+  --blue: #0047ff; /* 6.6:1 on white */
 
   --background: var(--paper);
   --foreground: var(--ink);
   --card: var(--paper);
   --card-foreground: var(--ink);
-  --popover: var(--paper-lift);
+  --popover: var(--paper);
   --popover-foreground: var(--ink);
   --primary: var(--ink);
   --primary-foreground: var(--paper);
-  --secondary: var(--paper-deep);
+  --secondary: var(--chip);
   --secondary-foreground: var(--ink);
-  --muted: var(--paper-deep);
+  --muted: var(--chip);
   --muted-foreground: var(--ink-muted);
-  --accent: var(--paper-deep);
+  --accent: var(--chip);
   --accent-foreground: var(--ink);
-  --destructive: var(--signal);
+  --destructive: var(--ink);
   --border: var(--rule);
-  --input: rgb(22 20 18 / 0.3);
-  --ring: var(--signal);
+  --input: #c4c4c4;
+  --ring: var(--blue);
   --radius: 0px;
-
-  /* Paper grain: tiny fractal-noise SVG, tinted warm, very low opacity. */
-  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .28 0 0 0 0 .18 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
 }
 
 @layer base {
@@ -107,15 +107,13 @@
   body {
     @apply text-ink;
     background-color: var(--paper);
-    background-image: var(--grain);
-    background-attachment: fixed;
     font-feature-settings: "kern", "liga";
   }
   ::selection {
-    background: rgb(184 60 11 / 0.2);
+    background: var(--mark);
   }
   :focus-visible {
-    outline: 2px solid var(--signal);
+    outline: 2px solid var(--blue);
     outline-offset: 2px;
   }
   input:focus-visible,
@@ -126,11 +124,9 @@
 }
 
 @layer components {
-  /* Opaque paper surface that lines up with the body grain (for sticky bars). */
+  /* Opaque surface for sticky bars. */
   .paper {
     background-color: var(--paper);
-    background-image: var(--grain);
-    background-attachment: fixed;
   }
 
   .kicker {
@@ -142,14 +138,17 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Tight, bold, slightly condensed grotesk for headings and the wordmark. */
   .display {
     font-family: var(--font-display);
-    font-variation-settings: "opsz" 72, "SOFT" 30, "WONK" 0;
+    font-stretch: 88%;
+    font-weight: 750;
+    letter-spacing: -0.025em;
   }
 
   /* Hairline field used by inputs, selects, textareas. */
   .field {
-    @apply rounded-none border border-input bg-paper-lift/60 text-ink transition-colors placeholder:text-ink-faint hover:border-rule-strong focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-signal;
+    @apply rounded-none border border-input bg-paper text-ink transition-colors placeholder:text-ink-low hover:border-ink focus-visible:border-blue focus-visible:outline-1 focus-visible:outline-blue;
   }
 
   /* Job description as readable article text. */
@@ -168,8 +167,9 @@
   .article h3,
   .article h4 {
     font-family: var(--font-display);
-    font-variation-settings: "opsz" 36, "SOFT" 20;
-    font-weight: 600;
+    font-stretch: 92%;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     line-height: 1.25;
     margin-top: 1.6em;
   }
@@ -215,22 +215,21 @@
   }
   .article mark {
     color: inherit;
-    background: linear-gradient(transparent 62%, rgb(184 60 11 / 0.16) 62%);
-    box-shadow: inset 0 -1px 0 rgb(184 60 11 / 0.7);
-    padding: 0 1px;
+    background: var(--mark);
+    padding: 0 2px;
   }
 
   /* Single page-load reveal for list rows. */
   .reveal {
-    animation: reveal 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-    animation-delay: calc(min(var(--i, 0), 14) * 28ms);
+    animation: reveal 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: calc(min(var(--i, 0), 12) * 18ms);
   }
 }
 
 @keyframes reveal {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(2px);
   }
   to {
     opacity: 1;

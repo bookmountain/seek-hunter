@@ -5,12 +5,12 @@ export type ScoreBand = "high" | "mid" | "low";
 export const scoreBand = (score: number): ScoreBand => (score >= 75 ? "high" : score >= 55 ? "mid" : "low");
 
 const BAND_CLASS: Record<ScoreBand, string> = {
-  high: "text-signal",
+  high: "text-blue",
   mid: "text-ink",
-  low: "text-ink-faint",
+  low: "text-ink-low",
 };
 
-/** Tabular mono numeral coloured by band: >=75 signal red, 55-74 ink, <55 faint. */
+/** Tabular mono numeral coloured by band: >=75 accent blue, 55-74 ink, <55 grey. */
 export function Score({ score, className }: { score: number; className?: string }) {
   const band = scoreBand(score);
   return (

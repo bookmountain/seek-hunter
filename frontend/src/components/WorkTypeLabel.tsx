@@ -2,21 +2,21 @@ import { FLEXIBLE_TYPES, WORK_TYPE_CAPS } from "@/lib/format";
 import type { WorkType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-/** Small-caps mono label. Flexible work (visa-friendly) is olive and underlined; full-time is plain ink. */
+/** Small-caps mono label. Flexible work (visa-friendly) is a blue outlined tag; full-time is plain ink. */
 export function WorkTypeLabel({ type, hours, className }: { type: WorkType; hours?: boolean; className?: string }) {
   const flexible = FLEXIBLE_TYPES.has(type);
   return (
-    <span className={cn("inline-flex flex-wrap items-baseline gap-x-2 gap-y-1", className)}>
+    <span className={cn("inline-flex flex-wrap items-center gap-x-1.5 gap-y-1", className)}>
       <span
         className={cn(
-          "kicker whitespace-nowrap",
-          flexible ? "text-olive underline decoration-olive/70 decoration-1 underline-offset-[3px]" : type === "unknown" ? "text-ink-faint" : "text-ink",
+          "kicker border px-1.5 py-[2px] leading-none whitespace-nowrap",
+          flexible ? "border-blue text-blue" : type === "unknown" ? "border-transparent text-ink-muted" : "border-transparent text-ink",
         )}
       >
         {WORK_TYPE_CAPS[type]}
       </span>
       {hours && (
-        <span className="kicker whitespace-nowrap text-signal" title="Stated hours may exceed the visa work limit">
+        <span className="kicker bg-chip px-1.5 py-[3px] leading-none whitespace-nowrap text-ink" title="Stated hours may exceed the visa work limit">
           Hours?
         </span>
       )}

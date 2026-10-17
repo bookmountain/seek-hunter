@@ -31,12 +31,12 @@ export function DetailEmpty({ count }: { count: number }) {
   return (
     <div className="flex h-full min-h-[60vh] items-center justify-center px-10">
       <div className="max-w-sm text-center">
-        <div className="mx-auto mb-6 h-px w-16 bg-ink" />
-        <p className="display text-[28px] leading-tight font-light text-ink italic">Pick an advertisement from the column.</p>
+        <div aria-hidden className="mx-auto mb-6 size-3 bg-blue" />
+        <p className="display text-[28px] leading-tight text-ink">Select a job.</p>
         <p className="mt-4 text-sm text-ink-muted">
           {count} listed. The full ad, its score and your notes open here.
         </p>
-        <p className="kicker mt-6 text-ink-faint">
+        <p className="kicker mt-6 text-ink-muted">
           <kbd className="font-mono">↑</kbd> <kbd className="font-mono">↓</kbd> to browse · <kbd className="font-mono">Esc</kbd> to clear
         </p>
       </div>
@@ -103,8 +103,7 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
 
         <h1
           id="job-title"
-          className="display mt-3 text-[30px] leading-[1.08] font-semibold tracking-[-0.015em] text-balance sm:text-[36px]"
-          style={{ fontVariationSettings: '"opsz" 144, "SOFT" 40, "WONK" 0' }}
+          className="display mt-3 text-[30px] leading-[1.04] text-balance sm:text-[38px]"
         >
           {view.title}
         </h1>
@@ -122,13 +121,13 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
         </p>
 
         {/* Score ledger */}
-        <div className="mt-6 grid grid-cols-[auto_1fr] items-end gap-x-6 border-y border-ink py-4">
+        <div className="mt-6 grid grid-cols-[auto_1fr] items-end gap-x-6 border-y-2 border-ink py-4">
           <Score score={view.final_score} className="text-[56px]" />
           <dl className="num grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 pb-1 text-[12.5px]">
             <dt className="kicker self-center text-ink-muted">Rules</dt>
             <dd>{view.rule_score}</dd>
             <dt className="kicker self-center text-ink-muted">AI</dt>
-            <dd>{view.llm_score ?? <span className="text-ink-faint">not scored</span>}</dd>
+            <dd>{view.llm_score ?? <span className="text-ink-muted">not scored</span>}</dd>
             <dt className="kicker self-center text-ink-muted">Type</dt>
             <dd>
               <WorkTypeLabel type={view.work_type} hours={view.flags.includes("hours")} />
@@ -137,25 +136,20 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
         </div>
 
         {view.llm_note && (
-          <blockquote className="mt-6 border-l-2 border-signal pl-5">
-            <p
-              className="display text-[19px] leading-snug text-ink italic"
-              style={{ fontVariationSettings: '"opsz" 36, "SOFT" 100, "WONK" 1' }}
-            >
-              {view.llm_note}
-            </p>
-            <footer className="kicker mt-2 text-ink-muted">AI reviewer</footer>
+          <blockquote className="mt-6 border-l-2 border-blue pl-4">
+            <p className="kicker text-blue">AI</p>
+            <p className="mt-1.5 text-[16px] leading-relaxed text-ink">{view.llm_note}</p>
           </blockquote>
         )}
 
         {view.excluded && (
-          <section className="mt-6 border border-signal/50 bg-signal/[0.04] p-4" aria-label="Exclusion">
-            <p className="kicker text-signal">Excluded</p>
+          <section className="mt-6 border border-ink p-4" aria-label="Exclusion">
+            <p className="kicker text-ink">Excluded</p>
             <ul className="mt-2 space-y-2 text-sm">
               {view.reasons.map((reason) => (
                 <li key={reason}>
-                  <span className="kicker mr-2 text-signal">{reason}</span>
-                  {view.snippets[reason] && <span className="text-ink-muted italic">…{view.snippets[reason]}…</span>}
+                  <span className="kicker mr-2 bg-chip px-1.5 py-[3px] text-ink">{reason}</span>
+                  {view.snippets[reason] && <span className="text-ink-muted">…{view.snippets[reason]}…</span>}
                 </li>
               ))}
             </ul>
@@ -184,7 +178,7 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
           <Button render={<a href={view.url} target="_blank" rel="noreferrer" />}>
             Open on {sourceName(view.source)} <span aria-hidden>↗</span>
           </Button>
-          <div role="group" aria-label="Status" className="inline-flex border border-rule-strong">
+          <div role="group" aria-label="Status" className="inline-flex border border-ink">
             {STATUSES.map((s, i) => {
               const active = view.status === s.value;
               return (
@@ -195,8 +189,8 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
                   onClick={() => patch.mutate({ status: s.value })}
                   className={cn(
                     "h-9 px-3 font-mono text-[11px] font-medium tracking-[0.1em] uppercase transition-colors",
-                    i > 0 && "border-l border-rule-strong",
-                    active ? "bg-ink text-paper" : "text-ink-muted hover:bg-ink/[0.05] hover:text-ink",
+                    i > 0 && "border-l border-ink",
+                    active ? "bg-ink text-white" : "text-ink hover:bg-hover hover:text-blue",
                   )}
                 >
                   {s.label}
@@ -224,15 +218,14 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
 
         {/* Section divider: the ad itself */}
         <div className="mt-10 mb-6 flex items-center gap-4" aria-hidden>
-          <span className="h-px flex-1 bg-ink" />
-          <span className="kicker text-ink">The advertisement</span>
-          <span className="h-px flex-1 bg-ink" />
+          <span className="kicker text-ink">Advertisement</span>
+          <span className="h-0.5 flex-1 bg-ink" />
         </div>
 
         {body ? (
           <div className="article" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlight(body, view.matched_skills)) }} />
         ) : (
-          <p className="text-sm text-ink-muted italic">{data ? "No description captured." : "Loading description…"}</p>
+          <p className="text-sm text-ink-muted">{data ? "No description captured." : "Loading description…"}</p>
         )}
       </div>
     </article>

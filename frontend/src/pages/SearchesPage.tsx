@@ -19,7 +19,7 @@ function toggle<T>(list: T[], v: T): T[] {
 }
 
 /** Square small-caps toggle chip. */
-function Chip({ on, onClick, children, tone = "ink" }: { on: boolean; onClick: () => void; children: React.ReactNode; tone?: "ink" | "olive" }) {
+function Chip({ on, onClick, children, tone = "ink" }: { on: boolean; onClick: () => void; children: React.ReactNode; tone?: "ink" | "blue" }) {
   return (
     <button
       type="button"
@@ -28,13 +28,13 @@ function Chip({ on, onClick, children, tone = "ink" }: { on: boolean; onClick: (
       className={cn(
         "inline-flex h-8 items-center gap-1.5 border px-2.5 font-mono text-[11px] font-medium tracking-[0.1em] whitespace-nowrap uppercase transition-colors",
         on
-          ? tone === "olive"
-            ? "border-olive bg-olive/[0.08] text-olive"
-            : "border-ink bg-ink/[0.06] text-ink"
-          : "border-rule text-ink-faint hover:border-rule-strong hover:text-ink",
+          ? tone === "blue"
+            ? "border-blue bg-selected text-blue"
+            : "border-ink bg-chip text-ink"
+          : "border-input text-ink-muted hover:border-ink hover:text-ink",
       )}
     >
-      <span aria-hidden className={cn("size-[7px]", on ? (tone === "olive" ? "bg-olive" : "bg-ink") : "border border-current")} />
+      <span aria-hidden className={cn("size-[7px]", on ? (tone === "blue" ? "bg-blue" : "bg-ink") : "border border-current")} />
       {children}
     </button>
   );
@@ -58,7 +58,7 @@ function ProfileRow({ initial, onSaved, index }: { initial: SearchProfile; onSav
   });
   return (
     <div className={cn("grid gap-x-5 gap-y-3 border-b border-rule py-4 md:grid-cols-[2.5rem_auto_minmax(10rem,1fr)_11rem] xl:grid-cols-[2rem_auto_minmax(9rem,1fr)_10.5rem_auto_auto_auto] xl:items-center", !p.enabled && "opacity-60")}>
-      <span className="num hidden text-[13px] text-ink-faint md:block">{index !== undefined ? String(index + 1).padStart(2, "0") : "+"}</span>
+      <span className="num hidden text-[13px] text-ink-muted md:block">{index !== undefined ? String(index + 1).padStart(2, "0") : "+"}</span>
       <Switch checked={p.enabled} onCheckedChange={(enabled) => setP({ ...p, enabled })} aria-label="Enabled" />
       <Input placeholder="keywords" aria-label="Keywords" value={p.keywords} onChange={(e) => setP({ ...p, keywords: e.target.value })} />
       <select
@@ -73,7 +73,7 @@ function ProfileRow({ initial, onSaved, index }: { initial: SearchProfile; onSav
       </select>
       <div className="flex flex-wrap gap-1 xl:flex-nowrap md:col-start-3 xl:col-start-auto" role="group" aria-label="Work types">
         {TYPES.map((t) => (
-          <Chip key={t} on={p.work_types.includes(t)} tone={FLEXIBLE_TYPES.has(t) ? "olive" : "ink"} onClick={() => setP({ ...p, work_types: toggle(p.work_types, t) })}>
+          <Chip key={t} on={p.work_types.includes(t)} tone={FLEXIBLE_TYPES.has(t) ? "blue" : "ink"} onClick={() => setP({ ...p, work_types: toggle(p.work_types, t) })}>
             {WORK_TYPE_LABEL[t]}
           </Chip>
         ))}
@@ -106,7 +106,7 @@ export function SearchesPage() {
   return (
     <Page wide>
       <PageHead
-        kicker="Standing orders"
+        kicker="Crawl profiles"
         title="Searches"
         dek="What gets crawled on SEEK and Jora each run. No work type selected means all types; full-time is still ranked lower."
       />

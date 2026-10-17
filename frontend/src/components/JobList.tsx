@@ -6,10 +6,10 @@ import { Score } from "./Score";
 import { WorkTypeLabel } from "./WorkTypeLabel";
 
 const STATUS_CLASS: Record<JobStatus, string> = {
-  new: "text-ink-faint",
+  new: "text-ink-muted",
   saved: "text-ink",
-  applied: "text-olive",
-  hidden: "text-ink-faint line-through decoration-1",
+  applied: "text-blue",
+  hidden: "text-ink-muted line-through decoration-1",
 };
 
 const MAX_SKILLS = 4;
@@ -24,16 +24,16 @@ function Skills({ skills }: { skills: string[] }) {
   return (
     <span className="font-mono text-[12px] leading-[1.6] text-ink-muted">
       {shown.join(", ")}
-      {rest > 0 && <span className="text-ink-faint"> +{rest}</span>}
+      {rest > 0 && <span className="text-ink-muted"> +{rest}</span>}
     </span>
   );
 }
 
 function Reasons({ reasons }: { reasons: string[] }) {
   return (
-    <span className="flex flex-wrap gap-x-2 gap-y-0.5">
+    <span className="flex flex-wrap gap-1">
       {reasons.map((r) => (
-        <span key={r} className="kicker text-signal">
+        <span key={r} className="kicker bg-chip px-1.5 py-[3px] leading-none text-ink">
           {r}
         </span>
       ))}
@@ -84,7 +84,7 @@ export function JobList({
   if (!jobs.length) {
     return (
       <div className="px-6 py-20 text-center">
-        <p className="display text-2xl text-ink italic">Nothing in the column.</p>
+        <p className="display text-2xl text-ink">No matches.</p>
         <p className="mt-2 text-sm text-ink-muted">No jobs match these filters yet.</p>
       </div>
     );
@@ -94,7 +94,7 @@ export function JobList({
     <div className="@container">
       <div
         aria-hidden
-        className={cn(GRID, "kicker hidden border-b border-ink px-5 py-2 text-[10px] text-ink-muted @3xl:grid lg:px-6")}
+        className={cn(GRID, "kicker hidden border-b-2 border-ink px-5 py-2 text-[10px] text-ink-muted @3xl:grid lg:px-6")}
       >
         <span>Score</span>
         <span>Position</span>
@@ -123,9 +123,9 @@ export function JobList({
                 className={cn(
                   GRID,
                   "relative w-full px-5 py-4 text-left transition-colors outline-none lg:px-6",
-                  "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-signal",
-                  "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-signal before:opacity-0 before:transition-opacity",
-                  selected ? "bg-ink/[0.045] before:opacity-100" : "hover:bg-ink/[0.03]",
+                  "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue",
+                  "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-blue before:opacity-0 before:transition-opacity",
+                  selected ? "bg-selected before:opacity-100" : "hover:bg-hover",
                 )}
               >
                 <span className="pt-0.5">
@@ -144,7 +144,7 @@ export function JobList({
                     </span>
                   </span>
                   {firstSnippet && (
-                    <span className="mt-1 block truncate text-[12.5px] text-ink-muted italic">…{firstSnippet}…</span>
+                    <span className="mt-1 block truncate font-mono text-[11.5px] text-ink-muted">…{firstSnippet}…</span>
                   )}
                   {/* folded layout (narrow column) */}
                   <span className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 @3xl:hidden">

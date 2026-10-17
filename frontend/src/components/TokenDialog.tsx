@@ -14,10 +14,10 @@ export function TokenDialog() {
       <DialogTrigger
         className={cn(
           "kicker inline-flex items-center gap-2 py-1 underline-offset-[5px] hover:underline",
-          hasToken ? "text-ink-muted" : "text-signal",
+          hasToken ? "text-ink-muted" : "text-blue",
         )}
       >
-        <span aria-hidden className={cn("size-[7px]", hasToken ? "bg-olive" : "border border-signal")} />
+        <span aria-hidden className={cn("size-[7px]", hasToken ? "bg-ink" : "border border-blue")} />
         {hasToken ? "Token set" : "Set write token"}
       </DialogTrigger>
       <DialogContent>

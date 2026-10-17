@@ -22,14 +22,9 @@ const dateline = new Intl.DateTimeFormat("en-AU", {
 export function Wordmark() {
   return (
     <span className="inline-flex items-center gap-2.5 text-ink select-none">
-      <span aria-hidden className="size-[11px] translate-y-[1px] bg-signal" />
-      <span className="display text-[25px] leading-none tracking-[-0.02em]">
-        <span className="mr-[0.06em] font-normal italic" style={{ fontVariationSettings: '"opsz" 144, "SOFT" 100, "WONK" 1' }}>
-          Seek
-        </span>
-        <span className="font-bold" style={{ fontVariationSettings: '"opsz" 144, "SOFT" 0, "WONK" 0' }}>
-          Hunter
-        </span>
+      <span aria-hidden className="size-[12px] bg-blue" />
+      <span className="display text-[21px] leading-none font-[900] tracking-[-0.04em] uppercase [font-stretch:80%]">
+        SeekHunter
       </span>
     </span>
   );
@@ -40,17 +35,17 @@ export function Layout() {
     <div className="flex min-h-dvh flex-col lg:h-dvh">
       <a
         href="#main"
-        className="kicker sr-only z-50 bg-ink px-3 py-2 text-paper focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+        className="kicker sr-only z-50 bg-ink px-3 py-2 text-white focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
       >
         Skip to content
       </a>
-      <header className="paper z-30 border-b-[3px] border-double border-ink">
+      <header className="paper z-30 border-b-2 border-ink">
         <div className="flex flex-wrap items-center gap-x-8 gap-y-2 px-5 pt-3 pb-2 lg:h-14 lg:flex-nowrap lg:px-6 lg:py-0">
           <NavLink to="/" aria-label="SeekHunter, jobs" className="shrink-0">
             <Wordmark />
           </NavLink>
           <div className="ml-auto flex items-center gap-5 lg:order-last">
-            <span className="kicker hidden text-ink-faint xl:inline">Adelaide · {dateline}</span>
+            <span className="kicker hidden text-ink-muted xl:inline">Adelaide · {dateline}</span>
             <TokenDialog />
           </div>
           <nav
@@ -66,7 +61,7 @@ export function Layout() {
                   cn(
                     "kicker shrink-0 py-1 underline-offset-[7px] transition-colors",
                     isActive
-                      ? "text-ink underline decoration-signal decoration-2"
+                      ? "text-ink underline decoration-blue decoration-2"
                       : "text-ink-muted hover:text-ink hover:underline hover:decoration-rule-strong hover:decoration-1",
                   )
                 }
