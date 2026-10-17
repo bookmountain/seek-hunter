@@ -66,6 +66,15 @@ def save_evaluation(session: Session, job_id: int, **fields) -> JobEvaluation:
     return ev
 
 
+def unevaluated_jobs(session: Session) -> list[Job]:
+    """Jobs with no evaluation row yet (e.g. left behind by a crashed earlier run)."""
+    stmt = (
+        select(Job).join(JobEvaluation, JobEvaluation.job_id == Job.id, isouter=True)
+        .where(col(JobEvaluation.id).is_(None), col(Job.canonical_job_id).is_(None))
+    )
+    return list(session.exec(stmt).all())
+
+
 def _active_clause():
     return (
         col(Job.canonical_job_id).is_(None),
