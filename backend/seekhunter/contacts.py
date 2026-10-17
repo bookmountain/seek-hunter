@@ -41,6 +41,8 @@ _NAME_BLOCKLIST = {
     # places
     "adelaide", "hill", "park", "terrace", "street", "road", "cbd", "north", "south", "east", "west",
     "sa", "nsw", "vic", "qld", "wa", "tas", "act", "nt", "lakes", "beach", "valley", "heights",
+    # brands / retail phrases that look like names
+    "apple", "authorised", "authorized", "reseller", "store", "retail",
     # places / subjects that look like names
     "st", "saint", "mount", "mt", "port", "new", "united", "kingdom", "states", "zealand", "wales",
     "sydney", "melbourne", "brisbane", "perth", "hobart", "darwin", "canberra", "london", "singapore",

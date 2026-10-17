@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     recap.add_argument("--dry-run", action="store_true")
     sub.add_parser("notify-test", help="send a test Telegram message")
     sub.add_parser("rescore", help="re-score recent jobs after a resume change (no LLM, no notifications)")
+    sub.add_parser("prune-contacts", help="remove auto-added contacts with no interaction or application")
     contacts = sub.add_parser("contacts", help="backfill recruiter contacts for recently seen jobs")
     contacts.add_argument("--days", type=int, default=7)
     insights = sub.add_parser("insights", help="refresh SEEK applicant insights on demand")
@@ -131,6 +132,9 @@ def main(argv: list[str] | None = None) -> int:
                 run_insights_brief(session, notifier, env.public_url, env.resume_dir, dry_run=args.dry_run)
                 return 0
 
+            if args.command == "prune-contacts":
+                print(f"removed {repo.prune_uncontacted_contacts(session)} uncontacted contacts")
+                return 0
             if args.command == "rescore":
                 from seekhunter.pipeline import run_rescore
                 from seekhunter.profile import load_profile

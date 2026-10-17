@@ -81,6 +81,8 @@ class AppSettings(BaseModel):
     # Server-side "last read" marker for the in-app notification bell (GET/POST /api/notifications).
     # Deliberately excluded from PUT /api/settings overwrites — see api.put_settings.
     notifications_read_at: NaiveDatetime | None = None
+    # Per-page UI filter memory (synced across devices); owned by /api/ui-prefs, preserved on PUT.
+    ui_prefs: dict = Field(default_factory=dict)
     market_enabled: bool = True
     market_cities: list[str] = Field(
         default_factory=lambda: ["adelaide", "melbourne", "sydney", "perth"])

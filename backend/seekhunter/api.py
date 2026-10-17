@@ -956,9 +956,25 @@ def create_app(init: bool = True) -> FastAPI:
     def put_settings(body: AppSettings, session: Session = Depends(get_session)):
         # The notification-bell "last read" marker is server-owned; never let a UI PUT (which
         # round-trips whatever GET /api/settings returned earlier) clobber it with a stale value.
-        body.notifications_read_at = repo.load_settings(session).notifications_read_at
+        stored = repo.load_settings(session)
+        body.notifications_read_at = stored.notifications_read_at
+        body.ui_prefs = stored.ui_prefs
         repo.save_settings(session, body)
         return body
+
+    @app.get("/api/ui-prefs")
+    def get_ui_prefs(session: Session = Depends(get_session)) -> dict:
+        return repo.load_settings(session).ui_prefs
+
+    @app.put("/api/ui-prefs/{page}", dependencies=write)
+    def put_ui_prefs(page: str, body: dict, session: Session = Depends(get_session)) -> dict:
+        """Remember one page's filters (e.g. page="jobs" -> {"city": "melbourne", "work_type": ...})."""
+        if len(page) > 40 or len(str(body)) > 4000:
+            raise HTTPException(422, "prefs too large")
+        settings = repo.load_settings(session)
+        settings.ui_prefs = {**settings.ui_prefs, page: body}
+        repo.save_settings(session, settings)
+        return settings.ui_prefs
 
     @app.get("/api/notifications", response_model=NotificationsOut)
     def get_notifications(limit: int = Query(20, ge=1, le=200), session: Session = Depends(get_session)):

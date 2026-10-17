@@ -439,3 +439,12 @@ def test_writes_allowed_without_token_when_not_required(client, monkeypatch):
 
 def test_meta_reports_token_required_by_default(client):
     assert client.get("/api/meta").json() == {"write_requires_token": True}
+
+
+def test_ui_prefs_roundtrip_and_survive_settings_put(client):
+    r = client.put("/api/ui-prefs/jobs", json={"city": "melbourne", "work_type": "contract"}, headers=AUTH)
+    assert r.status_code == 200 and r.json()["jobs"]["city"] == "melbourne"
+    s = client.get("/api/settings").json()
+    s["ui_prefs"] = {}
+    client.put("/api/settings", json=s, headers=AUTH)
+    assert client.get("/api/ui-prefs").json()["jobs"] == {"city": "melbourne", "work_type": "contract"}

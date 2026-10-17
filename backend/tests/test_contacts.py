@@ -200,3 +200,8 @@ def test_capitalised_phrases_without_contact_phrasing_rejected():
                  "Report to the Product Owner on 08 8216 3534",
                  "Contact Supply Chain systems", "brands like Krispy Kreme at 1300 123 456"]:
         assert extract_contacts(text).name is None, text
+
+
+def test_brand_phrases_are_not_names():
+    from seekhunter.contacts import is_plausible_name
+    assert not is_plausible_name("Apple Authorised Reseller")

@@ -69,9 +69,12 @@ def _digest_items(session: Session, rows: list[tuple[Job, JobEvaluation]],
 
 
 def _upsert_recruiter_contact(session: Session, job: Job) -> None:
-    """Upserts the job's recruiter (when a name is known; phone-only contacts stay on the job) into
-    `contacts`, linked to this job via `contact_jobs`."""
+    """Keeps an EXISTING contact (someone Book has contacted or applied through) in sync with new
+    details found on this ad. Never creates contacts: recruiters only become contacts once Book logs
+    an interaction or applies (see api contact-log / applied)."""
     if not job.contact_name:
+        return
+    if repo.find_contact(session, job.contact_name, job.company) is None:
         return
     contact = repo.upsert_contact(session, name=job.contact_name, company=job.company, role="Recruiter",
                                   phone=job.contact_phone, email=job.contact_email,

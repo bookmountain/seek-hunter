@@ -677,6 +677,28 @@ def upsert_contact(session: Session, *, name: str, company: str = "", role: str 
     return contact
 
 
+def find_contact(session: Session, name: str, company: str) -> Contact | None:
+    return session.exec(
+        select(Contact).where(func.lower(Contact.name) == name.lower(),
+                              Contact.company_key == company_key(company))
+    ).first()
+
+
+def prune_uncontacted_contacts(session: Session) -> int:
+    """Delete contacts with no logged interaction and no linked application (auto-added recruiters
+    from ads that Book never actually contacted). Returns how many were removed."""
+    removed = 0
+    for contact in session.exec(select(Contact)).all():
+        stats = contact_stats(session, contact.id)
+        if stats["interaction_count"] == 0 and stats["application_count"] == 0:
+            for link in session.exec(select(ContactJob).where(ContactJob.contact_id == contact.id)).all():
+                session.delete(link)
+            session.delete(contact)
+            removed += 1
+    session.commit()
+    return removed
+
+
 def link_contact_job(session: Session, contact_id: int, job_id: int) -> None:
     existing = session.exec(
         select(ContactJob).where(ContactJob.contact_id == contact_id, ContactJob.job_id == job_id)

@@ -9,7 +9,7 @@ from seekhunter.domain import JobData
 from seekhunter.http import SourceBlocked
 from seekhunter.llm.base import LLMScore
 from seekhunter.lock import RunLocked, run_lock
-from seekhunter.models import Contact, ContactJob, Job, JobEvaluation, Outbox, Run
+from seekhunter.models import Contact, ContactJob, Interaction, Job, JobEvaluation, Outbox, Run
 from seekhunter.models import utcnow as _utcnow
 from seekhunter.notify import NotifyError
 from seekhunter.pipeline import (
@@ -744,14 +744,32 @@ def test_run_insights_refresh_generic_exception_is_skipped_and_continues():
         assert report == {"checked": 2, "refreshed": 1, "error": None}
 
 
-def test_run_crawl_upserts_named_recruiter_into_contacts(session):
+def test_run_crawl_does_not_create_contacts_from_ads(session):
     seek = FakeSource("seek", [jd("seek", "1", desc="Call Brayden Mackay on 08 8216 3534.")])
     run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
     job = session.exec(select(Job).where(Job.external_id == "1")).one()
-    contact = session.exec(select(Contact).where(Contact.name == "Brayden Mackay")).one()
-    assert contact.company == "Acme" and contact.phone == "08 8216 3534"
-    link = session.exec(select(ContactJob).where(ContactJob.contact_id == contact.id)).one()
+    assert job.contact_name == "Brayden Mackay"  # stays on the job
+    assert session.exec(select(Contact)).first() is None  # not a contact until Book acts
+
+
+def test_run_crawl_updates_and_links_an_existing_contact(session):
+    existing = repo.upsert_contact(session, name="Brayden Mackay", company="Acme")
+    seek = FakeSource("seek", [jd("seek", "1", desc="Call Brayden Mackay on 08 8216 3534.")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    session.refresh(existing)
+    assert existing.phone == "08 8216 3534"
+    link = session.exec(select(ContactJob).where(ContactJob.contact_id == existing.id)).one()
     assert link.job_id == job.id
+
+
+def test_prune_uncontacted_contacts_keeps_people_with_activity(session):
+    keep = repo.upsert_contact(session, name="Jerry Belialba", company="Peoplebank")
+    session.add(Interaction(contact_id=keep.id, kind="call", at=_utcnow(), created_at=_utcnow()))
+    session.commit()
+    repo.upsert_contact(session, name="Never Contacted", company="Acme")
+    assert repo.prune_uncontacted_contacts(session) == 1
+    assert [c.name for c in session.exec(select(Contact)).all()] == ["Jerry Belialba"]
 
 
 def test_run_crawl_skips_contact_upsert_without_a_name(session):
@@ -760,11 +778,12 @@ def test_run_crawl_skips_contact_upsert_without_a_name(session):
     assert session.exec(select(Contact)).first() is None
 
 
-def test_run_contacts_backfill_upserts_named_recruiter_into_contacts():
+def test_run_contacts_backfill_updates_existing_contact_only():
     engine = create_engine("sqlite://")
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
         job, _ = repo.upsert_job(s, jd("seek", "1", desc="Call Brayden Mackay on 08 8216 3534."))
+        repo.upsert_contact(s, name="Brayden Mackay", company="Acme")
 
         class BackfillSeekSource:
             def details(self, data):
