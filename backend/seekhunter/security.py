@@ -8,11 +8,13 @@ from seekhunter.config import get_env
 
 
 def _in_cidrs(ip: str, cidrs: list[str]) -> bool:
+    if ip in cidrs or f"{ip}/32" in cidrs:
+        return True
     try:
         addr = ipaddress.ip_address(ip)
     except ValueError:
         return False
-    return any(addr in ipaddress.ip_network(c, strict=False) for c in cidrs)
+    return any(addr in ipaddress.ip_network(c, strict=False) for c in cidrs if "/" in c and c[0].isdigit())
 
 
 def client_allowed(remote_ip: str, cf_ip: str | None, cidrs: list[str], public_ips: list[str]) -> bool:
