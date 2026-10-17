@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
 import type { Job } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { CopyButton } from "./CopyButton";
 
 type Contact = Pick<
   Job,
@@ -8,28 +7,6 @@ type Contact = Pick<
 >;
 
 const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
-
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(t);
-  }, [copied]);
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={() => navigator.clipboard?.writeText(text).then(() => setCopied(true), () => {})}
-      className={cn(
-        "h-10 shrink-0 border px-3 font-mono lg:h-7 lg:px-2 text-[10.5px] font-medium tracking-[0.1em] uppercase transition-colors",
-        copied ? "border-blue text-blue" : "border-ink text-ink hover:border-blue hover:text-blue",
-      )}
-    >
-      <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
-    </button>
-  );
-}
 
 function ExtLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (

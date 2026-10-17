@@ -4,6 +4,7 @@ import { JobsPage } from "@/pages/JobsPage";
 import { RunsPage } from "@/pages/RunsPage";
 import { SearchesPage } from "@/pages/SearchesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { TailorPage } from "@/pages/TailorPage";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="searches" element={<SearchesPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="runs" element={<RunsPage />} />
+          <Route path="jobs/:id/tailor" element={<TailorPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

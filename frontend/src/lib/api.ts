@@ -1,4 +1,15 @@
-import type { AppSettings, Job, JobDetail, JobStatus, Run, SearchProfile } from "./types";
+import type {
+  AppSettings,
+  Job,
+  JobDetail,
+  JobStatus,
+  ResumeCurrent,
+  Run,
+  SearchProfile,
+  TailorStart,
+  TailoringDetail,
+  TailoringSummary,
+} from "./types";
 
 const TOKEN_KEY = "seekhunter.token";
 
@@ -65,4 +76,11 @@ export const api = {
   runs: () => request<Run[]>("GET", "/api/runs"),
   triggerRun: () => request<{ started: boolean }>("POST", "/api/runs"),
   notifyTest: () => request<{ sent: boolean }>("POST", "/api/notify/test"),
+  tailor: (jobId: number, send = false) =>
+    request<TailorStart>("POST", `/api/jobs/${jobId}/tailor?send=${send ? 1 : 0}`),
+  tailorings: (jobId: number) => request<TailoringSummary[]>("GET", `/api/jobs/${jobId}/tailorings`),
+  tailoring: (tid: number) => request<TailoringDetail>("GET", `/api/tailorings/${tid}`),
+  resumeCurrent: () => request<ResumeCurrent>("GET", "/api/resume/current"),
+  sendTailoring: (tid: number) =>
+    request<{ sent: boolean; sent_at: string | null }>("POST", `/api/tailorings/${tid}/send`),
 };

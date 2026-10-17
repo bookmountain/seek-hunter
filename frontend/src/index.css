@@ -226,6 +226,15 @@
   }
 }
 
+/* Indeterminate hairline progress: a blue segment sweeping across. */
+.indeterminate {
+  animation: sweep 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes sweep {
+  from { left: -33%; }
+  to { left: 100%; }
+}
+
 @keyframes reveal {
   from {
     opacity: 0;
@@ -240,6 +249,12 @@
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     animation: none;
+  }
+  .indeterminate {
+    animation: none;
+    left: 0;
+    width: 100%;
+    opacity: 0.4;
   }
   *,
   *::before,

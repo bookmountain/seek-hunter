@@ -115,3 +115,96 @@ export const WORK_TYPE_LABEL: Record<WorkType, string> = {
   casual: "Casual",
   unknown: "n/a",
 };
+
+// ---------------------------------------------------------------- tailoring
+
+export type TailoringStatus = "queued" | "running" | "done" | "failed";
+
+export interface TailoringSummary {
+  id: number;
+  job_id: number;
+  status: TailoringStatus;
+  /** "Reading resume" | "Rendering current resume" | "Tailoring with AI" | "Compiling PDFs" | "Sending to Telegram" | "Done" | "Failed" */
+  progress: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  provider: string | null;
+  error: string | null;
+  send_requested: boolean;
+  sent_at: string | null;
+  resume_hash: string | null;
+  /** Empty until done. */
+  pages: { resume?: number; cover_letter?: number };
+  warnings_count: number;
+}
+
+export interface TailorStart {
+  tailoring_id: number;
+  status: TailoringStatus;
+  reused: boolean;
+}
+
+export interface ResumeCurrent {
+  hash: string | null;
+  ready: boolean;
+  pages: number;
+  pdf_url: string | null;
+  page_urls: string[];
+  error: string | null;
+}
+
+export interface CoverLetter {
+  greeting: string;
+  paragraphs: string[];
+  sign_off: string;
+  text: string;
+  word_count: number;
+}
+
+export interface SummaryChange {
+  type: "summary";
+  before: string;
+  after: string;
+  changed: boolean;
+}
+
+export interface BulletChange {
+  type: "bullet";
+  experience: string;
+  company: string;
+  id: string;
+  status: "kept" | "reworded" | "removed";
+  before: string;
+  after: string | null;
+}
+
+export interface SkillsChange {
+  type: "skills";
+  id: string;
+  category: string;
+  before: string[];
+  after: string[];
+  changed: boolean;
+}
+
+export interface ProjectsChange {
+  type: "projects";
+  included: string[];
+  excluded: string[];
+}
+
+export type TailoringChange = SummaryChange | BulletChange | SkillsChange | ProjectsChange;
+
+export interface TailoringDetail extends TailoringSummary {
+  job: { id: number; title: string; company: string; location: string; work_type: WorkType; contact_name: string | null };
+  warnings: string[];
+  keywords_matched: string[];
+  gaps: string[];
+  /** null until done */
+  cover_letter: CoverLetter | null;
+  /** [] until done */
+  changes: TailoringChange[];
+  files: { resume_pdf: string; cover_letter_pdf: string; resume_pages: string[]; cover_letter_pages: string[] } | null;
+  current: ResumeCurrent | null;
+}

@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { TokenDialog } from "./TokenDialog";
@@ -31,6 +31,7 @@ export function Wordmark() {
 }
 
 export function Layout() {
+  const { pathname } = useLocation();
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
       <a
@@ -57,14 +58,17 @@ export function Layout() {
                 key={l.to}
                 to={l.to}
                 end={l.to === "/"}
-                className={({ isActive }) =>
+                className={({ isActive: active }) => {
+                  const isActive = active || (l.to === "/" && pathname.startsWith("/jobs/"));
+                  return (
                   cn(
                     "kicker shrink-0 py-1 underline-offset-[7px] transition-colors",
                     isActive
                       ? "text-ink underline decoration-blue decoration-2"
                       : "text-ink-muted hover:text-ink hover:underline hover:decoration-rule-strong hover:decoration-1",
                   )
-                }
+                  );
+                }}
               >
                 {l.label}
               </NavLink>

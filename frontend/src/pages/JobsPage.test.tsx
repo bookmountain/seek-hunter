@@ -62,7 +62,10 @@ function renderPage(initial = "/") {
 }
 
 describe("JobsPage split view", () => {
-  beforeEach(() => vi.spyOn(window, "scrollTo").mockImplementation(() => {}));
+  beforeEach(() => {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    vi.spyOn(api, "tailorings").mockResolvedValue([]);
+  });
   afterEach(() => vi.restoreAllMocks());
 
   it("opens the detail inline (no overlay) and reflects the job in the URL", async () => {

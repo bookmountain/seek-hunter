@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { CompetitionBlock } from "./CompetitionBlock";
 import { RecruiterBlock } from "./RecruiterBlock";
 import { Score } from "./Score";
+import { TailorAction } from "./TailorAction";
 import { WorkTypeLabel } from "./WorkTypeLabel";
 
 export function highlight(html: string, skills: string[]): string {
@@ -181,9 +182,11 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
 
         {/* Actions */}
         <div className="mt-7 flex flex-wrap items-center gap-3">
-          <Button render={<a href={view.url} target="_blank" rel="noreferrer" />}>
-            Open on {sourceName(view.source)} <span aria-hidden>↗</span>
-          </Button>
+          <TailorAction jobId={view.id}>
+            <Button variant="outline" render={<a href={view.url} target="_blank" rel="noreferrer" />}>
+              Open on {sourceName(view.source)} <span aria-hidden>↗</span>
+            </Button>
+          </TailorAction>
           <div role="group" aria-label="Status" className="inline-flex border border-ink">
             {STATUSES.map((s, i) => {
               const active = view.status === s.value;
