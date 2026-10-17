@@ -2768,7 +2768,7 @@ def _local(dt: datetime) -> datetime:
     return dt.replace(tzinfo=ZoneInfo("UTC")).astimezone(TZ)
 
 
-def _digest_item(job: Job, ev: JobEvaluation) -> DigestItem:
+def digest_item(job: Job, ev: JobEvaluation) -> DigestItem:
     return DigestItem(job_id=job.id, score=ev.final_score, title=job.title, company=job.company, location=job.location,
                       work_type=job.work_type, matched=ev.matched_skills, why=ev.llm_note, url=job.url,
                       flags=ev.flags)
@@ -2896,7 +2896,7 @@ def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, 
         if candidates and settings.notify_enabled:
             top = candidates[: settings.max_notify_per_run]
             degraded = [k for k, v in status.items() if v["status"] != "ok"]
-            for text in format_digest([_digest_item(j, e) for j, e in top], _local(now), public_url, degraded,
+            for text in format_digest([digest_item(j, e) for j, e in top], _local(now), public_url, degraded,
                                       extra=len(candidates) - len(top)):
                 _send(session, notifier, text)
             run.notified = len(top)
@@ -2922,8 +2922,8 @@ def run_recap(session: Session, notifier, public_url: str) -> None:  # noqa: ANN
     since = start_local.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
     rows = repo.list_jobs(session, view="active", since=since)
     excluded = repo.count_excluded_since(session, since)
-    text = format_recap([_digest_item(j, e) for j, e in rows], excluded, f"{local_now:%a %d %b}", public_url)
-    _send(session, notifier, text)
+    for text in format_recap([digest_item(j, e) for j, e in rows], excluded, f"{local_now:%a %d %b}", public_url):
+        _send(session, notifier, text)
     session.add(Run(kind="recap", finished_at=utcnow(), new_jobs=len(rows)))
     session.commit()
 ```
@@ -3729,7 +3729,7 @@ def format_brief(*, job_id: int, title: str, company: str, location: str, work_t
 
 - [ ] **Step 4: Add the endpoints to `backend/seekhunter/api.py`**
 
-Add imports: `from datetime import timedelta`, `from fastapi.responses import PlainTextResponse`, `from seekhunter.models import utcnow`, `from seekhunter.notify import format_brief`, `from seekhunter.profile import load_profile`, `from seekhunter.skills import extract_skills`, and import `_digest_item` as `digest_item` from `seekhunter.pipeline` (rename `_digest_item` to `digest_item` in `pipeline.py` and update its callers). Inside `create_app`, before the SPA catch-all route:
+Add imports: `from datetime import timedelta`, `from fastapi.responses import PlainTextResponse`, `from seekhunter.models import utcnow`, `from seekhunter.notify import format_brief`, `from seekhunter.profile import load_profile`, `from seekhunter.skills import extract_skills`, and `digest_item` from `seekhunter.pipeline`. Inside `create_app`, before the SPA catch-all route:
 
 ```python
     @app.get("/api/jobs/{job_id}/brief", response_class=PlainTextResponse)
@@ -5190,6 +5190,31 @@ Ask Book for the Anthropic API key (Console → API keys). Then:
 sshpass -p 'Book1995*' ssh root@192.168.4.50 "sed -i 's|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=<key>|' /opt/seek-hunter/.env"
 ```
 Never echo or commit the key. Read back the generated write token for Book with `grep API_WRITE_TOKEN /opt/seek-hunter/.env`.
+
+- [ ] **Step 2b: Create the tool-less OpenClaw scoring agent**
+
+Codex fallback scoring sends untrusted job-ad text to OpenClaw, so it must go to a dedicated agent with no tools, never `main`.
+```bash
+sshpass -p 'Book1995*' ssh root@192.168.4.50 '
+set -e
+mkdir -p /opt/seek-hunter/openclaw-scorer
+openclaw agents list | grep -q seekhunter-scorer || openclaw agents add seekhunter-scorer --non-interactive --workspace /opt/seek-hunter/openclaw-scorer
+openclaw config patch "{agents:{entries:{\"seekhunter-scorer\":{tools:{profile:\"minimal\",deny:[\"exec\",\"bash\",\"process\",\"read\",\"write\",\"edit\",\"apply_patch\",\"web_search\",\"web_fetch\",\"browser\",\"message\",\"cron\",\"sessions_spawn\",\"sessions_send\",\"gateway\",\"nodes\",\"canvas\"]}}}}}"
+openclaw agent --agent seekhunter-scorer --session-id scorer-check --thinking low --json -m "Reply with exactly: {\"ok\": true}" 2>/dev/null > /tmp/scorer.json
+python3 -c "import json; d=json.load(open(\"/tmp/scorer.json\")); m=d[\"result\"][\"meta\"]; print(m[\"finalAssistantVisibleText\"]); print(json.dumps(m)[:20000].count(\"\\\"name\\\"\"), \"tool entries\")"
+grep -o "\"name\": \"[a-z_]*\"" /tmp/scorer.json | sort -u
+rm /tmp/scorer.json
+'
+```
+Expected: reply `{"ok": true}`, and the listed tool names contain no exec/read/write/web/message tools. If any remain, add them to the `deny` list and re-check. Also confirm `openclaw agents list` shows that `main` is unchanged. If `openclaw agents add` needs extra auth for the new agent (model login), run `openclaw agents add` interactively with Book, or set `--model openai/gpt-5.5` to reuse the existing OpenAI OAuth profile.
+
+- [ ] **Step 2c: Check Telegram formatting**
+
+`openclaw message send` may parse Markdown. Send `seekhunter-api`-independent test text with special characters:
+```bash
+sshpass -p 'Book1995*' ssh root@192.168.4.50 'openclaw message send --channel telegram --target 1635495359 --message "🎯 format test: C#/.NET_Core *Urgent* <Senior> a_b_c https://x.com/a_b?c=1&d=2"'
+```
+Ask Book whether it arrived verbatim. If characters were eaten or the send failed, add escaping of `* _ [ ] < > &` for titles, companies and AI notes in `notify._format_item` (one commit, plus a test), before enabling the timers.
 
 - [ ] **Step 3: Deploy key from vm100 runner user to `.50`**
 
