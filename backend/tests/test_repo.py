@@ -70,6 +70,50 @@ def test_settings_roundtrip_and_seed(session):
     assert len(repo.list_search_profiles(session)) == len(profiles)
 
 
+def test_ensure_seed_adds_other_city_profiles(session):
+    repo.ensure_seed(session)
+    profiles = repo.list_search_profiles(session)
+    by_location: dict[str, set[str]] = {}
+    for p in profiles:
+        by_location.setdefault(p.location, set()).add(p.keywords)
+
+    for location in ("All Melbourne VIC", "All Sydney NSW", "All Perth WA"):
+        assert by_location[location] == {"software engineer", "developer", "full stack", "IT support"}
+    for p in profiles:
+        if p.location != "All Adelaide SA":
+            assert p.enabled is True
+            assert p.sources == ["seek", "jora"]
+
+
+def test_ensure_seed_other_city_profiles_are_idempotent(session):
+    repo.ensure_seed(session)
+    first = repo.list_search_profiles(session)
+    repo.ensure_seed(session)
+    repo.ensure_seed(session)
+    assert len(repo.list_search_profiles(session)) == len(first)
+
+
+def test_ensure_seed_other_city_profiles_migrate_existing_db_with_only_adelaide(session):
+    """Simulates an existing database seeded before the multi-city feature existed: only Adelaide
+    profiles present, settings already saved. A later ensure_seed call must still add the other
+    cities without duplicating Adelaide."""
+    repo.save_settings(session, repo.load_settings(session))
+    for kw in repo.DEFAULT_KEYWORDS:
+        from seekhunter.models import SearchProfile
+
+        session.add(SearchProfile(name=f"Adelaide · {kw}", keywords=kw, location="All Adelaide SA"))
+    session.commit()
+    adelaide_count = len(repo.list_search_profiles(session))
+
+    repo.ensure_seed(session)
+
+    profiles = repo.list_search_profiles(session)
+    adelaide_profiles = [p for p in profiles if p.location == "All Adelaide SA"]
+    assert len(adelaide_profiles) == adelaide_count
+    locations = {p.location for p in profiles}
+    assert {"All Melbourne VIC", "All Sydney NSW", "All Perth WA"} <= locations
+
+
 def test_find_duplicate_across_sources(session):
     seek_job, _ = repo.upsert_job(session, data(ext="1", source="seek", title="Full Stack Developer",
                                                 company="Acme Pty Ltd"))

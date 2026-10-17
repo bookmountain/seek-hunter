@@ -26,6 +26,12 @@ from seekhunter.settings_model import AppSettings
 DEFAULT_KEYWORDS = [
     "software engineer", "developer", "full stack", "frontend", "AI engineer", "graduate developer",
 ]
+OTHER_CITY_KEYWORDS = ["software engineer", "developer", "full stack", "IT support"]
+OTHER_CITY_LOCATIONS = {
+    "Melbourne": "All Melbourne VIC",
+    "Sydney": "All Sydney NSW",
+    "Perth": "All Perth WA",
+}
 
 
 def upsert_job(session: Session, data: JobData, profile_location: str | None = None) -> tuple[Job, bool]:
@@ -250,6 +256,22 @@ def ensure_seed(session: Session) -> None:
         for kw in DEFAULT_KEYWORDS:
             session.add(SearchProfile(name=f"Adelaide · {kw}", keywords=kw, location="All Adelaide SA"))
         session.commit()
+    _ensure_other_city_profiles(session)
+
+
+def _ensure_other_city_profiles(session: Session) -> None:
+    """Melbourne/Sydney/Perth search profiles for the multi-city jobs feed. Runs every time
+    (startup and every CLI command), not just on a fresh database, so this also acts as the
+    one-time migration for existing databases that were seeded before these cities existed.
+    Idempotent by (keywords, location): re-running never duplicates a profile."""
+    existing = {(p.keywords, p.location) for p in list_search_profiles(session)}
+    for city_name, location in OTHER_CITY_LOCATIONS.items():
+        for kw in OTHER_CITY_KEYWORDS:
+            if (kw, location) in existing:
+                continue
+            session.add(SearchProfile(name=f"{city_name} · {kw}", keywords=kw, location=location,
+                                      sources=["seek", "jora"], enabled=True))
+    session.commit()
 
 
 def recent_runs(session: Session, kind: str = "crawl", limit: int = 50) -> list[Run]:
