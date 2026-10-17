@@ -3048,6 +3048,152 @@ git commit -m "feat: add seekhunter CLI (run, recap, notify-test)"
 
 ---
 
+### Task 16b: Rescore command (resume changes)
+
+When `book-cv` changes, its deploy workflow syncs the LaTeX sections to `.50` and starts `seekhunter-rescore.service` (wired up in Tasks 24 and 26). This command re-runs exclusions and rule scoring for the last 7 days of jobs with the fresh profile. It keeps existing LLM scores, makes no LLM calls, and sends no notifications.
+
+**Files:**
+- Modify: `backend/seekhunter/lock.py`, `backend/seekhunter/repo.py`, `backend/seekhunter/pipeline.py`, `backend/seekhunter/cli.py`
+- Test: `backend/tests/test_pipeline.py`, `backend/tests/test_cli.py`
+
+- [ ] **Step 1: Add failing tests**
+
+Append to `backend/tests/test_pipeline.py`:
+```python
+from seekhunter.pipeline import run_rescore
+
+
+def test_rescore_uses_new_profile_keeps_llm_and_sends_nothing(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="React TypeScript Kotlin")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    ev = session.exec(select(JobEvaluation)).one()
+    assert "Kotlin" not in ev.matched_skills
+
+    richer = Profile(skills={"React", "TypeScript", "Kotlin"}, summary="s", titles=[], skill_lines=[], bullets=[])
+    assert run_rescore(session, richer) == 1
+    session.refresh(ev)
+    assert "Kotlin" in ev.matched_skills
+    assert ev.llm_score == 50
+    assert ev.final_score == round(0.6 * ev.rule_score + 0.4 * 50)
+
+
+def test_blocking_lock_waits(tmp_path):
+    import threading
+    import time
+
+    order = []
+
+    def holder():
+        with run_lock(tmp_path):
+            order.append("held")
+            time.sleep(0.3)
+        order.append("released")
+
+    t = threading.Thread(target=holder)
+    t.start()
+    time.sleep(0.05)
+    with run_lock(tmp_path, blocking=True):
+        order.append("acquired")
+    t.join()
+    assert order == ["held", "released", "acquired"]
+```
+
+Append to `backend/tests/test_cli.py`:
+```python
+def test_parser_rescore():
+    assert cli.build_parser().parse_args(["rescore"]).command == "rescore"
+```
+
+- [ ] **Step 2: Run to verify fail**
+
+Run: `cd backend && uv run pytest tests/test_pipeline.py tests/test_cli.py -v`
+Expected: FAIL, `ImportError: cannot import name 'run_rescore'`
+
+- [ ] **Step 3: Add `blocking` to `run_lock` in `backend/seekhunter/lock.py`**
+
+Replace the function with:
+```python
+@contextmanager
+def run_lock(data_dir: Path, blocking: bool = False) -> Iterator[None]:
+    data_dir.mkdir(parents=True, exist_ok=True)
+    with open(data_dir / "run.lock", "w") as fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as e:
+            raise RunLocked("another run is in progress") from e
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+```
+
+- [ ] **Step 4: Add helpers to `backend/seekhunter/repo.py`**
+
+```python
+def jobs_since(session: Session, since: datetime) -> list[Job]:
+    return list(session.exec(
+        select(Job).where(Job.first_seen_at >= since, col(Job.canonical_job_id).is_(None))).all())
+
+
+def get_evaluation(session: Session, job_id: int) -> JobEvaluation | None:
+    return session.exec(select(JobEvaluation).where(JobEvaluation.job_id == job_id)).first()
+```
+
+- [ ] **Step 5: Add `run_rescore` to `backend/seekhunter/pipeline.py`**
+
+```python
+def run_rescore(session: Session, profile: Profile, days: int = 7) -> int:
+    settings = repo.load_settings(session)
+    count = 0
+    for job in repo.jobs_since(session, utcnow() - timedelta(days=days)):
+        data = repo.to_jobdata(job)
+        fr = evaluate_exclusions(data, settings)
+        sr = score_job(data, profile.skills, settings)
+        existing = repo.get_evaluation(session, job.id)
+        llm_score = existing.llm_score if existing else None
+        repo.save_evaluation(session, job.id, excluded=fr.excluded, reasons=fr.reasons, snippets=fr.snippets,
+                             rule_score=sr.rule_score, final_score=blend(sr.rule_score, llm_score),
+                             matched_skills=sr.matched_skills, flags=sr.flags)
+        count += 1
+    session.add(Run(kind="rescore", finished_at=utcnow(), new_jobs=count))
+    session.commit()
+    return count
+```
+
+- [ ] **Step 6: Wire the CLI in `backend/seekhunter/cli.py`**
+
+In `build_parser()` add after the `recap` parser:
+```python
+    sub.add_parser("rescore", help="re-score recent jobs after a resume change (no LLM, no notifications)")
+```
+In `main()`, replace `with run_lock(env.data_dir), Session(get_engine()) as session:` with:
+```python
+        with run_lock(env.data_dir, blocking=args.command == "rescore"), Session(get_engine()) as session:
+```
+and add right after `repo.ensure_seed(session)`:
+```python
+            if args.command == "rescore":
+                from seekhunter.pipeline import run_rescore
+                from seekhunter.profile import load_profile
+
+                print(f"rescored {run_rescore(session, load_profile(env.resume_dir))} jobs")
+                return 0
+```
+
+- [ ] **Step 7: Run to verify pass**
+
+Run: `cd backend && uv run pytest -q && uv run ruff check .`
+Expected: all passed, ruff clean.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add backend/seekhunter backend/tests
+git commit -m "feat: add rescore command for resume changes"
+```
+
+---
+
 ### Task 17: Security middleware
 
 **Files:**
@@ -4547,7 +4693,7 @@ git commit -m "feat: add settings and runs pages"
 ### Task 24: Deploy assets (systemd, bootstrap, deploy script)
 
 **Files:**
-- Create: `deploy/systemd/seekhunter-web.service`, `deploy/systemd/seekhunter-crawl.service`, `deploy/systemd/seekhunter-crawl.timer`, `deploy/systemd/seekhunter-recap.service`, `deploy/systemd/seekhunter-recap.timer`, `deploy/env.example`, `deploy/bootstrap-vps.sh`, `deploy/deploy.sh`
+- Create: `deploy/systemd/seekhunter-web.service`, `deploy/systemd/seekhunter-crawl.service`, `deploy/systemd/seekhunter-crawl.timer`, `deploy/systemd/seekhunter-recap.service`, `deploy/systemd/seekhunter-recap.timer`, `deploy/systemd/seekhunter-rescore.service`, `deploy/env.example`, `deploy/bootstrap-vps.sh`, `deploy/deploy.sh`
 
 - [ ] **Step 1: `deploy/systemd/seekhunter-web.service`**
 
@@ -4627,6 +4773,21 @@ OnCalendar=*-*-* 21:15:00 Australia/Adelaide
 
 [Install]
 WantedBy=timers.target
+```
+
+- [ ] **Step 4b: `deploy/systemd/seekhunter-rescore.service`** (started by book-cv's deploy, no timer)
+
+```ini
+[Unit]
+Description=SeekHunter rescore after resume change
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/seek-hunter/app/backend
+EnvironmentFile=/opt/seek-hunter/.env
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/root/.local/bin/uv run --frozen --no-dev seekhunter rescore
+TimeoutStartSec=50min
 ```
 
 - [ ] **Step 5: `deploy/env.example`**
@@ -4892,6 +5053,19 @@ And ask Book to open `https://seekhunter.bookmountain.work` on phone mobile data
 sshpass -p 'Book1995*' ssh root@192.168.4.50 'openclaw cron list 2>/dev/null | grep -i "Noon Adelaide"'
 ```
 Expected: the noon job is still listed with its schedule unchanged.
+
+- [ ] **Step 9b: Make book-cv resume changes flow to SeekHunter**
+
+In `/Users/book/Documents/code/book-cv/.github/workflows/deploy.yml`, append this step to the end of the `deploy` job's `steps` (after "Restart containers"):
+```yaml
+      - name: Sync resume to SeekHunter
+        continue-on-error: true
+        run: |
+          rsync -az --delete -e "ssh -i /home/book/.ssh/seekhunter_deploy -o StrictHostKeyChecking=accept-new" \
+            latex/sections/ root@192.168.4.50:/opt/seek-hunter/book-cv/sections/
+          ssh -i /home/book/.ssh/seekhunter_deploy root@192.168.4.50 'systemctl start --no-block seekhunter-rescore.service'
+```
+Check the runner user first: `systemctl show -p User actions.runner.bookmountain-book-cv.vm100.service` must print `User=book` (so `/home/book/.ssh/seekhunter_deploy` is readable). Commit in the book-cv repo (`git -C ../book-cv add .github/workflows/deploy.yml && git -C ../book-cv commit -m "ci: sync resume sections to SeekHunter"`). **Ask Book before pushing**, because a push to `master` also redeploys the website. After the push, verify on `.50`: `journalctl -u seekhunter-rescore -n 5 --no-pager` shows "rescored N jobs".
 
 - [ ] **Step 10: Update TODO and commit**
 
