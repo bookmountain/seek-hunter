@@ -4508,7 +4508,7 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
 
 Run: `cd frontend && npm run build`
 Expected: build succeeds.
-Manual: in one shell `cd backend && uv run seekhunter run --dry-run` (populates `backend/data`), then `cd backend && API_WRITE_TOKEN=dev-token uv run uvicorn seekhunter.api:create_app --factory --port 8090`; in another `cd frontend && npm run dev`, open the printed URL, confirm the jobs table renders, a drawer opens, status buttons work after setting token `dev-token`.
+Manual: in one shell `cd backend && uv run seekhunter run --dry-run` (populates `backend/data`), then `cd backend && SEEKHUNTER_DEV=1 API_WRITE_TOKEN=dev-token uv run uvicorn seekhunter.api:create_app --factory --port 8090`; in another `cd frontend && npm run dev`, open the printed URL, confirm the jobs table renders, a drawer opens, status buttons work after setting token `dev-token`.
 
 - [ ] **Step 5: Commit**
 
@@ -4835,7 +4835,7 @@ Wants=network-online.target
 WorkingDirectory=/opt/seek-hunter/app/backend
 EnvironmentFile=/opt/seek-hunter/.env
 Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/root/.local/bin/uv run --frozen --no-dev uvicorn seekhunter.api:create_app --factory --host 0.0.0.0 --port 8090 --proxy-headers
+ExecStart=/root/.local/bin/uv run --frozen --no-dev uvicorn seekhunter.api:create_app --factory --host 0.0.0.0 --port 8090
 Restart=always
 RestartSec=5
 MemoryMax=400M
@@ -4930,6 +4930,7 @@ TELEGRAM_TARGET=1635495359
 OPENCLAW_BIN=/usr/bin/openclaw
 ALLOWED_CIDRS=127.0.0.1/32,192.168.4.0/24,100.64.0.0/10
 ALLOWED_PUBLIC_IPS=180.150.112.113
+TUNNEL_PROXY_IPS=192.168.4.106
 API_WRITE_TOKEN=change-me
 ANTHROPIC_API_KEY=
 ```
