@@ -24,6 +24,14 @@ export interface Job {
   final_score: number;
   matched_skills: string[];
   flags: string[];
+  contact_name: string | null;
+  /** Local AU format, e.g. "08 8216 3534". */
+  contact_phone: string | null;
+  contact_email: string | null;
+  /** A likely linkedin.com/in/ profile URL, when one was found. */
+  contact_linkedin: string | null;
+  /** Always has a LinkedIn people-search URL; `google` only when a name exists. */
+  contact_search: { linkedin: string; google?: string };
 }
 
 export interface JobDetail extends Job {

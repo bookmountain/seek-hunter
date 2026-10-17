@@ -141,6 +141,14 @@ export function JobList({
                     <span className="whitespace-nowrap">
                       <span className="text-ink-faint"> · </span>
                       <span className="font-mono text-[11.5px]">{sourceName(j.source)}</span>
+                      {j.contact_phone && (
+                        <span
+                          title={`Recruiter phone: ${j.contact_phone}`}
+                          className="ml-2 border border-rule px-1 py-px align-[1px] font-mono text-[9.5px] font-medium tracking-[0.1em] text-ink-muted"
+                        >
+                          TEL
+                        </span>
+                      )}
                     </span>
                   </span>
                   {firstSnippet && (

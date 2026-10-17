@@ -29,6 +29,11 @@ const job = (id: number, title: string, extra: Partial<Job> = {}): Job => ({
   final_score: 78,
   matched_skills: ["React", "TypeScript"],
   flags: [],
+  contact_name: null,
+  contact_phone: null,
+  contact_email: null,
+  contact_linkedin: null,
+  contact_search: { linkedin: "https://www.linkedin.com/search/results/people/?keywords=x" },
   ...extra,
 });
 

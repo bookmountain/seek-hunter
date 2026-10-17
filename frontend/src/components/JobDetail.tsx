@@ -8,6 +8,7 @@ import { api, errMsg } from "@/lib/api";
 import { since, sourceName } from "@/lib/format";
 import type { Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { RecruiterBlock } from "./RecruiterBlock";
 import { Score } from "./Score";
 import { WorkTypeLabel } from "./WorkTypeLabel";
 
@@ -172,6 +173,8 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
             </p>
           </div>
         )}
+
+        <RecruiterBlock job={view} />
 
         {/* Actions */}
         <div className="mt-7 flex flex-wrap items-center gap-3">
