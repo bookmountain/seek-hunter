@@ -111,7 +111,13 @@ def _contact_line(it: DigestItem) -> str | None:
     return " · ".join(parts) if parts else None
 
 
-def _format_item(it: DigestItem) -> str:
+def _app_base(public_url: str) -> str:
+    """Full clickable app URL (Telegram doesn't reliably auto-link bare hosts like *.work)."""
+    url = public_url.rstrip("/")
+    return url if url.startswith(("http://", "https://")) else f"https://{url}"
+
+
+def _format_item(it: DigestItem, app_base: str | None = None) -> str:
     lines = [f"#{it.job_id} · {it.score} · {it.title}", _meta_line(it)]
     contact_line = _contact_line(it)
     if contact_line:
@@ -119,11 +125,12 @@ def _format_item(it: DigestItem) -> str:
     note_line = _note_line(it)
     if note_line:
         lines.append(note_line)
-    lines.append(_short_url(it.url))
+    # Deep link into the app (job detail has the SEEK/Jora link); fall back to the ad link.
+    lines.append(f"{app_base}/?job={it.job_id}" if app_base else _short_url(it.url))
     return "\n".join(lines)
 
 
-def _pack_items(items: list[DigestItem]) -> list[list[DigestItem]]:
+def _pack_items(items: list[DigestItem], app_base: str | None = None) -> list[list[DigestItem]]:
     """Group items into chunks that fit Telegram's message-size limit.
 
     A chunk never exceeds PER_MESSAGE items, and starting a new item never pushes the chunk's
@@ -135,7 +142,7 @@ def _pack_items(items: list[DigestItem]) -> list[list[DigestItem]]:
     current: list[DigestItem] = []
     current_len = 0
     for it in items:
-        text = _format_item(it)
+        text = _format_item(it, app_base)
         added_len = len(text) + (2 if current else 0)
         if current and (len(current) >= PER_MESSAGE or current_len + added_len > MAX_CHARS):
             chunks.append(current)
@@ -170,13 +177,14 @@ def format_digest(items: list[DigestItem], when: datetime, public_url: str, degr
         header_lines.append(f"{names} unavailable this run")
     header = "\n".join(header_lines)
 
-    chunks = _pack_items(items)
+    base = _app_base(public_url)
+    chunks = _pack_items(items, base)
     n_chunks = len(chunks)
-    host = _host(public_url)
+    host = base
     first_id = items[0].job_id if items else ""
     messages = []
     for idx, chunk in enumerate(chunks):
-        job_texts = [_format_item(it) for it in chunk]
+        job_texts = [_format_item(it, base) for it in chunk]
         head = header if idx == 0 else f"SeekHunter — continued ({idx + 1}/{n_chunks})"
         footer = None
         if idx == n_chunks - 1:
@@ -192,13 +200,14 @@ def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: s
     extra = max(0, len(items) - RECAP_MAX_ITEMS)
     header = f"SeekHunter daily recap — {day}"
     summary = f"{len(items)} new jobs, {excluded} excluded"
-    chunks = _pack_items(shown)
+    base = _app_base(public_url)
+    chunks = _pack_items(shown, base)
     n_chunks = len(chunks)
-    host = _host(public_url)
+    host = base
     first_id = shown[0].job_id if shown else ""
     messages = []
     for idx, chunk in enumerate(chunks):
-        job_texts = [_format_item(it) for it in chunk]
+        job_texts = [_format_item(it, base) for it in chunk]
         head = header if idx == 0 else f"SeekHunter daily recap — continued ({idx + 1}/{n_chunks})"
         if idx == 0:
             head = f"{head}\n{summary}"
@@ -273,7 +282,7 @@ def format_market_brief(overview: list[dict], top_skills: list[dict], top_gaps: 
     lines.append("")
     lines.append(f"Best city for flexible roles: {best_flexible_city.capitalize()} "
                  f"({best_flexible_share * 100:.0f}%)")
-    lines.append(f"{_host(public_url)}/insights")
+    lines.append(f"{_app_base(public_url)}/insights")
     return "\n".join(lines)
 
 

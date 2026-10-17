@@ -37,7 +37,8 @@ def test_digest_format_and_split():
     assert "Reply to OpenClaw: save 100 · hide 100 · why 100" in msgs[-1]
     assert '"Strong React match"' not in msgs[0]
     assert "Strong React match" in msgs[0]
-    assert "+3 more: sh" in msgs[-1]
+    assert "+3 more: https://sh" in msgs[-1]
+    assert "https://sh/?job=100" in msgs[0]  # clickable deep link into the app
     assert msgs[-1].rstrip().endswith("why 100")
 
 
@@ -57,7 +58,7 @@ def test_digest_header_includes_extra_in_count():
 
 def test_digest_packs_long_items_under_telegram_limit():
     long_items = [
-        DigestItem(job_id=200 + i, score=70, title="T" * 150, company="Acme", location="Adelaide SA",
+        DigestItem(job_id=200 + i, score=70, title="T" * 400, company="Acme", location="Adelaide SA",
                    work_type="contract", matched=["React", "TypeScript"], why="Strong match",
                    url="https://example.com/" + "u" * 200, flags=["flexible"])
         for i in range(10)
@@ -82,19 +83,21 @@ def test_blank_line_separates_job_blocks():
 
 
 def test_jora_url_is_shortened_to_id():
+    from seekhunter.notify import _short_url
     hex_id = "0df32b6e859d734ba88f1b03a73a7b3d"
-    it = item(1, url=f"https://au.jora.com/job/Developer-Programmer-SA-{hex_id}")
-    msgs = format_digest([it], datetime(2026, 10, 17, 9, 0), "https://sh", [])
-    assert f"au.jora.com/job/j-{hex_id}" in msgs[0]
-    assert "Developer-Programmer-SA" not in msgs[0]
+    url = f"https://au.jora.com/job/Developer-Programmer-SA-{hex_id}"
+    assert _short_url(url) == f"au.jora.com/job/j-{hex_id}"
 
 
 def test_seek_url_drops_scheme_and_www():
-    it = item(1, url="https://www.seek.com.au/job/95262793")
-    msgs = format_digest([it], datetime(2026, 10, 17, 9, 0), "https://sh", [])
-    assert "seek.com.au/job/95262793" in msgs[0]
-    assert "https://" not in msgs[0]
-    assert "www." not in msgs[0]
+    from seekhunter.notify import _short_url
+    assert _short_url("https://www.seek.com.au/job/95262793") == "seek.com.au/job/95262793"
+
+
+def test_bare_public_host_gets_https_scheme():
+    msgs = format_digest([item(1)], datetime(2026, 10, 17, 9, 0), "seekhunter.example.work", [])
+    assert "https://seekhunter.example.work/?job=101" in msgs[0]
+    assert "\nhttps://seekhunter.example.work\n" in msgs[0]
 
 
 def test_generic_adelaide_location_is_omitted():
@@ -150,7 +153,7 @@ def test_note_line_omitted_when_no_note_and_no_matches():
     assert len(job_lines) == 1
     idx = lines.index(job_lines[0])
     # title line, meta line, then straight to the url (no note/skills line)
-    assert lines[idx + 2].endswith("/job/1") or "seek.com.au" in lines[idx + 2]
+    assert lines[idx + 2] == "https://sh/?job=101"
 
 
 def test_no_emoji_in_digest_or_recap():
