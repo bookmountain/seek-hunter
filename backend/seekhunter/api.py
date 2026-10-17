@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from seekhunter import market, repo
 from seekhunter.config import get_env
@@ -107,6 +107,26 @@ class JobDetailOut(JobOut):
 class CityCountOut(BaseModel):
     city: str
     count: int
+
+
+class NotificationItemOut(BaseModel):
+    type: str  # job | tailoring | follow_up
+    at: datetime
+    title: str
+    subtitle: str
+    city: str | None = None
+    score: int | None = None
+    job_id: int | None = None
+    tailoring_id: int | None = None
+    application_id: int | None = None
+    unread: bool
+
+
+class NotificationsOut(BaseModel):
+    read_at: datetime
+    unread_count: int
+    by_city: list[CityCountOut]
+    items: list[NotificationItemOut]
 
 
 class JobPatch(BaseModel):
@@ -579,6 +599,50 @@ def _tailoring_file(t: Tailoring, name: str) -> Path:
     return path
 
 
+def _notifications_payload(session: Session, now: datetime, limit: int) -> NotificationsOut:
+    """Shared by GET /api/notifications and POST /api/notifications/read. `jobs` and `tailoring`
+    items are combined and sorted newest-first then capped at `limit`; `follow_up` items are always
+    included in full (they're a small, current snapshot, not a time-windowed backlog) and don't
+    count toward `unread_count`."""
+    _stored, since = repo.notifications_read_at(session, now)
+    job_rows = repo.unread_job_items(session, since)
+    tailoring_rows = repo.unread_tailoring_items(session, since)
+    due = repo.follow_ups_due(session, now)
+
+    job_items = [
+        NotificationItemOut(type="job", at=j.first_seen_at, title=j.title, subtitle=j.company,
+                            city=j.city or "other", score=ev.final_score, job_id=j.id, unread=True)
+        for j, ev in job_rows
+    ]
+
+    tailoring_items: list[NotificationItemOut] = []
+    if tailoring_rows:
+        job_ids = {t.job_id for t in tailoring_rows}
+        jobs_by_id = {j.id: j for j in session.exec(select(Job).where(col(Job.id).in_(job_ids))).all()}
+        for t in tailoring_rows:
+            job = jobs_by_id.get(t.job_id)
+            tailoring_items.append(NotificationItemOut(
+                type="tailoring", at=t.finished_at, title=job.title if job else f"Job #{t.job_id}",
+                subtitle=f"Tailoring {t.status}", job_id=t.job_id, tailoring_id=t.id, unread=True))
+
+    combined = sorted(job_items + tailoring_items, key=lambda i: i.at, reverse=True)[:limit]
+
+    follow_up_items = [
+        NotificationItemOut(type="follow_up", at=a.applied_at, title=a.title, subtitle=a.company,
+                            application_id=a.id, unread=False)
+        for a in due
+    ]
+
+    by_city_counts: dict[str, int] = {}
+    for item in job_items:
+        by_city_counts[item.city] = by_city_counts.get(item.city, 0) + 1
+    by_city = [CityCountOut(city=c, count=n) for c, n in sorted(by_city_counts.items())]
+
+    return NotificationsOut(
+        read_at=since, unread_count=len(job_items) + len(tailoring_items), by_city=by_city,
+        items=combined + follow_up_items)
+
+
 def create_app(init: bool = True) -> FastAPI:
     env = get_env()
     ensure_safe_write_token(env)
@@ -865,8 +929,22 @@ def create_app(init: bool = True) -> FastAPI:
 
     @app.put("/api/settings", response_model=AppSettings, dependencies=write)
     def put_settings(body: AppSettings, session: Session = Depends(get_session)):
+        # The notification-bell "last read" marker is server-owned; never let a UI PUT (which
+        # round-trips whatever GET /api/settings returned earlier) clobber it with a stale value.
+        body.notifications_read_at = repo.load_settings(session).notifications_read_at
         repo.save_settings(session, body)
         return body
+
+    @app.get("/api/notifications", response_model=NotificationsOut)
+    def get_notifications(limit: int = Query(20, ge=1, le=200), session: Session = Depends(get_session)):
+        return _notifications_payload(session, utcnow(), limit)
+
+    @app.post("/api/notifications/read", response_model=NotificationsOut, dependencies=write)
+    def mark_notifications_read(limit: int = Query(20, ge=1, le=200),
+                                session: Session = Depends(get_session)):
+        now = utcnow()
+        repo.mark_notifications_read(session, now)
+        return _notifications_payload(session, now, limit)
 
     @app.get("/api/runs", response_model=list[Run])
     def list_runs(session: Session = Depends(get_session)):

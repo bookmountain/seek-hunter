@@ -199,6 +199,46 @@ def notification_candidates(session: Session, now: datetime,
     return list(session.exec(stmt).all())
 
 
+NOTIFICATIONS_READ_FALLBACK = timedelta(hours=24)
+
+
+def notifications_read_at(session: Session, now: datetime) -> tuple[datetime | None, datetime]:
+    """`(stored, effective)`: the raw server-side "last read" marker (`None` before it's ever been
+    set) and the cutoff actually used to decide what's unread — `stored`, or `now` minus
+    `NOTIFICATIONS_READ_FALLBACK` when nothing has been read yet."""
+    stored = load_settings(session).notifications_read_at
+    return stored, stored or (now - NOTIFICATIONS_READ_FALLBACK)
+
+
+def mark_notifications_read(session: Session, when: datetime) -> None:
+    settings = load_settings(session)
+    settings.notifications_read_at = when
+    save_settings(session, settings)
+
+
+def unread_job_items(session: Session, since: datetime) -> list[tuple[Job, JobEvaluation]]:
+    """Active (not excluded/hidden/duplicate) jobs first seen after `since`, across all cities,
+    newest first — the "job" items in the in-app notification feed."""
+    stmt = (
+        select(Job, JobEvaluation).join(JobEvaluation, JobEvaluation.job_id == Job.id)
+        .where(*_active_clause(), Job.first_seen_at > since)
+        .order_by(col(Job.first_seen_at).desc())
+    )
+    return list(session.exec(stmt).all())
+
+
+def unread_tailoring_items(session: Session, since: datetime) -> list[Tailoring]:
+    """Tailorings that finished (done or failed) after `since`, newest first — the "tailoring"
+    items in the in-app notification feed."""
+    stmt = (
+        select(Tailoring)
+        .where(col(Tailoring.status).in_(["done", "failed"]), col(Tailoring.finished_at).is_not(None),
+               Tailoring.finished_at > since)
+        .order_by(col(Tailoring.finished_at).desc())
+    )
+    return list(session.exec(stmt).all())
+
+
 def mark_notified(session: Session, job_ids: list[int], when: datetime) -> None:
     for job in session.exec(select(Job).where(col(Job.id).in_(job_ids))).all():
         job.notified_at = when

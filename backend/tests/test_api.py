@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -141,6 +142,103 @@ def test_search_profile_crud_and_settings(client):
     s = client.get("/api/settings").json()
     s["weights"]["full_time"] = 5
     assert client.put("/api/settings", json=s, headers=AUTH).json()["weights"]["full_time"] == 5
+
+
+def test_put_settings_does_not_clobber_notifications_read_at(client):
+    read_at = client.post("/api/notifications/read", headers=AUTH).json()["read_at"]
+
+    s = client.get("/api/settings").json()
+    assert s["notifications_read_at"] == read_at
+    s["notify_cities"] = ["adelaide", "melbourne"]
+    s["notifications_read_at"] = None  # a naive UI payload must not be able to clear it
+    r = client.put("/api/settings", json=s, headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["notifications_read_at"] == read_at
+    assert r.json()["notify_cities"] == ["adelaide", "melbourne"]
+    assert client.get("/api/settings").json()["notifications_read_at"] == read_at
+
+
+def test_get_notifications_lists_unread_job_and_counts_by_city(client):
+    out = client.get("/api/notifications").json()
+    assert out["unread_count"] == 1  # the "React Dev" job seeded by the client fixture
+    assert out["by_city"] == [{"city": "adelaide", "count": 1}]
+    job_items = [i for i in out["items"] if i["type"] == "job"]
+    assert [i["title"] for i in job_items] == ["React Dev"]
+    assert job_items[0]["unread"] is True
+    assert job_items[0]["city"] == "adelaide"
+    assert job_items[0]["score"] == 70
+
+
+def test_post_notifications_read_marks_read_and_clears_unread(client):
+    first = client.get("/api/notifications").json()
+    assert first["unread_count"] == 1
+
+    r = client.post("/api/notifications/read", headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["unread_count"] == 0
+
+    assert client.get("/api/notifications").json()["unread_count"] == 0
+
+
+def test_post_notifications_read_requires_write_token(client):
+    assert client.post("/api/notifications/read").status_code == 401
+
+
+def test_notifications_follow_up_items_always_listed_not_counted_unread(client):
+    old_applied_at = (utcnow() - timedelta(days=10)).isoformat()
+    r = client.post("/api/applications", headers=AUTH, json={
+        "company": "Globex", "title": "Dev", "applied_at": old_applied_at})
+    app_id = r.json()["id"]
+    client.post("/api/notifications/read", headers=AUTH)  # clear the job/tailoring noise
+
+    out = client.get("/api/notifications").json()
+    follow_ups = [i for i in out["items"] if i["type"] == "follow_up"]
+    assert [i["application_id"] for i in follow_ups] == [app_id]
+    assert follow_ups[0]["unread"] is False
+    assert out["unread_count"] == 0  # follow-ups never count toward unread
+
+
+def test_notifications_includes_finished_tailoring_items(monkeypatch, tmp_path):
+    monkeypatch.setenv("API_WRITE_TOKEN", "t0k")
+    monkeypatch.setenv("ALLOWED_CIDRS", "127.0.0.1/32,testclient/32")
+    monkeypatch.setenv("STATIC_DIR", str(tmp_path))
+    monkeypatch.setenv("RESUME_DIR", str(Path(__file__).parent / "fixtures" / "resume"))
+    (tmp_path / "index.html").write_text("<html>spa</html>")
+    get_env.cache_clear()
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        repo.ensure_seed(s)
+        job, _ = repo.upsert_job(s, JobData(source="seek", external_id="1", title="React Dev",
+                                            company="Acme", location="Adelaide SA", work_type="contract",
+                                            url="u"))
+        repo.save_evaluation(s, job.id, excluded=False, reasons=[], snippets={}, rule_score=70,
+                             llm_score=None, llm_note=None, llm_provider=None, final_score=70,
+                             matched_skills=[], flags=[])
+        repo.mark_notifications_read(s, utcnow() - timedelta(minutes=5))
+        t = repo.create_tailoring(s, job.id)
+        t.status, t.finished_at = "done", utcnow()
+        repo.save_tailoring(s, t)
+        job_id, tailoring_id = job.id, t.id
+
+    def override():
+        with Session(engine) as s:
+            yield s
+
+    app = create_app(init=False)
+    app.dependency_overrides[get_session] = override
+    tc = TestClient(app)
+
+    out = tc.get("/api/notifications").json()
+    tailoring_items = [i for i in out["items"] if i["type"] == "tailoring"]
+    assert len(tailoring_items) == 1
+    item = tailoring_items[0]
+    assert item["title"] == "React Dev"
+    assert item["subtitle"] == "Tailoring done"
+    assert item["tailoring_id"] == tailoring_id and item["job_id"] == job_id
+    assert item["unread"] is True
+    assert out["unread_count"] == 2  # the job itself + the tailoring completion
+    get_env.cache_clear()
 
 
 def test_runs_list(client):

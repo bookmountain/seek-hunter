@@ -302,6 +302,67 @@ def test_jobs_needing_insights_prioritises_notify_cities(session):
     assert {j.id for j in jobs_unfiltered} == {adelaide.id, melbourne.id}
 
 
+def test_notifications_read_at_defaults_to_24h_fallback(session):
+    now = utcnow()
+    stored, effective = repo.notifications_read_at(session, now)
+    assert stored is None
+    assert effective == now - timedelta(hours=24)
+
+
+def test_mark_notifications_read_sets_stored_value(session):
+    now = utcnow()
+    repo.mark_notifications_read(session, now)
+    stored, effective = repo.notifications_read_at(session, now)
+    assert stored == now
+    assert effective == now
+
+
+def test_unread_job_items_excludes_excluded_hidden_duplicate_and_old(session):
+    fresh = _with_eval(session, "nj1", title="Fresh")
+    excluded = _with_eval(session, "nj2", title="Excluded", excluded=True)
+    hidden = _with_eval(session, "nj3", title="Hidden")
+    hidden.status = "hidden"
+    dup = _with_eval(session, "nj4", title="Dup")
+    dup.canonical_job_id = fresh.id
+    old = _with_eval(session, "nj5", title="Old")
+    old.first_seen_at = utcnow() - timedelta(days=2)
+    session.add_all([excluded, hidden, dup, old])
+    session.commit()
+
+    since = utcnow() - timedelta(hours=1)
+    rows = repo.unread_job_items(session, since)
+    assert [j.id for j, _ in rows] == [fresh.id]
+
+
+def test_unread_job_items_newest_first(session):
+    older = _with_eval(session, "nj6", title="Older")
+    older.first_seen_at = utcnow() - timedelta(minutes=10)
+    newer = _with_eval(session, "nj7", title="Newer")
+    session.add_all([older, newer])
+    session.commit()
+
+    since = utcnow() - timedelta(hours=1)
+    rows = repo.unread_job_items(session, since)
+    assert [j.id for j, _ in rows] == [newer.id, older.id]
+
+
+def test_unread_tailoring_items_only_done_or_failed_after_since(session):
+    job, _ = repo.upsert_job(session, data(ext="tj1"))
+    now = utcnow()
+    done = repo.create_tailoring(session, job.id)
+    done.status, done.finished_at = "done", now
+    queued = repo.create_tailoring(session, job.id)
+    queued.status = "queued"
+    failed_old = repo.create_tailoring(session, job.id)
+    failed_old.status, failed_old.finished_at = "failed", now - timedelta(days=1)
+    session.add_all([done, queued, failed_old])
+    session.commit()
+
+    since = now - timedelta(hours=1)
+    rows = repo.unread_tailoring_items(session, since)
+    assert [t.id for t in rows] == [done.id]
+
+
 def test_set_insights_applies_data_and_checked_at(session):
     job, _ = repo.upsert_job(session, data())
     now = utcnow()
