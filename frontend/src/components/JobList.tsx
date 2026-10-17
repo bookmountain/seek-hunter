@@ -137,7 +137,7 @@ export function JobList({
                   <span className="mt-1 block text-[13px] leading-snug text-ink-muted">
                     {j.company}
                     <span className="text-ink-faint"> · </span>
-                    {j.location}
+                    <span className="whitespace-nowrap">{j.location}</span>
                     <span className="whitespace-nowrap">
                       <span className="text-ink-faint"> · </span>
                       <span className="font-mono text-[11.5px]">{sourceName(j.source)}</span>
