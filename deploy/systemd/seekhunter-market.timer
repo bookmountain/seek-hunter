@@ -1,0 +1,10 @@
+[Unit]
+Description=SeekHunter market insights crawl 02:30 Adelaide
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Australia/Adelaide
+RandomizedDelaySec=20min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

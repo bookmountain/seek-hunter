@@ -1,0 +1,11 @@
+[Unit]
+Description=SeekHunter weekly market insights brief
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/seek-hunter/app/backend
+EnvironmentFile=/opt/seek-hunter/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/root/.local/bin/uv run --frozen --no-dev seekhunter insights-brief
+SuccessExitStatus=75

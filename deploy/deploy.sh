@@ -32,7 +32,8 @@ openclaw skills install /opt/seek-hunter/app/openclaw-skill/seekhunter --as seek
   --acknowledge-install-policy-warning || echo "WARN: openclaw skill install failed"
 install -m 644 /opt/seek-hunter/app/deploy/systemd/*.service /opt/seek-hunter/app/deploy/systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now seekhunter-crawl.timer seekhunter-recap.timer
+systemctl enable --now seekhunter-crawl.timer seekhunter-recap.timer seekhunter-market.timer \
+  seekhunter-insights-brief.timer
 systemctl enable seekhunter-web.service
 systemctl restart seekhunter-web.service
 # Build/cache the current resume preview once in the background. The first Tectonic run downloads its

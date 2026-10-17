@@ -1,0 +1,8 @@
+[Unit]
+Description=SeekHunter weekly market insights brief Mondays 08:30 Adelaide
+
+[Timer]
+OnCalendar=Mon *-*-* 08:30:00 Australia/Adelaide
+
+[Install]
+WantedBy=timers.target

@@ -47,6 +47,17 @@ SeekHunter can rewrite Book's resume for one job (reorders/trims skills, picks p
 - When Book states a lasting preference ("no recruiter X", "only contract"), apply it via settings/searches and remember it.
 - Don't touch other cron jobs or channels.
 
+## Market insights ("what skills should I learn?", "Java or C#?", "is Melbourne better?")
+SeekHunter also runs a separate daily crawl of SEEK across Adelaide, Melbourne, Sydney, and Perth purely for
+market stats (volume, flexible-work share, pay, skill demand) — this data never touches jobs or digests.
+- City snapshot (totals, flexible %, pay percentiles, work-type/role mix): `seekhunter-api GET "/api/insights/overview?days=14"` → one row per city.
+- What skills are in demand: `seekhunter-api GET "/api/insights/skills?city=adelaide&days=14"` → `[{skill, count, share, you_have}]`, sorted most in-demand first. Add `&role_family=ai_ml|data|devops_cloud|mobile|qa|it_support|frontend|backend|fullstack` to narrow it.
+- Head-to-head (e.g. "Java or C#?"): `seekhunter-api GET "/api/insights/compare?skills=Java,C%23&days=14"` → the share of ads asking for each skill, per city.
+- Gaps against Book's resume ("what should I learn?"): `seekhunter-api GET "/api/insights/gaps?city=adelaide&days=14"` → skills not in his resume, ranked by demand, each with up to 3 example titles and which role families ask for it.
+- Trends over time: `seekhunter-api GET "/api/insights/trends?city=adelaide&skills=Java,C%23&weeks=8"` (needs a few days of daily snapshots to show more than one point).
+- Role families ("is there more frontend or backend work?"): `seekhunter-api GET "/api/insights/roles?city=adelaide&days=14"` → count, flexible %, and top skills per role family.
+- Answer in 3–6 plain-text lines, no emoji: cite the actual numbers (don't round away the sample size), and point to https://seekhunter.bookmountain.work/insights for the charts. If a city/role has too few jobs to be meaningful, say so rather than overstating a tiny sample.
+
 ## Research a job ("research #142", "tell me about the company for #142")
 1. Read the job: `seekhunter-api GET /api/jobs/142/brief`.
 2. Web-search the employer. If it is a recruitment agency, research the agency and name the end client only if the ad reveals it. Find what the company does, rough size, notable news from the last 6 months, and tech stack signals (their engineering blog, GitHub, other job ads).
