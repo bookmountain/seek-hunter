@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { api } from "@/lib/api";
+import { api, errMsg } from "@/lib/api";
 import type { AppSettings, Weights } from "@/lib/types";
 
 type ListKey = {
@@ -22,6 +22,7 @@ const LISTS: [ListKey, string][] = [
   ["citizenship_patterns", "Citizenship/PR patterns (regex)"],
   ["defence_keywords", "Defence keywords (regex)"],
   ["bank_keywords", "Bank keywords (regex)"],
+  ["fintech_keywords", "Fintech keywords (regex)"],
   ["role_boost_terms", "Role boost terms"],
   ["role_penalty_terms", "Role penalty terms"],
   ["llm_providers", "LLM provider order (anthropic, openclaw)"],
@@ -40,14 +41,32 @@ const TOGGLES: [keyof AppSettings, string][] = [
   ["exclude_fintech", "Exclude fintech"],
 ];
 
+const parseList = (text: string): string[] =>
+  text
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+const parseInt0 = (v: string): number => Math.trunc(Number(v) || 0);
+
 export function SettingsPage() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const [s, setS] = useState<AppSettings | null>(null);
-  useEffect(() => setS(data ?? null), [data]);
-  const fail = (e: Error) => toast.error(e.message.includes("401") ? "Set the write token first" : e.message);
+  // Raw textarea text, kept separate from `s` so each keystroke (including spaces and
+  // newlines) is preserved as typed; it's only split/trimmed/filtered when saving.
+  const [listText, setListText] = useState<Partial<Record<ListKey, string>>>({});
+  useEffect(() => {
+    if (!data) return;
+    setS(data);
+    setListText(Object.fromEntries(LISTS.map(([k]) => [k, data[k].join("\n")])) as Record<ListKey, string>);
+  }, [data]);
+  const fail = (e: Error) => toast.error(errMsg(e));
   const save = useMutation({
-    mutationFn: () => api.saveSettings(s!),
+    mutationFn: () => {
+      const lists = Object.fromEntries(LISTS.map(([k]) => [k, parseList(listText[k] ?? "")])) as Record<ListKey, string[]>;
+      return api.saveSettings({ ...s!, ...lists });
+    },
     onSuccess: () => {
       toast.success("Settings saved");
       qc.invalidateQueries({ queryKey: ["settings"] });
@@ -83,16 +102,34 @@ export function SettingsPage() {
           {WEIGHTS.map(([k, label]) => (
             <div key={k} className="space-y-1">
               <Label>{label}</Label>
-              <Input type="number" value={s.weights[k]} onChange={(e) => setS({ ...s, weights: { ...s.weights, [k]: Number(e.target.value) } })} />
+              <Input
+                type="number"
+                step={1}
+                min={0}
+                value={s.weights[k]}
+                onChange={(e) => setS({ ...s, weights: { ...s.weights, [k]: parseInt0(e.target.value) } })}
+              />
             </div>
           ))}
           <div className="space-y-1">
             <Label>Max notified per run</Label>
-            <Input type="number" value={s.max_notify_per_run} onChange={(e) => setS({ ...s, max_notify_per_run: Number(e.target.value) })} />
+            <Input
+              type="number"
+              step={1}
+              min={0}
+              value={s.max_notify_per_run}
+              onChange={(e) => setS({ ...s, max_notify_per_run: parseInt0(e.target.value) })}
+            />
           </div>
           <div className="space-y-1">
             <Label>Max pages per search</Label>
-            <Input type="number" value={s.max_pages_per_search} onChange={(e) => setS({ ...s, max_pages_per_search: Number(e.target.value) })} />
+            <Input
+              type="number"
+              step={1}
+              min={0}
+              value={s.max_pages_per_search}
+              onChange={(e) => setS({ ...s, max_pages_per_search: parseInt0(e.target.value) })}
+            />
           </div>
         </CardContent>
       </Card>
@@ -107,8 +144,8 @@ export function SettingsPage() {
               <Textarea
                 rows={6}
                 className="font-mono text-xs"
-                value={s[k].join("\n")}
-                onChange={(e) => setS({ ...s, [k]: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })}
+                value={listText[k] ?? ""}
+                onChange={(e) => setListText({ ...listText, [k]: e.target.value })}
               />
             </div>
           ))}

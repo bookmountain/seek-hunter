@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
+import { parseIsoUtc } from "@/lib/utils";
 
 const fmt = (iso: string | null) =>
-  iso ? new Date(iso.endsWith("Z") ? iso : `${iso}Z`).toLocaleString("en-AU", { timeZone: "Australia/Adelaide" }) : "—";
+  iso ? parseIsoUtc(iso).toLocaleString("en-AU", { timeZone: "Australia/Adelaide" }) : "—";
 
 export function RunsPage() {
   const { data = [] } = useQuery({ queryKey: ["runs"], queryFn: api.runs, refetchInterval: 30_000 });

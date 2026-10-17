@@ -13,6 +13,26 @@ export class ApiError extends Error {
   }
 }
 
+/** Turns a thrown error into a readable message for toasts. */
+export function errMsg(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.status === 401) return "Set the write token first";
+    try {
+      const data = JSON.parse(e.message) as { detail?: unknown };
+      if (Array.isArray(data.detail)) {
+        return data.detail
+          .map((d) => (d && typeof d === "object" && "msg" in d ? String((d as { msg: unknown }).msg) : String(d)))
+          .join(", ");
+      }
+      if (typeof data.detail === "string") return data.detail;
+    } catch {
+      // not JSON; fall through to the raw response text below
+    }
+    return e.message;
+  }
+  return e instanceof Error ? e.message : String(e);
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (method !== "GET") headers.Authorization = `Bearer ${getToken()}`;

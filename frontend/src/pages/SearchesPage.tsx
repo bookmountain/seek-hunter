@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { api } from "@/lib/api";
+import { api, errMsg } from "@/lib/api";
 import { type SearchProfile, WORK_TYPE_LABEL, type WorkType } from "@/lib/types";
 
 const LOCATIONS = ["All Adelaide SA", "All Melbourne VIC", "All Sydney NSW", "All Perth WA", "All Brisbane QLD"];
@@ -25,9 +25,13 @@ function ProfileRow({ initial, onSaved }: { initial: SearchProfile; onSaved: () 
       onSaved();
       if (!p.id) setP(EMPTY);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(errMsg(e)),
   });
-  const remove = useMutation({ mutationFn: () => api.deleteProfile(p.id!), onSuccess: onSaved });
+  const remove = useMutation({
+    mutationFn: () => api.deleteProfile(p.id!),
+    onSuccess: onSaved,
+    onError: (e: Error) => toast.error(errMsg(e)),
+  });
   return (
     <Card>
       <CardContent className="flex flex-wrap items-center gap-3 py-4">

@@ -1,31 +1,38 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { JobDrawer } from "@/components/JobDrawer";
 import { JobTable } from "@/components/JobTable";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { api } from "@/lib/api";
+import { api, errMsg } from "@/lib/api";
 import type { Job } from "@/lib/types";
 
 const ALL = "all";
 
 export function JobsPage({ view }: { view: "active" | "excluded" }) {
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [workType, setWorkType] = useState(ALL);
   const [status, setStatus] = useState(ALL);
   const [source, setSource] = useState(ALL);
   const [selected, setSelected] = useState<Job | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
   const params = {
     view,
-    q,
+    q: debouncedQ,
     work_type: workType === ALL ? undefined : workType,
     status: status === ALL ? undefined : status,
     source: source === ALL ? undefined : source,
   };
-  const { data = [], isLoading } = useQuery({ queryKey: ["jobs", params], queryFn: () => api.jobs(params) });
+  const { data = [], isLoading, error } = useQuery({ queryKey: ["jobs", params], queryFn: () => api.jobs(params) });
 
   const select = (value: string, onChange: (v: string) => void, options: [string, string][], placeholder: string) => (
-    <Select value={value} onValueChange={(v) => onChange(v as string)}>
+    <Select value={value} onValueChange={(v) => onChange(v as string)} items={Object.fromEntries(options)}>
       <SelectTrigger className="w-36">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
@@ -49,7 +56,11 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
         {select(source, setSource, [[ALL, "All sources"], ["seek", "SEEK"], ["jora", "Jora"]], "Source")}
         <span className="ml-auto text-sm text-muted-foreground">{isLoading ? "Loading…" : `${data.length} jobs`}</span>
       </div>
-      <JobTable jobs={data} view={view} onSelect={setSelected} />
+      {error ? (
+        <p className="py-12 text-center text-destructive">{errMsg(error)}</p>
+      ) : (
+        <JobTable jobs={data} view={view} onSelect={setSelected} />
+      )}
       <JobDrawer job={selected} onClose={() => setSelected(null)} />
     </div>
   );

@@ -1,10 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { parseIsoUtc } from "@/lib/utils";
 import { type Job, WORK_TYPE_LABEL } from "@/lib/types";
 import { ScoreBadge } from "./ScoreBadge";
 
 const since = (iso: string) => {
-  const h = Math.round((Date.now() - new Date(iso.endsWith("Z") ? iso : `${iso}Z`).getTime()) / 3_600_000);
+  const h = Math.round((Date.now() - parseIsoUtc(iso).getTime()) / 3_600_000);
   return h < 24 ? `${h}h` : `${Math.round(h / 24)}d`;
 };
 
