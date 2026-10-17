@@ -331,6 +331,7 @@ def ensure_seed(session: Session) -> None:
             session.add(SearchProfile(name=f"Adelaide · {kw}", keywords=kw, location="All Adelaide SA"))
         session.commit()
     _ensure_other_city_profiles(session)
+    _ensure_linkedin_source(session)
 
 
 def _ensure_other_city_profiles(session: Session) -> None:
@@ -344,8 +345,22 @@ def _ensure_other_city_profiles(session: Session) -> None:
             if (kw, location) in existing:
                 continue
             session.add(SearchProfile(name=f"{city_name} · {kw}", keywords=kw, location=location,
-                                      sources=["seek", "jora"], enabled=True))
+                                      enabled=True))
     session.commit()
+
+
+def _ensure_linkedin_source(session: Session) -> None:
+    """Adds "linkedin" to every search profile's `sources` list that doesn't already have it — the
+    migration for databases seeded before LinkedIn existed as a source. Runs every time (like
+    `_ensure_other_city_profiles`); idempotent, since it's a no-op once every profile has it."""
+    changed = False
+    for p in list_search_profiles(session):
+        if "linkedin" not in p.sources:
+            p.sources = [*p.sources, "linkedin"]
+            session.add(p)
+            changed = True
+    if changed:
+        session.commit()
 
 
 def recent_runs(session: Session, kind: str = "crawl", limit: int = 50) -> list[Run]:

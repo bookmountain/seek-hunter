@@ -4,7 +4,7 @@ export type JobCity = "adelaide" | "melbourne" | "sydney" | "perth" | "brisbane"
 
 export interface Job {
   id: number;
-  source: "seek" | "jora";
+  source: "seek" | "jora" | "linkedin";
   title: string;
   company: string;
   location: string;
@@ -60,7 +60,7 @@ export interface SearchProfile {
   keywords: string;
   location: string;
   work_types: WorkType[];
-  sources: ("seek" | "jora")[];
+  sources: ("seek" | "jora" | "linkedin")[];
   enabled: boolean;
 }
 

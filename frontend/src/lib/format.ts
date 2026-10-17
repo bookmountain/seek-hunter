@@ -30,7 +30,9 @@ export const CITY_NAME: Record<string, string> = {
 
 export const cityName = (c: string | null | undefined) => (c ? (CITY_NAME[c] ?? c) : "");
 
-export const sourceName = (s: Job["source"]) => (s === "seek" ? "SEEK" : "Jora");
+const SOURCE_NAME: Record<Job["source"], string> = { seek: "SEEK", jora: "Jora", linkedin: "LinkedIn" };
+
+export const sourceName = (s: Job["source"]) => SOURCE_NAME[s] ?? s;
 
 /** Relative age for status lines, e.g. "just now", "12m ago", "2h ago", "3d ago". */
 export function ago(iso: string, now = Date.now()): string {

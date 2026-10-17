@@ -71,7 +71,7 @@ class SearchProfile(SQLModel, table=True):
     keywords: str
     location: str = "All Adelaide SA"
     work_types: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    sources: list[str] = Field(default_factory=lambda: ["seek", "jora"], sa_column=Column(JSON))
+    sources: list[str] = Field(default_factory=lambda: ["seek", "jora", "linkedin"], sa_column=Column(JSON))
     enabled: bool = True
 
 

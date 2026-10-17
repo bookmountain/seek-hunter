@@ -435,6 +435,151 @@ def test_seek_becomes_canonical_over_existing_jora_duplicate(session):
     assert second_notifier.sent == []  # already notified via jora; no duplicate notification
 
 
+def test_linkedin_duplicate_of_existing_seek_job_links_to_seek_as_canonical(session):
+    seek = FakeSource("seek", [jd("seek", "y", title="Data Engineer", company="Foo")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    seek_job = session.exec(select(Job).where(Job.source == "seek", Job.external_id == "y")).one()
+
+    linkedin = FakeSource("linkedin", [jd("linkedin", "x", title="Data Engineer", company="Foo")])
+    run_crawl(session, {"linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+
+    linkedin_job = session.exec(
+        select(Job).where(Job.source == "linkedin", Job.external_id == "x")).one()
+    assert linkedin_job.canonical_job_id == seek_job.id
+    session.refresh(seek_job)
+    assert seek_job.canonical_job_id is None
+
+
+def test_seek_becomes_canonical_over_existing_linkedin_duplicate(session):
+    linkedin = FakeSource("linkedin", [jd("linkedin", "x", title="Data Engineer", company="Foo")])
+    first_notifier = FakeNotifier()
+    run_crawl(session, {"linkedin": linkedin}, FakeChain(), first_notifier, PROFILE, "https://sh")
+    linkedin_job = session.exec(
+        select(Job).where(Job.source == "linkedin", Job.external_id == "x")).one()
+    assert linkedin_job.notified_at is not None
+
+    seek = FakeSource("seek", [jd("seek", "y", title="Data Engineer", company="Foo")])
+    second_notifier = FakeNotifier()
+    run_crawl(session, {"seek": seek}, FakeChain(), second_notifier, PROFILE, "https://sh")
+
+    session.refresh(linkedin_job)
+    seek_job = session.exec(select(Job).where(Job.source == "seek", Job.external_id == "y")).one()
+    assert linkedin_job.canonical_job_id == seek_job.id
+    assert seek_job.canonical_job_id is None
+    assert seek_job.notified_at == linkedin_job.notified_at
+    assert seek.detail_calls == 1  # seek is canonical, so its details were fetched
+    assert second_notifier.sent == []  # already notified via linkedin; no duplicate notification
+
+
+def test_jora_and_linkedin_duplicate_first_seen_wins_regardless_of_source(session):
+    # jora runs before linkedin in this dict -> jora wins the canonical slot.
+    jora = FakeSource("jora", [jd("jora", "a", title="Data Engineer", company="Foo")])
+    linkedin = FakeSource("linkedin", [jd("linkedin", "b", title="Data Engineer", company="Foo")])
+    run_crawl(session, {"jora": jora, "linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE,
+             "https://sh")
+    jora_job = session.exec(select(Job).where(Job.source == "jora", Job.external_id == "a")).one()
+    linkedin_job = session.exec(
+        select(Job).where(Job.source == "linkedin", Job.external_id == "b")).one()
+    assert linkedin_job.canonical_job_id == jora_job.id
+    assert jora_job.canonical_job_id is None
+
+
+def test_linkedin_and_jora_duplicate_first_seen_wins_when_linkedin_runs_first(session):
+    # linkedin runs before jora in this dict -> linkedin wins the canonical slot.
+    linkedin = FakeSource("linkedin", [jd("linkedin", "b", title="Data Engineer", company="Foo")])
+    jora = FakeSource("jora", [jd("jora", "a", title="Data Engineer", company="Foo")])
+    run_crawl(session, {"linkedin": linkedin, "jora": jora}, FakeChain(), FakeNotifier(), PROFILE,
+             "https://sh")
+    linkedin_job = session.exec(
+        select(Job).where(Job.source == "linkedin", Job.external_id == "b")).one()
+    jora_job = session.exec(select(Job).where(Job.source == "jora", Job.external_id == "a")).one()
+    assert jora_job.canonical_job_id == linkedin_job.id
+    assert linkedin_job.canonical_job_id is None
+
+
+def test_new_linkedin_job_persists_applicant_count_from_details(session):
+    linkedin = FakeSource("linkedin", [jd("linkedin", "1", applicant_count=42)])
+    run_crawl(session, {"linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    job = session.exec(select(Job).where(Job.source == "linkedin", Job.external_id == "1")).one()
+    assert job.applicant_count == 42
+    assert job.insights_checked_at is not None
+
+
+def test_linkedin_jobs_are_not_touched_by_the_seek_only_insights_refresh_loop(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    linkedin = FakeSource("linkedin", [jd("linkedin", "a", title="Backend Dev", company="Other",
+                                          applicant_count=5)])
+    run_crawl(session, {"seek": seek, "linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE,
+             "https://sh")
+    linkedin_job = session.exec(select(Job).where(Job.source == "linkedin", Job.external_id == "a")).one()
+    assert linkedin_job.applicant_count == 5
+
+    # Force both jobs to look overdue for an insights refresh, then run again: the refresh loop
+    # only ever looks at seek jobs (see repo.jobs_needing_insights), so linkedin's count and
+    # insights_calls must be untouched.
+    for job in session.exec(select(Job)).all():
+        job.insights_checked_at = None
+        session.add(job)
+    session.commit()
+    run_crawl(session, {"seek": seek, "linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE,
+             "https://sh")
+    assert linkedin.insights_calls == 0
+
+
+def test_linkedin_disabled_is_skipped_entirely(session):
+    settings = repo.load_settings(session)
+    settings.linkedin_enabled = False
+    repo.save_settings(session, settings)
+
+    seek = FakeSource("seek", [jd("seek", "1")])
+    linkedin = FakeSource("linkedin", [jd("linkedin", "a", title="Backend Dev", company="Other")])
+    report = run_crawl(session, {"seek": seek, "linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE,
+                       "https://sh")
+    assert "linkedin" not in report.source_status
+    assert session.exec(select(Job).where(Job.source == "linkedin")).first() is None
+
+
+def test_max_pages_for_applies_linkedin_cap(session):
+    from seekhunter.models import SearchProfile
+
+    settings = repo.load_settings(session)
+    settings.max_pages_per_search = 5
+    settings.linkedin_max_pages = 2
+    settings.other_city_max_pages = 3
+    adelaide = SearchProfile(name="a", keywords="dev", location="All Adelaide SA")
+    assert _max_pages_for(adelaide, settings) == 5
+    assert _max_pages_for(adelaide, settings, "linkedin") == 2
+    assert _max_pages_for(adelaide, settings, "seek") == 5
+
+    melbourne = SearchProfile(name="m", keywords="dev", location="All Melbourne VIC")
+    # non-notify city cap still wins when it's lower than linkedin's own cap.
+    settings.linkedin_max_pages = 10
+    assert _max_pages_for(melbourne, settings, "linkedin") == 3
+
+
+def test_crawl_passes_linkedin_max_pages_to_the_linkedin_source(session):
+    settings = repo.load_settings(session)
+    settings.max_pages_per_search = 5
+    settings.linkedin_max_pages = 1
+    repo.save_settings(session, settings)
+
+    class RecordingSource(FakeSource):
+        def __init__(self, name, jobs):
+            super().__init__(name, jobs)
+            self.max_pages_seen = None
+
+        def search(self, profile, max_pages):
+            self.max_pages_seen = max_pages
+            return super().search(profile, max_pages)
+
+    seek = RecordingSource("seek", [])
+    linkedin = RecordingSource("linkedin", [])
+    run_crawl(session, {"seek": seek, "linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE,
+             "https://sh")
+    assert seek.max_pages_seen == 5
+    assert linkedin.max_pages_seen == 1
+
+
 def test_blocking_lock_waits(tmp_path):
     # flock() is scoped per-process (on BSD/macOS) or per-open-file-description (on Linux); either way
     # two threads in the *same* process don't reliably contend with each other. Use a real second

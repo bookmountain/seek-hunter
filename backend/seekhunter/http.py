@@ -16,6 +16,7 @@ class PoliteClient:
         min_delay: float = 2.0,
         max_delay: float = 5.0,
         backoffs: tuple[float, ...] = (30.0, 90.0),
+        blocked_statuses: tuple[int, ...] = (403, 429, 503),
     ) -> None:
         if session is None:
             from curl_cffi import requests as cffi_requests
@@ -26,6 +27,7 @@ class PoliteClient:
         self.min_delay = min_delay
         self.max_delay = max_delay
         self.backoffs = backoffs
+        self.blocked_statuses = blocked_statuses
         self.request_count = 0
         self.blocked_count = 0
 
@@ -42,7 +44,7 @@ class PoliteClient:
         self.request_count += 1
         for attempt in range(len(self.backoffs) + 1):
             resp = self.session.request(method, url, **kw)
-            if resp.status_code not in (403, 429, 503):
+            if resp.status_code not in self.blocked_statuses:
                 return resp
             self.blocked_count += 1
             if attempt < len(self.backoffs):

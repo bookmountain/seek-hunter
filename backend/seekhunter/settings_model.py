@@ -78,6 +78,11 @@ class AppSettings(BaseModel):
     max_insights_per_run: int = 30
     notify_cities: list[str] = Field(default_factory=lambda: ["adelaide"])
     other_city_max_pages: int = 2
+    linkedin_enabled: bool = True
+    # LinkedIn's guest search is far more rate-limit-sensitive than SEEK/Jora, so it gets its own,
+    # tighter page cap (also subject to `other_city_max_pages` for non-notify cities, like every
+    # other source — see pipeline._max_pages_for).
+    linkedin_max_pages: int = 2
     # Server-side "last read" marker for the in-app notification bell (GET/POST /api/notifications).
     # Deliberately excluded from PUT /api/settings overwrites — see api.put_settings.
     notifications_read_at: NaiveDatetime | None = None

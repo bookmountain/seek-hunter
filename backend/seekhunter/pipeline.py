@@ -139,24 +139,32 @@ def _jobdata_insights(data: JobData) -> dict:
     return {f: getattr(data, f) for f in fields if getattr(data, f) is not None}
 
 
+_INSIGHTS_SOURCES = ("seek", "linkedin")
+
+
 def _apply_details(session: Session, name: str, source, job: Job, data: JobData) -> None:  # noqa: ANN001
-    """Fetches and persists a job's detail page: description/contacts, and for SEEK, applicant
-    insights too (SeekSource.details() now returns them in the same GraphQL request)."""
+    """Fetches and persists a job's detail page: description/contacts, and for SEEK and LinkedIn,
+    applicant insights too (both return applicant_count in the same details() call; SEEK's
+    insights refresh loop, `run_insights_refresh`, is SEEK-only — LinkedIn's count is only ever
+    picked up here, on first sight of the job)."""
     details = source.details(data)
     repo.update_job_details(session, job, details)
     _apply_contacts(session, job)
-    if name == "seek":
+    if name in _INSIGHTS_SOURCES:
         repo.set_insights(session, job, _jobdata_insights(details), utcnow())
 
 
-def _max_pages_for(profile: SearchProfile, settings) -> int:  # noqa: ANN001
+def _max_pages_for(profile: SearchProfile, settings, source: str | None = None) -> int:  # noqa: ANN001
     """Politeness cap: profiles outside the notify_cities get at most `other_city_max_pages` pages
     per search (they're still fully evaluated/scored/contacted, just crawled more lightly since
-    they're not going to Telegram unless/until their city is enabled)."""
+    they're not going to Telegram unless/until their city is enabled). LinkedIn gets its own,
+    tighter base cap (`settings.linkedin_max_pages`) before that non-notify-city cap is applied,
+    since its guest API is far more rate-limit-sensitive than SEEK/Jora."""
+    base = settings.linkedin_max_pages if source == "linkedin" else settings.max_pages_per_search
     city = CITY_BY_PROFILE_LOCATION.get(profile.location, "other")
     if city not in settings.notify_cities:
-        return min(settings.max_pages_per_search, settings.other_city_max_pages)
-    return settings.max_pages_per_search
+        return min(base, settings.other_city_max_pages)
+    return base
 
 
 def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict]:  # noqa: ANN001
@@ -164,12 +172,14 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
     new_jobs: list[Job] = []
     profiles = repo.list_search_profiles(session, enabled_only=True)
     for name, source in sources.items():
+        if name == "linkedin" and not settings.linkedin_enabled:
+            continue
         st = {"status": "ok", "found": 0, "new": 0, "error": None}
         try:
             for profile in profiles:
                 if name not in profile.sources:
                     continue
-                for data in source.search(profile, _max_pages_for(profile, settings)):
+                for data in source.search(profile, _max_pages_for(profile, settings, name)):
                     st["found"] += 1
                     job, is_new = repo.upsert_job(session, data, profile_location=profile.location)
                     if not is_new:

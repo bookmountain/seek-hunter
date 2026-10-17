@@ -52,6 +52,24 @@ def test_503_is_treated_as_blocked_like_cloudflare_challenge():
     assert c.blocked_count == 1
 
 
+def test_custom_blocked_statuses_treats_999_as_blocked():
+    """LinkedIn answers 999 (and sometimes 403/429) when it's rate-limiting the guest API; the
+    default (403, 429, 503) set doesn't cover 999, so callers can override it per-client."""
+    s = FakeSession([999, 999, 999])
+    c = PoliteClient(session=s, sleep=lambda _: None, backoffs=(1, 2), blocked_statuses=(403, 429, 999))
+    with pytest.raises(SourceBlocked):
+        c.get("http://x")
+    assert c.blocked_count == 3
+
+
+def test_custom_blocked_statuses_overrides_default_entirely():
+    """A client configured with its own `blocked_statuses` is not also blocked by the default
+    403/429/503 unless it includes them — 503 here passes straight through."""
+    s = FakeSession([503])
+    c = PoliteClient(session=s, sleep=lambda _: None, blocked_statuses=(999,))
+    assert c.get("http://x").status_code == 503
+
+
 class RecordingSession:
     def __init__(self):
         self.last_kwargs = None

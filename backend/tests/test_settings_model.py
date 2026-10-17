@@ -26,6 +26,8 @@ def test_defaults_contain_core_rules():
     assert s.notify_cities == ["adelaide"]
     assert s.other_city_max_pages == 2
     assert s.notifications_read_at is None
+    assert s.linkedin_enabled is True
+    assert s.linkedin_max_pages == 2
 
 
 def test_roundtrip_json():

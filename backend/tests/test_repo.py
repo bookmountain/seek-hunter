@@ -82,7 +82,7 @@ def test_ensure_seed_adds_other_city_profiles(session):
     for p in profiles:
         if p.location != "All Adelaide SA":
             assert p.enabled is True
-            assert p.sources == ["seek", "jora"]
+            assert p.sources == ["seek", "jora", "linkedin"]
 
 
 def test_ensure_seed_other_city_profiles_are_idempotent(session):
@@ -112,6 +112,39 @@ def test_ensure_seed_other_city_profiles_migrate_existing_db_with_only_adelaide(
     assert len(adelaide_profiles) == adelaide_count
     locations = {p.location for p in profiles}
     assert {"All Melbourne VIC", "All Sydney NSW", "All Perth WA"} <= locations
+
+
+def test_ensure_seed_migrates_existing_profiles_missing_linkedin(session):
+    """Simulates a database seeded before LinkedIn existed as a source: every profile has only
+    seek/jora. A later ensure_seed call must add "linkedin" to each, without duplicating it on a
+    third call."""
+    repo.ensure_seed(session)
+    for p in repo.list_search_profiles(session):
+        p.sources = ["seek", "jora"]
+        session.add(p)
+    session.commit()
+
+    repo.ensure_seed(session)
+    profiles = repo.list_search_profiles(session)
+    assert profiles
+    for p in profiles:
+        assert p.sources == ["seek", "jora", "linkedin"]
+
+    repo.ensure_seed(session)  # idempotent: a third call doesn't duplicate the entry
+    for p in repo.list_search_profiles(session):
+        assert p.sources == ["seek", "jora", "linkedin"]
+
+
+def test_ensure_seed_leaves_a_custom_sources_list_alone_if_linkedin_already_present(session):
+    repo.ensure_seed(session)
+    profile = repo.list_search_profiles(session)[0]
+    profile.sources = ["jora", "linkedin"]  # a user deliberately disabled seek on this profile
+    session.add(profile)
+    session.commit()
+
+    repo.ensure_seed(session)
+    session.refresh(profile)
+    assert profile.sources == ["jora", "linkedin"]
 
 
 def test_find_duplicate_across_sources(session):
