@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  TailoringListItem,
   CityCount,
   NotificationsResult,
   Application,
@@ -102,6 +103,8 @@ export const api = {
   tailor: (jobId: number, send = false) =>
     request<TailorStart>("POST", `/api/jobs/${jobId}/tailor?send=${send ? 1 : 0}`),
   tailorings: (jobId: number) => request<TailoringSummary[]>("GET", `/api/jobs/${jobId}/tailorings`),
+  allTailorings: (q?: string, limit = 100) =>
+    request<TailoringListItem[]>("GET", `/api/tailorings${qs({ limit: String(limit), q })}`),
   tailoring: (tid: number) => request<TailoringDetail>("GET", `/api/tailorings/${tid}`),
   resumeCurrent: () => request<ResumeCurrent>("GET", "/api/resume/current"),
   insightsOverview: (days = 14) => request<CityOverview[]>("GET", `/api/insights/overview${qs({ days: String(days) })}`),

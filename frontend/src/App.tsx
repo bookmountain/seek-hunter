@@ -3,6 +3,7 @@ import { Layout } from "@/components/Layout";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { InsightsPage } from "@/pages/InsightsPage";
 import { JobsPage } from "@/pages/JobsPage";
+import { ResumesPage } from "@/pages/ResumesPage";
 import { RunsPage } from "@/pages/RunsPage";
 import { SearchesPage } from "@/pages/SearchesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -16,6 +17,7 @@ export default function App() {
           <Route index element={<JobsPage key="active" view="active" />} />
           <Route path="excluded" element={<JobsPage key="excluded" view="excluded" />} />
           <Route path="history" element={<HistoryPage />} />
+          <Route path="resumes" element={<ResumesPage />} />
           <Route path="searches" element={<SearchesPage />} />
           <Route path="insights" element={<InsightsPage />} />
           <Route path="settings" element={<SettingsPage />} />

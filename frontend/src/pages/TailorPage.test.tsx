@@ -138,7 +138,7 @@ describe("TailorPage", () => {
 });
 
 describe("ChangesPanel", () => {
-  it("renders a reworded bullet with old (struck) and new text, removed bullets and collapsed kept ones", () => {
+  it("renders a reworded bullet as an inline word diff, removed bullets and collapsed kept ones", () => {
     const { container } = render(
       <ChangesPanel
         changes={[
@@ -149,10 +149,67 @@ describe("ChangesPanel", () => {
         ]}
       />,
     );
-    expect(container.querySelector("del")?.textContent).toBe("Wrote APIs");
-    expect(container.querySelector("ins")?.textContent).toBe("Wrote FastAPI services");
+    // word-level: only the changed words are marked, the sentence isn't repeated
+    expect(container.querySelector("del")?.textContent).toBe("APIs");
+    expect(container.querySelector("ins")?.textContent).toBe("FastAPI services");
+    expect(screen.getAllByText(/Wrote/).length).toBe(1);
     expect(screen.getByText("Removed")).toBeTruthy();
     expect(screen.getByText("1 unchanged")).toBeTruthy();
-    expect(container.querySelectorAll(".bg-mark").length).toBe(2);
+    expect(container.querySelectorAll("p.font-mono .bg-mark").length).toBe(2);
+  });
+
+  it("uses the API diff when present and labels moved bullets", () => {
+    const { container } = render(
+      <ChangesPanel
+        counts={{ reworded: 1, removed: 0, moved: 1, skills_reordered: 5, projects_changed: 1, summary_changed: true }}
+        changes={[
+          {
+            type: "summary",
+            before: "Builds web apps.",
+            after: "Builds React web apps.",
+            changed: true,
+            diff: [
+              { op: "equal", text: "Builds " },
+              { op: "insert", text: "React " },
+              { op: "equal", text: "web apps." },
+            ],
+          },
+          {
+            type: "bullet", experience: "a", company: "Acme", id: "a-b1", status: "reworded", before: "Led team", after: "Led small team",
+            diff: [
+              { op: "equal", text: "Led " },
+              { op: "delete", text: "the" },
+              { op: "insert", text: "a small" },
+              { op: "equal", text: " team" },
+            ],
+          },
+          { type: "bullet", experience: "a", company: "Acme", id: "a-b3", status: "moved", before: "Shipped features", after: "Shipped features", position_before: 3, position_after: 1 },
+        ]}
+      />,
+    );
+    const ins = Array.from(container.querySelectorAll("ins")).map((n) => n.textContent);
+    expect(ins).toEqual(["React", "a small"]);
+    expect(container.querySelector("del")?.textContent).toBe("the");
+    expect(screen.getByText("Moved up 3 → 1")).toBeTruthy();
+    // server word runs come without the spaces between them; they're restored on render
+    expect(container.querySelectorAll("p.leading-relaxed")[1]?.textContent).toBe("Led the a small team");
+    expect(screen.getByText("Shipped features")).toBeTruthy();
+    expect(screen.getByTestId("change-summary").textContent).toBe(
+      "Summary rewritten · 1 reworded · 1 moved · skills reordered in 5 lines · projects changed",
+    );
+  });
+
+  it("falls back to a client-side word diff and counts when the API sends neither", () => {
+    const { container } = render(
+      <ChangesPanel
+        changes={[
+          { type: "summary", before: "Engineer with 6 years of experience.", after: "Engineer with 6 years of React experience.", changed: true },
+          { type: "bullet", experience: "a", company: "Acme", id: "a-b2", status: "removed", before: "Made coffee", after: null },
+        ]}
+      />,
+    );
+    expect(container.querySelector("ins")?.textContent).toBe("React");
+    expect(container.querySelector("del")).toBeNull();
+    expect(screen.getByTestId("change-summary").textContent).toBe("Summary rewritten · 1 removed");
   });
 });

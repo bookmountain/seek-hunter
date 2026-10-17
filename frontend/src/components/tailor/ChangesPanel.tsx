@@ -1,4 +1,5 @@
-import type { BulletChange, ProjectsChange, SkillsChange, SummaryChange, TailoringChange } from "@/lib/types";
+import type { BulletChange, ChangeCounts, DiffOp, ProjectsChange, SkillsChange, SummaryChange, TailoringChange } from "@/lib/types";
+import { wordDiff } from "@/lib/wordDiff";
 import { cn } from "@/lib/utils";
 import { RichText } from "./RichText";
 
@@ -6,20 +7,73 @@ function Kicker({ children }: { children: React.ReactNode }) {
   return <p className="kicker text-ink-muted">{children}</p>;
 }
 
-function Before({ text }: { text: string }) {
+/**
+ * Inline word diff: equal in ink, deletions grey + struck, insertions ink on faint blue.
+ * Server diffs are word runs without the whitespace between runs, so a space is restored
+ * wherever neither neighbour carries one (client-side diffs keep their own whitespace).
+ */
+export function DiffText({ ops }: { ops: DiffOp[] }) {
   return (
-    <del className="block text-[14px] leading-relaxed text-ink-muted decoration-ink-muted/70">
-      <RichText text={text} />
-    </del>
+    <p className="text-[14px] leading-relaxed text-ink">
+      {ops.map((o, i) => {
+        const next = ops[i + 1];
+        const sep = next && !/\s$/.test(o.text) && !/^\s/.test(next.text) ? " " : "";
+        if (o.op === "equal")
+          return (
+            <span key={i}>
+              {o.text}
+              {sep}
+            </span>
+          );
+        // keep surrounding spaces outside the mark so highlights hug the words
+        const [, lead, core, trail] = /^(\s*)([\s\S]*?)(\s*)$/.exec(o.text) ?? ["", "", o.text, ""];
+        return (
+          <span key={i}>
+            {lead}
+            {o.op === "delete" ? (
+              <del className="text-ink-muted decoration-ink-muted/80">{core}</del>
+            ) : (
+              <ins className="bg-mark px-px text-ink no-underline">{core}</ins>
+            )}
+            {trail}
+            {sep}
+          </span>
+        );
+      })}
+    </p>
   );
 }
 
-function After({ text }: { text: string }) {
-  return (
-    <ins className="block text-[14px] leading-relaxed text-ink no-underline">
-      <RichText text={text} />
-    </ins>
-  );
+const opsFor = (c: { diff?: DiffOp[]; before: string; after: string | null }) => c.diff ?? wordDiff(c.before, c.after ?? "");
+
+/** Positions may arrive 0- or 1-based; show them 1-based. */
+function movedLabel(b: BulletChange): string {
+  const from = b.position_before;
+  const to = b.position_after;
+  if (from === undefined || to === undefined) return "Moved";
+  const shift = from === 0 || to === 0 ? 1 : 0;
+  return `Moved ${to < from ? "up" : "down"} ${from + shift} → ${to + shift}`;
+}
+
+/** One-line summary from `change_counts`, or counted from `changes` on older payloads. */
+export function changeSummary(changes: TailoringChange[], counts?: ChangeCounts): string {
+  const bullets = changes.filter((c): c is BulletChange => c.type === "bullet");
+  const c: ChangeCounts = counts ?? {
+    summary_changed: changes.some((x) => x.type === "summary" && x.changed),
+    reworded: bullets.filter((b) => b.status === "reworded").length,
+    removed: bullets.filter((b) => b.status === "removed").length,
+    moved: bullets.filter((b) => b.status === "moved").length,
+    skills_reordered: changes.filter((x) => x.type === "skills" && x.changed).length,
+    projects_changed: changes.some((x) => x.type === "projects" && x.excluded.length > 0),
+  };
+  const parts: string[] = [];
+  if (c.summary_changed) parts.push("Summary rewritten");
+  if (c.reworded) parts.push(`${c.reworded} reworded`);
+  if (c.removed) parts.push(`${c.removed} removed`);
+  if (c.moved) parts.push(`${c.moved} moved`);
+  if (c.skills_reordered) parts.push(`skills reordered in ${c.skills_reordered} ${c.skills_reordered === 1 ? "line" : "lines"}`);
+  if (c.projects_changed) parts.push("projects changed");
+  return parts.length ? parts.join(" · ") : "No changes";
 }
 
 function SummaryBlock({ c }: { c: SummaryChange }) {
@@ -27,9 +81,8 @@ function SummaryBlock({ c }: { c: SummaryChange }) {
     <section className="border-t border-rule pt-4">
       <Kicker>Summary</Kicker>
       {c.changed ? (
-        <div className="mt-2 space-y-2">
-          <Before text={c.before} />
-          <After text={c.after} />
+        <div className="mt-2">
+          <DiffText ops={opsFor(c)} />
         </div>
       ) : (
         <p className="mt-2 text-[13px] text-ink-muted">Unchanged</p>
@@ -53,8 +106,16 @@ function BulletGroup({ company, bullets }: { company: string; bullets: BulletCha
             </li>
           ) : (
             <li key={b.id} className="space-y-1">
-              <Before text={b.before} />
-              <After text={b.after ?? ""} />
+              {b.status === "moved" && (
+                <span className="kicker inline-block border border-ink px-1.5 py-[2px] text-[10px] text-ink">{movedLabel(b)}</span>
+              )}
+              {b.status === "moved" && (b.after === null || b.after === b.before) && !b.diff?.some((o) => o.op !== "equal") ? (
+                <p className="text-[14px] leading-relaxed text-ink">
+                  <RichText text={b.before} />
+                </p>
+              ) : (
+                <DiffText ops={opsFor(b)} />
+              )}
             </li>
           ),
         )}
@@ -134,7 +195,7 @@ function ProjectsBlock({ c }: { c: ProjectsChange }) {
 }
 
 /** Human-readable diff of what the tailoring changed. */
-export function ChangesPanel({ changes }: { changes: TailoringChange[] }) {
+export function ChangesPanel({ changes, counts }: { changes: TailoringChange[]; counts?: ChangeCounts }) {
   const summary = changes.find((c): c is SummaryChange => c.type === "summary");
   const bullets = changes.filter((c): c is BulletChange => c.type === "bullet");
   const skills = changes.filter((c): c is SkillsChange => c.type === "skills");
@@ -146,16 +207,14 @@ export function ChangesPanel({ changes }: { changes: TailoringChange[] }) {
     if (g) g.bullets.push(b);
     else groups.push({ company: b.company, bullets: [b] });
   }
-  const reworded = bullets.filter((b) => b.status === "reworded").length;
-  const removed = bullets.filter((b) => b.status === "removed").length;
 
   return (
     <div aria-label="Changes" role="region" className="space-y-5">
-      <div className="flex items-baseline justify-between border-b-2 border-ink pb-2">
+      <div className="border-b-2 border-ink pb-2">
         <h2 className="kicker text-ink">Changes</h2>
-        <span className="num text-[11.5px] text-ink-muted">
-          {reworded} reworded · {removed} removed
-        </span>
+        <p data-testid="change-summary" className="mt-1 font-mono text-[11.5px] leading-snug text-ink-muted">
+          {changeSummary(changes, counts)}
+        </p>
       </div>
       {summary && <SummaryBlock c={summary} />}
       {groups.length > 0 && (

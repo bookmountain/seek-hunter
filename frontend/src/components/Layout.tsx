@@ -9,6 +9,7 @@ import { TokenDialog } from "./TokenDialog";
 const links = [
   { to: "/", label: "Jobs" },
   { to: "/history", label: "History" },
+  { to: "/resumes", label: "Resumes" },
   { to: "/excluded", label: "Excluded" },
   { to: "/searches", label: "Searches" },
   { to: "/insights", label: "Insights" },

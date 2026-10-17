@@ -151,7 +151,7 @@ function Done({ t, jobId, onRegenerate, regenerating }: { t: TailoringDetail; jo
               </ul>
             </div>
           )}
-          <ChangesPanel changes={t.changes} />
+          <ChangesPanel changes={t.changes} counts={t.change_counts} />
           <Chips title="Keywords matched" items={t.keywords_matched} tone="match" />
           <Chips title="Gaps" items={t.gaps} tone="gap" />
         </aside>
@@ -211,9 +211,14 @@ export function TailorPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1680px] px-5 py-6 lg:px-8 lg:py-8">
-      <Link to={`/?job=${jobId}`} className="kicker text-blue hover:underline">
-        <span aria-hidden>←</span> Back to job
-      </Link>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        <Link to={`/?job=${jobId}`} className="kicker text-blue hover:underline">
+          <span aria-hidden>←</span> Back to job
+        </Link>
+        <Link to="/resumes" className="kicker text-ink-muted hover:text-blue hover:underline">
+          All resumes
+        </Link>
+      </div>
 
       <header className="mt-4 flex flex-wrap items-end justify-between gap-x-10 gap-y-4 border-b-2 border-ink pb-5">
         <div className="min-w-0 max-w-4xl">

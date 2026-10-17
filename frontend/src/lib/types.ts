@@ -174,11 +174,18 @@ export interface CoverLetter {
   word_count: number;
 }
 
+export interface DiffOp {
+  op: "equal" | "delete" | "insert";
+  text: string;
+}
+
 export interface SummaryChange {
   type: "summary";
   before: string;
   after: string;
   changed: boolean;
+  /** Word-level diff (newer backends). */
+  diff?: DiffOp[];
 }
 
 export interface BulletChange {
@@ -186,9 +193,21 @@ export interface BulletChange {
   experience: string;
   company: string;
   id: string;
-  status: "kept" | "reworded" | "removed";
+  status: "kept" | "reworded" | "removed" | "moved";
   before: string;
   after: string | null;
+  diff?: DiffOp[];
+  position_before?: number;
+  position_after?: number;
+}
+
+export interface ChangeCounts {
+  reworded: number;
+  removed: number;
+  moved: number;
+  skills_reordered: number;
+  projects_changed: number | boolean;
+  summary_changed: boolean;
 }
 
 export interface SkillsChange {
@@ -219,6 +238,18 @@ export interface TailoringDetail extends TailoringSummary {
   changes: TailoringChange[];
   files: { resume_pdf: string; cover_letter_pdf: string; resume_pages: string[]; cover_letter_pages: string[] } | null;
   current: ResumeCurrent | null;
+  change_counts?: ChangeCounts;
+}
+
+export interface TailoringListItem extends TailoringSummary {
+  job_title: string;
+  company: string;
+  city: JobCity | null;
+  resume_pdf: string | null;
+  cover_letter_pdf: string | null;
+  /** Page-1 PNG URL, when done. */
+  thumbnail: string | null;
+  applied_application_id: number | null;
 }
 
 // ---------------------------------------------------------------- market insights
