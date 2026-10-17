@@ -1,4 +1,4 @@
-from seekhunter.domain import JobData, dedupe_key, html_to_text, normalize_work_type
+from seekhunter.domain import JobData, dedupe_key, html_to_lines, html_to_text, normalize_work_type
 
 
 def test_normalize_work_type():
@@ -29,3 +29,19 @@ def test_jobdata_text_prefers_description():
     job2 = JobData(source="seek", external_id="2", title="Dev", company="A", location="",
                    work_type="unknown", url="u", teaser="short")
     assert job2.text == "short"
+
+
+def test_html_to_lines_splits_list_items_and_drops_blanks():
+    html = "<ul><li>No visa sponsorship</li><li>Security clearance required</li></ul>"
+    assert html_to_lines(html) == "No visa sponsorship\nSecurity clearance required"
+    assert html_to_lines("") == ""
+
+
+def test_jobdata_filter_text_uses_lines_and_falls_back_to_teaser():
+    html = "<li>Hybrid, no weekends</li><li>NV1 clearance required</li>"
+    job = JobData(source="seek", external_id="1", title="Dev", company="A", location="Adelaide SA",
+                  work_type="part_time", url="u", teaser="short", description_html=html)
+    assert job.filter_text == "Hybrid, no weekends\nNV1 clearance required"
+    job2 = JobData(source="seek", external_id="2", title="Dev", company="A", location="",
+                   work_type="unknown", url="u", teaser="short")
+    assert job2.filter_text == "short"

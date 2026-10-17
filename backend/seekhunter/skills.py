@@ -22,7 +22,7 @@ SKILL_ALIASES: dict[str, list[str]] = {
     "Redux": ["redux"],
     "Node.js": ["node.js", "nodejs"],
     "NestJS": ["nestjs", "nest.js"],
-    "Spring": ["spring boot", "spring framework", "spring mvc"],
+    "Spring": ["spring boot", "spring framework", "spring mvc", "springboot", "spring ai"],
     "Django": ["django"],
     "FastAPI": ["fastapi"],
     "Flask": ["flask"],

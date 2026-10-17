@@ -1,3 +1,5 @@
+import pytest
+
 from seekhunter.domain import JobData
 from seekhunter.scoring import blend, score_job
 from seekhunter.settings_model import AppSettings
@@ -40,3 +42,38 @@ def test_hours_flag():
 def test_blend():
     assert blend(80, None) == 80
     assert blend(80, 50) == 68
+
+
+@pytest.mark.parametrize("text", [
+    "37.5 hours per week",
+    "76 hours per fortnight",
+    "30 hours weekly",
+    "0.8 FTE",
+    "4 days a week",
+])
+def test_hours_flag_variants_trigger(text):
+    r = score_job(job(work_type="part_time", text=text), PROFILE, AppSettings())
+    assert "hours" in r.flags, text
+
+
+@pytest.mark.parametrize("text", [
+    "20 hours per week",
+    "40 hours per fortnight",
+    "0.5 FTE",
+    "3 days per week",
+])
+def test_hours_flag_variants_do_not_trigger(text):
+    r = score_job(job(work_type="part_time", text=text), PROFILE, AppSettings())
+    assert "hours" not in r.flags, text
+
+
+def test_directory_services_not_penalised_as_director():
+    normal = score_job(job(title="Directory Services Engineer"), PROFILE, AppSettings()).rule_score
+    penalized = score_job(job(title="Director"), PROFILE, AppSettings()).rule_score
+    assert normal > penalized
+
+
+def test_years_experience_penalty_matches_digit_plus_years():
+    penalized = score_job(job(text="Minimum 15+ years experience required"), PROFILE, AppSettings())
+    clean = score_job(job(text="Great team, flexible hours"), PROFILE, AppSettings())
+    assert penalized.rule_score < clean.rule_score

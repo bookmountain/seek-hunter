@@ -43,6 +43,10 @@ class AppSettings(BaseModel):
         r"australian\s+citizens\s+only",
         r"(open|available)\s+to\s+australian\s+citizens",
         r"must\s+(have|hold)\s+(australian\s+)?PR\b",
+        r"only\s+australian\s+citizens",
+        r"\b(australian\s+)?(citizen(ship)?|PR|permanent\s+residen\w*)\s+(or|/)\s+"
+        r"(citizen(ship)?|PR|permanent\s+residen\w*)\b",
+        r"without\s+australian\s+citizenship",
     ])
     defence_keywords: list[str] = Field(default_factory=lambda: [
         r"defence\s+industry", r"defence\s+prime", r"defence\s+program", r"department\s+of\s+defence",

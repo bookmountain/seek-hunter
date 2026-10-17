@@ -41,3 +41,35 @@ def test_blocked_after_backoffs():
         c.get("http://x")
     assert s.calls == 3
     assert c.blocked_count == 3
+
+
+def test_503_is_treated_as_blocked_like_cloudflare_challenge():
+    sleeps = []
+    s = FakeSession([503, 200])
+    c = PoliteClient(session=s, sleep=sleeps.append, backoffs=(30,), min_delay=0, max_delay=0)
+    assert c.get("http://x").status_code == 200
+    assert sleeps == [30]
+    assert c.blocked_count == 1
+
+
+class RecordingSession:
+    def __init__(self):
+        self.last_kwargs = None
+
+    def request(self, method, url, **kw):
+        self.last_kwargs = kw
+        return FakeResp(200)
+
+
+def test_custom_timeout_kwarg_does_not_collide():
+    s = RecordingSession()
+    c = PoliteClient(session=s, sleep=lambda _: None, min_delay=0, max_delay=0)
+    c.get("http://x", timeout=5)
+    assert s.last_kwargs["timeout"] == 5
+
+
+def test_default_timeout_is_applied_when_not_given():
+    s = RecordingSession()
+    c = PoliteClient(session=s, sleep=lambda _: None, min_delay=0, max_delay=0)
+    c.get("http://x")
+    assert s.last_kwargs["timeout"] == 30

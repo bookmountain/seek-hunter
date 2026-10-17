@@ -36,12 +36,13 @@ class PoliteClient:
         return self._request("POST", url, **kw)
 
     def _request(self, method: str, url: str, **kw: Any) -> Any:
+        kw.setdefault("timeout", 30)
         if self.request_count > 0:
             self.sleep(random.uniform(self.min_delay, self.max_delay))
         self.request_count += 1
         for attempt in range(len(self.backoffs) + 1):
-            resp = self.session.request(method, url, timeout=30, **kw)
-            if resp.status_code not in (403, 429):
+            resp = self.session.request(method, url, **kw)
+            if resp.status_code not in (403, 429, 503):
                 return resp
             self.blocked_count += 1
             if attempt < len(self.backoffs):

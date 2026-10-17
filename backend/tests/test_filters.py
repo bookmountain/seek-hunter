@@ -10,6 +10,11 @@ def job(title="Software Developer", company="Acme", text=""):
                    work_type="part_time", url="u", description_html=f"<p>{text}</p>")
 
 
+def job_html(title="Software Developer", company="Acme", html=""):
+    return JobData(source="seek", external_id="1", title=title, company=company, location="Adelaide SA",
+                   work_type="part_time", url="u", description_html=html)
+
+
 @pytest.mark.parametrize("j, reason", [
     (job(text="Applicants must hold a current NV1 clearance."), "clearance"),
     (job(text="Ability to obtain a Baseline clearance is essential."), "clearance"),
@@ -50,3 +55,29 @@ def test_fintech_toggle():
     j = job(text="Fast-growing fintech startup")
     assert not evaluate_exclusions(j, AppSettings()).excluded
     assert "fintech" in evaluate_exclusions(j, AppSettings(exclude_fintech=True)).reasons
+
+
+@pytest.mark.parametrize("j, reason", [
+    (job_html(html="<ul><li>No visa sponsorship</li><li>Security clearance required</li></ul>"), "clearance"),
+    (job_html(html="<li>Hybrid, no weekends</li><li>NV1 clearance required</li>"), "clearance"),
+    (job(text="No visa sponsorship: Australian citizens only"), "citizenship"),
+    (job(text="No sponsorship available, Australian citizens only"), "citizenship"),
+    (job(text="Australian citizen with no criminal record, NV1 clearance"), "clearance"),
+    (job(text="Non-negotiable: NV1 clearance"), "clearance"),
+    (job(text="Not suitable for applicants without NV1 clearance"), "clearance"),
+    (job(text="Must hold NV1. Not required: degree"), "clearance"),
+])
+def test_negation_does_not_leak_across_bullets_or_sentences(j, reason):
+    r = evaluate_exclusions(j, AppSettings())
+    assert r.excluded
+    assert reason in r.reasons
+
+
+@pytest.mark.parametrize("j", [
+    job(text="Security clearance not essential"),
+    job(text="No security clearance required"),
+    job(text="A security clearance is not required for this role."),
+])
+def test_genuine_negation_still_suppresses_exclusion(j):
+    r = evaluate_exclusions(j, AppSettings())
+    assert not r.excluded, r.reasons

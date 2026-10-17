@@ -31,3 +31,8 @@ def test_csharp_dotnet_combo():
 
 def test_ms_sql_matches_sql_server():
     assert "SQL Server" in extract_skills("MS SQL")
+
+
+def test_spring_matches_springboot_and_spring_ai():
+    assert "Spring" in extract_skills("We use SpringBoot in production")
+    assert "Spring" in extract_skills("Experience with Spring AI is a plus")

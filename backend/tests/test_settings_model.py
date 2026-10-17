@@ -47,3 +47,18 @@ def test_clearance_patterns_match_nv_and_tspv_variants():
 def test_invalid_regex_pattern_raises_validation_error():
     with pytest.raises(ValidationError):
         AppSettings(clearance_patterns=["("])
+
+
+NEW_CITIZENSHIP_PHRASES = [
+    "Only Australian citizens will be considered",
+    "Australian PR or citizenship required",
+    "Must have permanent residency or citizenship",
+    "(Citizen or PR)",
+    "Applicants without Australian citizenship will not be considered",
+]
+
+
+def test_citizenship_patterns_match_additional_real_world_phrasings():
+    s = AppSettings()
+    for phrase in NEW_CITIZENSHIP_PHRASES:
+        assert any(re.search(p, phrase, re.I) for p in s.citizenship_patterns), phrase

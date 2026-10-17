@@ -30,6 +30,14 @@ def html_to_text(html: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def html_to_lines(html: str) -> str:
+    if not html:
+        return ""
+    text = LexborHTMLParser(html).text(separator="\n")
+    lines = (re.sub(r"[ \t]+", " ", line).strip() for line in text.splitlines())
+    return "\n".join(line for line in lines if line)
+
+
 def _norm(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
@@ -56,3 +64,7 @@ class JobData:
     @property
     def text(self) -> str:
         return html_to_text(self.description_html) or self.teaser
+
+    @property
+    def filter_text(self) -> str:
+        return html_to_lines(self.description_html) or self.teaser

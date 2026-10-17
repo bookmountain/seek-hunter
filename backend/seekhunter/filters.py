@@ -4,9 +4,12 @@ from dataclasses import dataclass, field
 from seekhunter.domain import JobData
 from seekhunter.settings_model import AppSettings
 
-_PRE_NEGATION = re.compile(r"\b(no|not|without|non)\b", re.IGNORECASE)
-_POST_NEGATION = re.compile(r"^\W*(is\s+|are\s+)?not\s+(required|needed|necessary)", re.IGNORECASE)
-_SENTENCE_BREAK = re.compile(r"[.!?\n]")
+_PRE_NEGATION = re.compile(r"\b(no|not)\s+(?:[\w/-]+\s+){0,2}$", re.IGNORECASE)
+_POST_NEGATION = re.compile(
+    r"^[\s:,\-–—]*(is\s+|are\s+)?not\s+(required|needed|necessary|essential|mandatory)",
+    re.IGNORECASE,
+)
+_SENTENCE_BREAK = re.compile(r"[.!?;:\n•|,–—]")
 
 
 @dataclass
@@ -41,7 +44,7 @@ def _employer_hit(names: list[str], company: str) -> str | None:
 
 
 def evaluate_exclusions(job: JobData, settings: AppSettings) -> FilterResult:
-    text = f"{job.title}\n{job.text}"
+    text = f"{job.title}\n{job.filter_text}"
     result = FilterResult(excluded=False)
 
     def add(reason: str, snippet: str | None) -> None:
