@@ -124,3 +124,15 @@ def test_init_db_insight_columns_roundtrip(tmp_path):
         assert job.applicant_volume == "Medium application volume"
         assert job.resume_pct == 100
         assert job.cover_letter_pct == 57
+
+
+def test_init_db_creates_tailorings_table_on_existing_db(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(OLD_JOBS_TABLE))
+    init_db(engine)
+    inspector = inspect(engine)
+    assert "tailorings" in inspector.get_table_names()
+    cols = {c["name"] for c in inspector.get_columns("tailorings")}
+    assert {"job_id", "status", "progress", "warnings", "result", "resume_hash", "out_dir",
+            "send_requested", "sent_at"} <= cols

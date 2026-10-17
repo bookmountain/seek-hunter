@@ -104,3 +104,24 @@ class Outbox(SQLModel, table=True):
     last_error: str | None = None
     created_at: NaiveDatetime = Field(default_factory=utcnow)
     sent_at: NaiveDatetime | None = None
+
+
+class Tailoring(SQLModel, table=True):
+    __tablename__ = "tailorings"
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="jobs.id", index=True)
+    status: str = "queued"  # queued | running | done | failed
+    progress: str = ""
+    created_at: NaiveDatetime = Field(default_factory=utcnow, index=True)
+    started_at: NaiveDatetime | None = None
+    finished_at: NaiveDatetime | None = None
+    provider: str | None = None
+    error: str | None = None
+    warnings: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    # {"base": ResumeDoc, "tailored": ResumeDoc, "keywords_matched", "gaps", "cover_letter", "pages"}
+    result: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    resume_hash: str | None = None
+    out_dir: str | None = None
+    send_requested: bool = False
+    sent_at: NaiveDatetime | None = None

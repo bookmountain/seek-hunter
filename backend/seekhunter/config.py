@@ -9,6 +9,8 @@ class Env(BaseSettings):
 
     database_url: str = "sqlite:///./data/seekhunter.db"
     resume_dir: Path = Path("../../book-cv/latex/sections/resume")
+    latex_dir: Path = Path("../../book-cv/latex")
+    tectonic_bin: str = "/usr/local/bin/tectonic"
     static_dir: Path = Path("../frontend/dist")
     data_dir: Path = Path("./data")
     anthropic_api_key: str | None = None

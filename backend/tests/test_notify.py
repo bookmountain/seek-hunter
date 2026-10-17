@@ -310,3 +310,19 @@ def test_format_brief():
     assert "AI 88" in text
     assert len(text) < 5000
     assert _no_disallowed_chars(text)
+
+
+def test_notifier_send_file_uses_media_and_force_document(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(subprocess, "run",
+                        lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    pdf = tmp_path / "r.pdf"
+    Notifier("openclaw", "123").send_file(pdf, "#7 resume")
+    assert calls[0] == ["openclaw", "message", "send", "--channel", "telegram", "--target", "123",
+                        "--media", str(pdf), "--force-document", "--message", "#7 resume"]
+
+
+def test_notifier_send_file_failure_raises(monkeypatch, tmp_path):
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "nope"))
+    with pytest.raises(NotifyError):
+        Notifier("openclaw", "123").send_file(tmp_path / "r.pdf", "c")

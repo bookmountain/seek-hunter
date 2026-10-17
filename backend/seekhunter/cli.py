@@ -10,6 +10,7 @@ from seekhunter import repo
 from seekhunter.config import Env, get_env
 from seekhunter.db import get_engine, init_db
 from seekhunter.lock import RunLocked, run_lock
+from seekhunter.models import Job, Tailoring
 from seekhunter.notify import Notifier
 
 
@@ -34,7 +35,57 @@ def build_parser() -> argparse.ArgumentParser:
     contacts.add_argument("--days", type=int, default=7)
     insights = sub.add_parser("insights", help="refresh SEEK applicant insights on demand")
     insights.add_argument("--limit", type=int, default=60)
+    tailor = sub.add_parser("tailor", help="tailor the resume + cover letter for one job")
+    tailor.add_argument("job_id", type=int)
+    tailor.add_argument("--tailoring-id", type=int, default=None,
+                        help="run an existing queued tailoring row (the API creates one)")
+    tailor.add_argument("--send", action="store_true", help="send both PDFs to Telegram when done")
+    sub.add_parser("resume-preview", help="build/cache the PDF + PNG preview of the current resume")
     return parser
+
+
+def _tailor_commands(args: argparse.Namespace, env: Env, notifier: Notifier) -> int:
+    """`tailor` and `resume-preview` run under `tailor.lock`, independent of the crawl's run.lock."""
+    from seekhunter.tailor import pipeline
+    from seekhunter.tailor.render import tectonic_compiler
+
+    compiler = tectonic_compiler(env.tectonic_bin)
+    if args.command == "resume-preview":
+        from seekhunter.tailor.current import ensure_current
+
+        try:
+            with run_lock(env.data_dir, name="tailor.lock"):
+                print(json.dumps(ensure_current(env.latex_dir, env.data_dir, compiler)))
+                return 0
+        except RunLocked:
+            print("a tailoring is in progress (it builds the preview too)", file=sys.stderr)
+            return 75
+
+    with Session(get_engine()) as session:
+        job = session.get(Job, args.job_id)
+        if job is None:
+            print(f"job {args.job_id} not found", file=sys.stderr)
+            return 2
+        if args.tailoring_id is not None:
+            t = session.get(Tailoring, args.tailoring_id)
+            if t is None or t.job_id != job.id:
+                print(f"tailoring {args.tailoring_id} not found for job {job.id}", file=sys.stderr)
+                return 2
+            if args.send and not t.send_requested:
+                t.send_requested = True
+                repo.save_tailoring(session, t)
+        else:
+            t = repo.create_tailoring(session, job.id, send=args.send)
+        tailoring_id = t.id
+
+    from seekhunter.tailor.engine import openclaw_llm
+
+    with run_lock(env.data_dir, blocking=True, name="tailor.lock"), Session(get_engine()) as session:
+        t = pipeline.run_tailoring(session, tailoring_id, env=env, llm=openclaw_llm(env), compiler=compiler,
+                                   notifier=notifier)
+        print(json.dumps({"tailoring_id": t.id, "status": t.status, "error": t.error,
+                          "warnings": t.warnings}, indent=1))
+        return 0 if t.status == "done" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -47,6 +98,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "notify-test":
         notifier.send("SeekHunter test message")
         return 0
+
+    if args.command in ("tailor", "resume-preview"):
+        return _tailor_commands(args, env, notifier)
 
     try:
         blocking = args.command in ("rescore", "contacts", "insights")

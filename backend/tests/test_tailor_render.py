@@ -9,6 +9,7 @@ from PIL import Image
 from seekhunter.resume_doc import load_resume_doc
 from seekhunter.tailor import current, render
 from seekhunter.tailor.models import CoverLetter
+from tests.pdf_helpers import FakeCompiler, write_pdf
 
 REAL_LATEX = Path(__file__).resolve().parents[3] / "book-cv" / "latex"
 
@@ -23,23 +24,6 @@ RESUME_TEX = r"""\documentclass{article}
 
 LETTER = CoverLetter(greeting="Dear Brayden,", paragraphs=["I cut costs by 50% & more.", "Second."],
                      sign_off="Kind regards,")
-
-
-def write_pdf(path: Path, pages: int = 1) -> None:
-    imgs = [Image.new("RGB", (60, 85), "white") for _ in range(pages)]
-    imgs[0].save(path, "PDF", save_all=True, append_images=imgs[1:])
-
-
-class FakeCompiler:
-    def __init__(self, pages: dict[str, int] | None = None):
-        self.calls: list[tuple[Path, str]] = []
-        self.pages = pages or {}
-
-    def __call__(self, work_dir: Path, tex_name: str) -> Path:
-        self.calls.append((work_dir, tex_name))
-        pdf = work_dir / tex_name.replace(".tex", ".pdf")
-        write_pdf(pdf, self.pages.get(tex_name, 1))
-        return pdf
 
 
 @pytest.fixture

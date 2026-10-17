@@ -4,7 +4,7 @@ from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
 from seekhunter.domain import JobData, dedupe_key
-from seekhunter.models import Job, JobEvaluation, Outbox, Run, SearchProfile, SettingsRow
+from seekhunter.models import Job, JobEvaluation, Outbox, Run, SearchProfile, SettingsRow, Tailoring
 from seekhunter.settings_model import AppSettings
 
 DEFAULT_KEYWORDS = [
@@ -238,3 +238,43 @@ def recent_runs(session: Session, kind: str = "crawl", limit: int = 50) -> list[
 def pending_outbox(session: Session) -> list[Outbox]:
     stmt = select(Outbox).where(col(Outbox.sent_at).is_(None), Outbox.attempts < 10).order_by(col(Outbox.id))
     return list(session.exec(stmt).all())
+
+
+TAILORING_STALE_AFTER = timedelta(minutes=30)
+
+
+def create_tailoring(session: Session, job_id: int, send: bool = False) -> Tailoring:
+    t = Tailoring(job_id=job_id, send_requested=send)
+    session.add(t)
+    session.commit()
+    session.refresh(t)
+    return t
+
+
+def save_tailoring(session: Session, t: Tailoring) -> None:
+    session.add(t)
+    session.commit()
+    session.refresh(t)
+
+
+def list_tailorings(session: Session, job_id: int, limit: int = 20) -> list[Tailoring]:
+    return list(session.exec(
+        select(Tailoring).where(Tailoring.job_id == job_id)
+        .order_by(col(Tailoring.created_at).desc(), col(Tailoring.id).desc()).limit(limit)).all())
+
+
+def active_tailoring(session: Session, job_id: int, now: datetime) -> Tailoring | None:
+    """The job's queued/running tailoring, if any. Ones older than TAILORING_STALE_AFTER are assumed
+    dead (worker crashed or was killed) and marked failed so a new one can start."""
+    rows = session.exec(select(Tailoring).where(
+        Tailoring.job_id == job_id, col(Tailoring.status).in_(["queued", "running"]))
+        .order_by(col(Tailoring.id).desc())).all()
+    active = None
+    for t in rows:
+        if t.created_at < now - TAILORING_STALE_AFTER:
+            t.status, t.error, t.finished_at = "failed", "timed out (worker did not finish)", now
+            session.add(t)
+        elif active is None:
+            active = t
+    session.commit()
+    return active

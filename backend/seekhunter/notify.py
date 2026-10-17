@@ -2,6 +2,7 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 
 WORK_TYPE_LABELS = {"full_time": "Full time", "part_time": "Part time", "contract": "Contract",
                     "casual": "Casual", "unknown": "Type n/a"}
@@ -257,6 +258,22 @@ class Notifier:
         ]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            raise NotifyError(str(e)) from e
+        if proc.returncode != 0:
+            raise NotifyError(f"exit {proc.returncode}: {proc.stderr[-300:]}")
+
+    def send_file(self, path: Path, caption: str) -> None:
+        """Send `path` as a Telegram document (not a compressed photo) with `caption`."""
+        if self.dry_run:
+            print(f"--- [dry-run telegram file → {self.target}] {path} ---\n{caption}\n")
+            return
+        cmd = [
+            self.bin_path, "message", "send", "--channel", "telegram", "--target", self.target,
+            "--media", str(path), "--force-document", "--message", caption,
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         except (OSError, subprocess.TimeoutExpired) as e:
             raise NotifyError(str(e)) from e
         if proc.returncode != 0:

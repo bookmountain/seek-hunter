@@ -51,3 +51,49 @@ def test_build_contact_lookup_present_with_brave_key(monkeypatch):
     assert lookup is not None
     assert lookup("Jane Doe", "Acme") == "https://www.linkedin.com/in/x"
     assert calls["args"] == ("Jane Doe", "Acme", "k3y")
+
+
+def test_parser_tailor():
+    args = cli.build_parser().parse_args(["tailor", "7"])
+    assert (args.command, args.job_id, args.tailoring_id, args.send) == ("tailor", 7, None, False)
+    args = cli.build_parser().parse_args(["tailor", "7", "--tailoring-id", "3", "--send"])
+    assert (args.tailoring_id, args.send) == (3, True)
+
+
+def test_parser_resume_preview():
+    assert cli.build_parser().parse_args(["resume-preview"]).command == "resume-preview"
+
+
+def test_tailor_command_creates_row_and_runs_pipeline(monkeypatch, tmp_path):
+    from sqlalchemy.pool import StaticPool
+    from sqlmodel import Session, SQLModel, create_engine
+
+    from seekhunter import repo
+    from seekhunter.domain import JobData
+    from seekhunter.models import Tailoring
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        job, _ = repo.upsert_job(s, JobData(source="seek", external_id="1", title="Dev", company="A",
+                                            location="", work_type="contract", url="u"))
+        job_id = job.id
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "get_engine", lambda: engine)
+    monkeypatch.setattr(cli, "init_db", lambda: None)
+    seen = {}
+
+    def fake_run(session, tid, **kw):
+        seen["tid"], seen["kw"] = tid, kw
+        t = session.get(Tailoring, tid)
+        t.status = "done"
+        repo.save_tailoring(session, t)
+        return t
+
+    monkeypatch.setattr("seekhunter.tailor.pipeline.run_tailoring", fake_run)
+    assert cli.main(["tailor", str(job_id), "--send"]) == 0
+    with Session(engine) as s:
+        t = s.get(Tailoring, seen["tid"])
+        assert t.job_id == job_id and t.send_requested is True
+    assert callable(seen["kw"]["llm"]) and callable(seen["kw"]["compiler"])
+    assert cli.main(["tailor", "999"]) == 2
