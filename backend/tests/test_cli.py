@@ -96,6 +96,7 @@ def test_tailor_command_creates_row_and_runs_pipeline(monkeypatch, tmp_path):
         t = s.get(Tailoring, seen["tid"])
         assert t.job_id == job_id and t.send_requested is True
     assert callable(seen["kw"]["llm"]) and callable(seen["kw"]["compiler"])
+    assert seen["kw"]["defer_resume_matcher"] is True
     assert cli.main(["tailor", "999"]) == 2
 
 
@@ -181,3 +182,14 @@ def test_main_insights_brief_runs_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr("seekhunter.pipeline.run_insights_brief", fake_brief)
     assert cli.main(["insights-brief", "--dry-run"]) == 0
     assert seen["args"][2] is True
+
+
+def test_parser_resume_matcher():
+    args = cli.build_parser().parse_args(["resume-matcher", "12"])
+    assert (args.command, args.tailoring_id) == ("resume-matcher", 12)
+
+
+def test_resume_matcher_command_disabled_without_url(monkeypatch):
+    monkeypatch.setenv("RM_BASE_URL", "")
+    monkeypatch.setattr(cli, "init_db", lambda: None)
+    assert cli.main(["resume-matcher", "1"]) == 2

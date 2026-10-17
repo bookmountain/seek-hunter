@@ -48,6 +48,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="run an existing queued tailoring row (the API creates one)")
     tailor.add_argument("--send", action="store_true", help="send both PDFs to Telegram when done")
     sub.add_parser("resume-preview", help="build/cache the PDF + PNG preview of the current resume")
+    rmp = sub.add_parser("resume-matcher", help="(re)run the Resume-Matcher analysis of a finished tailoring")
+    rmp.add_argument("tailoring_id", type=int)
     return parser
 
 
@@ -85,14 +87,39 @@ def _tailor_commands(args: argparse.Namespace, env: Env, notifier: Notifier) -> 
             t = repo.create_tailoring(session, job.id, send=args.send)
         tailoring_id = t.id
 
+    from seekhunter.resume_matcher import client_from_env
     from seekhunter.tailor.engine import openclaw_llm
 
+    rm_client = client_from_env(env)
     with run_lock(env.data_dir, blocking=True, name="tailor.lock"), Session(get_engine()) as session:
         t = pipeline.run_tailoring(session, tailoring_id, env=env, llm=openclaw_llm(env), compiler=compiler,
-                                   notifier=notifier)
+                                   notifier=notifier, resume_matcher=rm_client, defer_resume_matcher=True)
         print(json.dumps({"tailoring_id": t.id, "status": t.status, "error": t.error,
                           "warnings": t.warnings}, indent=1))
-        return 0 if t.status == "done" else 1
+        status = t.status
+    if status == "done" and rm_client is not None:
+        _resume_matcher(env, tailoring_id, rm_client)  # outside tailor.lock: RM's LLM calls are slow
+    return 0 if status == "done" else 1
+
+
+def _resume_matcher(env: Env, tailoring_id: int, client=None) -> int:
+    from seekhunter.resume_matcher import client_from_env
+    from seekhunter.tailor.rm import run_resume_matcher
+
+    client = client or client_from_env(env)
+    if client is None:
+        print("Resume-Matcher is disabled (RM_BASE_URL is empty)", file=sys.stderr)
+        return 2
+    with Session(get_engine()) as session:
+        try:
+            t = run_resume_matcher(session, tailoring_id, env=env, client=client)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        r = (t.result or {}).get("resume_matcher") or {}
+        print(json.dumps({"tailoring_id": t.id, "status": r.get("status"), "error": r.get("error"),
+                          "ats_score": r.get("ats_score")}, indent=1))
+        return 0 if r.get("status") == "done" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -108,6 +135,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command in ("tailor", "resume-preview"):
         return _tailor_commands(args, env, notifier)
+    if args.command == "resume-matcher":
+        return _resume_matcher(env, args.tailoring_id)
 
     try:
         if args.command == "market":

@@ -36,6 +36,7 @@ def get_engine() -> Engine:
 
 def init_db(engine: Engine | None = None) -> None:
     from seekhunter import models  # noqa: F401  (register tables)
+    from seekhunter.tailor import rm  # noqa: F401  (resume_matcher_masters)
 
     eng = engine or get_engine()
     SQLModel.metadata.create_all(eng)

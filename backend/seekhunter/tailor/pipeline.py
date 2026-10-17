@@ -10,12 +10,13 @@ from zoneinfo import ZoneInfo
 
 from sqlmodel import Session
 
-from seekhunter import repo
+from seekhunter import ats_score, repo
 from seekhunter.config import Env
 from seekhunter.models import Job, Tailoring, utcnow
 from seekhunter.notify import NotifyError
-from seekhunter.resume_doc import load_resume_doc
-from seekhunter.tailor import current
+from seekhunter.resume_doc import ResumeDoc, load_resume_doc
+from seekhunter.resume_matcher import ResumeMatcher
+from seekhunter.tailor import current, rm
 from seekhunter.tailor.engine import LLM, JobContext, tailor
 from seekhunter.tailor.render import Compiler, build_tailored
 
@@ -65,9 +66,23 @@ def send_tailoring(session: Session, t: Tailoring, job: Job, notifier: FileNotif
     repo.save_tailoring(session, t)
 
 
+def own_ats(env: Env, title: str, base: ResumeDoc, tailored: ResumeDoc, matched: list[str],
+            gaps: list[str]) -> dict:
+    """Resume-Matcher's deterministic ATS formula applied to SeekHunter's current and tailored resumes,
+    against SeekHunter's own keyword list (re-scored with RM's list once the RM step has it)."""
+    keywords = ats_score.seekhunter_keywords(title, matched, gaps)
+    contact = ats_score.contact_from_latex(env.latex_dir)
+    return {"keywords_source": "seekhunter", "current": ats_score.score_doc(base, keywords, contact),
+            "tailored": ats_score.score_doc(tailored, keywords, contact)}
+
+
 def run_tailoring(session: Session, tailoring_id: int, *, env: Env, llm: LLM, compiler: Compiler,
                   notifier: FileNotifier | None = None, provider: str = "openclaw",
-                  today: date | None = None) -> Tailoring:
+                  today: date | None = None, resume_matcher: ResumeMatcher | None = None,
+                  defer_resume_matcher: bool = False) -> Tailoring:
+    """`resume_matcher`: when given, a best-effort "Analysing with Resume-Matcher" step runs after the
+    tailoring is done (never failing it). With `defer_resume_matcher` it is only marked queued and the
+    caller runs `rm.run_resume_matcher` itself (the CLI does, outside the tailoring lock)."""
     t = session.get(Tailoring, tailoring_id)
     if t is None:
         raise ValueError(f"tailoring {tailoring_id} not found")
@@ -100,6 +115,7 @@ def run_tailoring(session: Session, tailoring_id: int, *, env: Env, llm: LLM, co
             "base": doc.model_dump(), "tailored": validated.doc.model_dump(),
             "keywords_matched": validated.keywords_matched, "gaps": validated.gaps,
             "cover_letter": validated.cover_letter.model_dump(), "pages": rendered["pages"],
+            "ats": own_ats(env, job.title, doc, validated.doc, validated.keywords_matched, validated.gaps),
         }
         t.status, t.progress, t.finished_at = "done", "Done", utcnow()
         repo.save_tailoring(session, t)
@@ -125,4 +141,10 @@ def run_tailoring(session: Session, tailoring_id: int, *, env: Env, llm: LLM, co
             t.warnings = [*t.warnings, f"Telegram delivery failed: {e}"]
         t.progress = "Done"
         repo.save_tailoring(session, t)
+
+    if resume_matcher is not None:
+        if defer_resume_matcher:
+            rm.mark_queued(session, t)
+        else:
+            t = rm.run_resume_matcher(session, t.id, env=env, client=resume_matcher)
     return t
