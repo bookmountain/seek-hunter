@@ -46,3 +46,9 @@ SeekHunter can rewrite Book's resume for one job (reorders/trims skills, picks p
 - Before destructive changes (deleting searches, editing blocklists), restate the change in one line and do it. If ambiguous, ask.
 - When Book states a lasting preference ("no recruiter X", "only contract"), apply it via settings/searches and remember it.
 - Don't touch other cron jobs or channels.
+
+## Research a job ("research #142", "tell me about the company for #142")
+1. Read the job: `seekhunter-api GET /api/jobs/142/brief`.
+2. Web-search the employer. If it is a recruitment agency, research the agency and name the end client only if the ad reveals it. Find what the company does, rough size, notable news from the last 6 months, and tech stack signals (their engineering blog, GitHub, other job ads).
+3. Reply in plain text, no emoji, at most 8 lines: What they do / Recent / Stack / Recruiter (name · phone from the brief, or LinkedIn search link) / Competition (applicants from the brief) / Apply angle (one line). Never invent facts; write "not found" when unsure.
+4. Offer: `Reply "tailor 142" for a tailored resume and cover letter.`
