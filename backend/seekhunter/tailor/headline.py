@@ -167,14 +167,31 @@ def fallback_headline(base: ResumeDoc, *, job_title: str, ad_text: str) -> str:
     return role + SEP + ", ".join(techs) if techs else role
 
 
+_ROLE_CASE = {"full stack": "Full Stack", "full-stack": "Full-Stack", "front end": "Front End",
+              "front-end": "Front-End", "back end": "Back End", "back-end": "Back-End"}
+
+
+def tidy_case(headline: str) -> str:
+    """Title-case the role words ('Full stack Java developer' -> 'Full Stack Java Developer') while
+    leaving tech names after the separator exactly as written."""
+    role, sep, techs = headline.partition(" · ")
+    words = []
+    for w in role.split():
+        words.append(w if (w.isupper() or any(c.isupper() for c in w[1:])) else w[:1].upper() + w[1:])
+    role = " ".join(words)
+    for low, fixed in _ROLE_CASE.items():
+        role = re.sub(re.escape(low), fixed, role, flags=re.IGNORECASE)
+    return f"{role}{sep}{techs}" if sep else role
+
+
 def validate_headline(raw: str | None, base: ResumeDoc, *, job_title: str, ad_text: str,
                       supported: list[str] | None = None) -> tuple[str, str | None]:
     """(headline to use, warning or None). A missing headline silently uses the fallback."""
     fallback = fallback_headline(base, job_title=job_title, ad_text=ad_text)
     headline = " ".join((raw or "").split())
     if not headline:
-        return fallback, None
+        return tidy_case(fallback), None
     problem = _problem(headline, _Context(base, job_title, supported or []))
     if problem:
-        return fallback, f"Headline '{headline[:100]}' {problem}; used '{fallback}' instead."
-    return headline, None
+        return tidy_case(fallback), f"Headline '{headline[:100]}' {problem}; used '{fallback}' instead."
+    return tidy_case(headline), None

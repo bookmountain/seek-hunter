@@ -89,3 +89,10 @@ def test_fallback_without_matching_techs_is_role_only():
 def test_fallback_is_valid():
     h = fallback_headline(BASE, job_title=TITLE, ad_text=AD)
     assert _check(h) == (h, None)
+
+
+def test_tidy_case_fixes_role_words_only():
+    from seekhunter.tailor.headline import tidy_case
+    fixed = tidy_case("Full stack Java developer · Java, Spring, React")
+    assert fixed == "Full Stack Java Developer · Java, Spring, React"
+    assert tidy_case("software engineer · .NET, gRPC") == "Software Engineer · .NET, gRPC"
