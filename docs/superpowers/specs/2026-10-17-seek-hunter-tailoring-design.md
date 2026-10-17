@@ -1,0 +1,35 @@
+# SeekHunter — Tailoring (Sub-project B) Design
+
+**Date:** 2026-10-17 · **Status:** Approved (user asked to build all remaining features autonomously)
+
+## Goal
+For any job, generate a tailored resume PDF and cover letter from Book's `book-cv` LaTeX, without inventing facts. Show the current and tailored resumes side by side on the website with a list of changes, and deliver PDFs to Telegram on request ("tailor #7").
+
+## Verified constraints (2026-10-17)
+- `.50` (Ubuntu 22.04, glibc 2.35) runs **Tectonic 0.17 static musl build** at `/usr/local/bin/tectonic`; `tectonic -X compile resume.tex` builds the real resume (first run ~3 min to fetch bundle, then ~3 s; cache `/root/.cache/tectonic` 43 MB).
+- Resume source: `book-cv/latex/` (resume.tex preamble + macros, `assets/fonts/Roboto-*.ttf`, `sections/resume/*.tex`). Must sync the **whole `latex/` dir** to `.50` at `/opt/seek-hunter/book-cv/latex/` (was only `sections/`).
+- `pypdfium2` + `pillow` render PDF pages to PNG (works without poppler).
+- LLM: OpenClaw `seekhunter-scorer` agent (no tools, OpenAI subscription) via `openclaw agent --agent seekhunter-scorer --json -m …`, reply at `result.meta.finalAssistantVisibleText`. Anthropic is not configured.
+
+## Components
+1. **Resume model** (`seekhunter/resume_doc.py`): parse `sections/resume` into `ResumeDoc` with stable IDs — `summary: str`; `skills: [SkillLine(id, category, items[])]`; `experiences: [Experience(id=file stem, title, company, location, dates, bullets[Bullet(id="<exp>-b<n>", text)])]` in `experience.tex` input order; `projects: [Project(id, name, stack, bullets[])]` (uncommented only); `education`/`referees` passed through untouched (raw tex). Text is LaTeX-unescaped for the LLM and re-escaped on render.
+2. **Tailor engine** (`seekhunter/tailor/engine.py`): builds one prompt (job title/company/ad text ≤ 6000 chars + ResumeDoc JSON + rules) and expects JSON:
+   ```json
+   {"summary": "...", "skills": [{"id": "...", "items": ["..."]}],
+    "experiences": [{"id": "...", "bullets": [{"id": "...", "text": "..."}]}],
+    "projects": ["id", ...], "keywords_matched": ["..."], "gaps": ["..."],
+    "cover_letter": {"greeting": "Dear Brayden,", "paragraphs": ["..."], "sign_off": "Kind regards,"}}
+   ```
+   Rules in prompt: never add employers, titles, dates, metrics, or technologies not present in the resume; reorder/trim skills only; keep ≥ 2 bullets for the two most recent roles; summary ≤ 480 chars; cover letter 220–350 words, 3–4 paragraphs, addressed to the recruiter's first name when `job.contact_name` exists else "Dear Hiring Manager,", mention the visa only as "available for part-time/contract work during study; full working rights in holidays" when the role is part-time/contract/casual, no clichés ("I am writing to express"), Australian English.
+3. **Validator** (`seekhunter/tailor/validate.py`): enforce: skill items ⊆ original items of that line (case-insensitive); bullet ids exist; rewritten bullet text may not contain numbers (`\d`) absent from the original bullet, nor skill-vocabulary terms (`skills.extract_skills`) absent from the whole resume; summary may not introduce skills absent from the resume; unknown project ids dropped; roles never dropped (if a role's bullet list is empty → keep originals). Violations revert to original text and append a human-readable warning.
+4. **Renderer** (`seekhunter/tailor/render.py`): copy `latex/` to a work dir, regenerate `summary.tex`, `skills.tex`, `experience/*.tex`, `projects.tex` from the tailored doc using the existing macros (`\resumeSection`, `\resumeSkillLine`, `\resumeExperience`, `\resumeProject`), escape `\ # $ % & _ { } ~ ^`, compile with Tectonic (timeout 240 s). Cover letter: `cover_letter.tex` generated from a template that `\input`s the resume preamble/header (reuse `resume.tex` up to `\begin{document}` + `\resumeHeader`), date, recipient (contact name/company), paragraphs, sign-off "Book Sam". Render PNG previews (scale 1.5) per page.
+5. **Current-resume cache**: compile the untouched resume once per content hash of `latex/` into `data/resume_current/<hash>/` (PDF + PNGs); reused by every comparison.
+6. **Storage**: table `tailorings(id, job_id, status[queued|running|done|failed], created_at, finished_at, provider, error, warnings JSON, result JSON (validated edits + keywords/gaps + cover letter), resume_hash, out_dir)`; files in `data/tailored/<id>/{resume.pdf,cover_letter.pdf,resume-<n>.png,cover_letter-<n>.png}`. Created via the existing idempotent migration path (new table → `create_all` handles it).
+7. **Execution**: `seekhunter tailor <job_id> [--tailoring-id N] [--send]` CLI runs the pipeline under a separate `tailor.lock` (not the crawl lock). API spawns it detached. `--send` delivers both PDFs to Telegram: `openclaw message send --channel telegram --target <id> --media <pdf> --force-document --message "<caption>"`.
+8. **API**: `POST /api/jobs/{id}/tailor?send=0|1` (write token) → `{tailoring_id}`; `GET /api/jobs/{id}/tailorings`; `GET /api/tailorings/{tid}` (status, warnings, keywords, gaps, cover letter text, and a computed `changes` list: summary before/after, per bullet kept/reworded/removed, skills order before/after, projects included/excluded); `GET /api/tailorings/{tid}/resume.pdf|cover_letter.pdf`; `GET /api/tailorings/{tid}/pages/{kind}/{n}.png`; `GET /api/resume/current` (page count, hash) + `/api/resume/current.pdf` + `/api/resume/current/pages/{n}.png`; `POST /api/tailorings/{tid}/send` (write). File routes are IP-gated like the rest; served with correct content types.
+9. **Website** (Swiss mono style): "Tailor resume" primary action in job detail (shows latest tailoring status); route `/jobs/:id/tailor`: job header; side-by-side page previews **Current | Tailored** (stacked on mobile with a toggle), synced page navigation; "Changes" panel (summary diff, reworded bullets with old struck-through grey and new in ink, removed bullets, skills order, projects); keywords matched / gaps chips; cover letter preview (text + PDF page images) with Copy; Download resume PDF / cover letter PDF; Regenerate; Send to Telegram; polling while running (2 s) with a progress label; validator warnings shown in a grey note.
+10. **OpenClaw skill**: "tailor #7" → `seekhunter-api POST "/api/jobs/7/tailor?send=1"` then tell Book the PDFs will arrive in ~1–2 minutes; "show changes for #7" → read `GET /api/jobs/7/tailorings` + `GET /api/tailorings/{tid}`.
+11. **Deploy**: deploy.sh ensures Tectonic is installed (download static musl build if missing) and warms the cache once; env `LATEX_DIR=/opt/seek-hunter/book-cv/latex`, `RESUME_DIR=/opt/seek-hunter/book-cv/latex/sections/resume`; book-cv workflow syncs `latex/` (not just `sections/`).
+
+## Testing
+Resume parsing round-trip (parse → render tex → parse equals); validator cases (added skill, new number, unknown tech, dropped role, unknown ids); renderer escaping; engine with a fake LLM; API status/changes/file routes (with a fake compiled PDF); CLI arg parsing. Live check on `.50`: tailor one real job and view previews.
