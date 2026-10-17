@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.command == "recap":
                 from seekhunter.pipeline import run_recap
 
-                run_recap(session, notifier, env.public_url)
+                run_recap(session, notifier, env.public_url, dry_run=args.dry_run)
                 return 0
 
             from seekhunter.llm.chain import build_chain
@@ -58,7 +58,8 @@ def main(argv: list[str] | None = None) -> int:
 
             profile = load_profile(env.resume_dir)
             llm = build_chain(repo.load_settings(session), env)
-            report = run_crawl(session, build_sources(), llm, notifier, profile, env.public_url)
+            report = run_crawl(session, build_sources(), llm, notifier, profile, env.public_url,
+                               dry_run=args.dry_run)
             print(json.dumps(report.__dict__, default=str, indent=1))
             return 0
     except RunLocked:

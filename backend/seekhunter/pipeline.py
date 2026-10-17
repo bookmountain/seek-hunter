@@ -79,6 +79,24 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
                     new_jobs.append(job)
                     dup = repo.find_duplicate(session, job)
                     if dup:
+                        other = session.get(Job, dup)
+                        if job.source == "seek" and other is not None and other.source != "seek":
+                            # SEEK is canonical: reverse the link instead of folding the seek job
+                            # into the older jora row.
+                            other.canonical_job_id = job.id
+                            if other.notified_at and not job.notified_at:
+                                job.notified_at = other.notified_at
+                            session.add(other)
+                            session.add(job)
+                            session.commit()
+                            repo.delete_evaluation(session, other.id)
+                            try:
+                                repo.update_job_details(session, job, source.details(data))
+                            except Exception as e:  # noqa: BLE001  one bad detail page mustn't abort the rest
+                                session.rollback()
+                                log.warning("details failed for %s %s: %s", name, data.external_id, e)
+                                st["error"] = f"details: {e}"
+                            continue
                         job.canonical_job_id = dup
                         session.add(job)
                         session.commit()
@@ -86,11 +104,14 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
                     try:
                         repo.update_job_details(session, job, source.details(data))
                     except Exception as e:  # noqa: BLE001  one bad detail page must not abort the source
+                        session.rollback()
                         log.warning("details failed for %s %s: %s", name, data.external_id, e)
                         st["error"] = f"details: {e}"
         except SourceBlocked as e:
+            session.rollback()
             st["status"], st["error"] = "degraded", str(e)
         except Exception as e:  # parsing or network errors must not kill the other sources
+            session.rollback()
             log.exception("source %s failed", name)
             st["status"], st["error"] = "degraded", f"{type(e).__name__}: {e}"
         st["requests"] = getattr(source.client, "request_count", 0)
@@ -145,14 +166,23 @@ def _maybe_health_alert(session: Session, notifier, run: Run) -> None:  # noqa: 
     session.commit()
 
 
-def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, public_url: str) -> RunReport:  # noqa: ANN001
+def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, public_url: str,  # noqa: ANN001
+             dry_run: bool = False) -> RunReport:
+    """Crawl, evaluate, and notify.
+
+    Notification is at-least-once, not exactly-once: digest messages are sent via the notifier
+    *before* `repo.mark_notified` runs, and a send failure is parked in the outbox (flushed on the
+    next run) rather than silently dropped. A crash between sending and `mark_notified` can
+    therefore resend a job on the next run, but a job is never silently skipped.
+    """
     settings = repo.load_settings(session)
     run = Run(kind="crawl")
     session.add(run)
     session.commit()
     session.refresh(run)
     try:
-        _flush_outbox(session, notifier)
+        if not dry_run:
+            _flush_outbox(session, notifier)
         new_jobs, status = _collect(session, sources, settings)
         run.source_status, run.new_jobs = status, len(new_jobs)
 
@@ -170,34 +200,40 @@ def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, 
                                       extra=len(candidates) - len(top)):
                 _send(session, notifier, text)
             run.notified = len(top)
-        if candidates:
+        # Intentionally marks candidates notified even when notify_enabled is False, so that
+        # re-enabling notifications later doesn't flood Telegram with a backlog of old jobs.
+        # Skipped during a dry run, which must have no side effects.
+        if candidates and not dry_run:
             repo.mark_notified(session, [j.id for j, _ in candidates], now)
     except Exception as e:
+        session.rollback()
         run.error = f"{type(e).__name__}: {e}"
         raise
     finally:
         run.finished_at = utcnow()
         session.add(run)
         session.commit()
-    _maybe_health_alert(session, notifier, run)
+    if not dry_run:
+        _maybe_health_alert(session, notifier, run)
     return RunReport(run_id=run.id, new_jobs=run.new_jobs, notified=run.notified,
                      source_status=run.source_status)
 
 
-def run_recap(session: Session, notifier, public_url: str) -> None:  # noqa: ANN001
+def run_recap(session: Session, notifier, public_url: str, dry_run: bool = False) -> None:  # noqa: ANN001
     settings = repo.load_settings(session)
     if not settings.recap_enabled:
         return
     local_now = _local(utcnow())
     start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     since = start_local.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-    rows = repo.list_jobs(session, view="active", since=since)
+    rows = repo.list_jobs(session, view="active", since=since, limit=500)
     excluded = repo.count_excluded_since(session, since)
     for text in format_recap([digest_item(j, e) for j, e in rows], excluded, f"{local_now:%a %d %b}",
                              public_url):
         _send(session, notifier, text)
-    session.add(Run(kind="recap", finished_at=utcnow(), new_jobs=len(rows)))
-    session.commit()
+    if not dry_run:
+        session.add(Run(kind="recap", finished_at=utcnow(), new_jobs=len(rows)))
+        session.commit()
 
 
 def run_rescore(session: Session, profile: Profile, days: int = 7) -> int:

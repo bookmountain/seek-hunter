@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from seekhunter import repo
@@ -6,7 +7,7 @@ from seekhunter.domain import JobData
 from seekhunter.http import SourceBlocked
 from seekhunter.llm.base import LLMScore
 from seekhunter.lock import RunLocked, run_lock
-from seekhunter.models import Job, JobEvaluation, Outbox
+from seekhunter.models import Job, JobEvaluation, Outbox, Run
 from seekhunter.notify import NotifyError
 from seekhunter.pipeline import run_crawl, run_recap, run_rescore
 from seekhunter.profile import Profile
@@ -197,6 +198,86 @@ def _hold_lock_for(data_dir, seconds, held_event):  # noqa: ANN001  module-level
     with run_lock(data_dir):
         held_event.set()
         time.sleep(seconds)
+
+
+def test_dry_run_does_not_mark_notified_and_real_run_later_notifies(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    dry_notifier = FakeNotifier()
+    run_crawl(session, {"seek": seek}, FakeChain(), dry_notifier, PROFILE, "https://sh", dry_run=True)
+    assert len(dry_notifier.sent) == 1 and "1 new" in dry_notifier.sent[0]
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    assert job.notified_at is None
+
+    real_notifier = FakeNotifier()
+    report = run_crawl(session, {"seek": seek}, FakeChain(), real_notifier, PROFILE, "https://sh")
+    assert report.new_jobs == 0
+    assert len(real_notifier.sent) == 1 and "1 new" in real_notifier.sent[0]
+    session.refresh(job)
+    assert job.notified_at is not None
+
+
+def test_dry_run_leaves_outbox_rows_unsent(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(fail=True), PROFILE, "https://sh")
+    before = session.exec(select(Outbox)).one()
+    assert before.sent_at is None
+
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh", dry_run=True)
+    after = session.exec(select(Outbox)).one()
+    assert after.sent_at is None
+    assert after.attempts == before.attempts
+
+
+def test_rollback_on_source_failure_keeps_other_source_working(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    jora = FakeSource("jora", [jd("jora", "a", title="Vue Developer", company="Other")])
+    calls = {"n": 0}
+    original_upsert = repo.upsert_job
+
+    def flaky_upsert(session, data):  # noqa: ANN001
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OperationalError("SELECT 1", {}, Exception("boom"))
+        return original_upsert(session, data)
+
+    import seekhunter.pipeline as pipeline_module
+
+    pipeline_module.repo.upsert_job = flaky_upsert
+    try:
+        report = run_crawl(session, {"seek": seek, "jora": jora}, FakeChain(), FakeNotifier(), PROFILE,
+                           "https://sh")
+    finally:
+        pipeline_module.repo.upsert_job = original_upsert
+
+    assert report.source_status["seek"]["status"] == "degraded"
+    assert report.source_status["jora"]["status"] == "ok"
+    jora_job = session.exec(select(Job).where(Job.source == "jora", Job.external_id == "a")).one()
+    assert jora_job is not None
+    run_row = session.exec(select(Run)).first()
+    assert run_row.finished_at is not None
+
+
+def test_seek_becomes_canonical_over_existing_jora_duplicate(session):
+    jora = FakeSource("jora", [jd("jora", "x", title="Data Engineer", company="Foo")])
+    first_notifier = FakeNotifier()
+    run_crawl(session, {"jora": jora}, FakeChain(), first_notifier, PROFILE, "https://sh")
+    jora_job = session.exec(select(Job).where(Job.source == "jora", Job.external_id == "x")).one()
+    assert jora_job.notified_at is not None
+    assert len(first_notifier.sent) == 1
+
+    seek = FakeSource("seek", [jd("seek", "y", title="Data Engineer", company="Foo")])
+    second_notifier = FakeNotifier()
+    run_crawl(session, {"seek": seek}, FakeChain(), second_notifier, PROFILE, "https://sh")
+
+    session.refresh(jora_job)
+    seek_job = session.exec(select(Job).where(Job.source == "seek", Job.external_id == "y")).one()
+    assert jora_job.canonical_job_id == seek_job.id
+    assert seek_job.canonical_job_id is None
+    assert seek_job.notified_at == jora_job.notified_at
+    ev = session.exec(select(JobEvaluation).where(JobEvaluation.job_id == seek_job.id)).first()
+    assert ev is not None
+    assert seek.detail_calls == 1  # seek is canonical, so its details were fetched
+    assert second_notifier.sent == []  # already notified via jora; no duplicate notification
 
 
 def test_blocking_lock_waits(tmp_path):

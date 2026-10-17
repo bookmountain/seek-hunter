@@ -84,6 +84,13 @@ def get_evaluation(session: Session, job_id: int) -> JobEvaluation | None:
     return session.exec(select(JobEvaluation).where(JobEvaluation.job_id == job_id)).first()
 
 
+def delete_evaluation(session: Session, job_id: int) -> None:
+    ev = get_evaluation(session, job_id)
+    if ev:
+        session.delete(ev)
+        session.commit()
+
+
 def _active_clause():
     return (
         col(Job.canonical_job_id).is_(None),
