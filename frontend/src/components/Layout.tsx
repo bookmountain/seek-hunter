@@ -11,32 +11,73 @@ const links = [
   { to: "/runs", label: "Runs" },
 ];
 
+const dateline = new Intl.DateTimeFormat("en-AU", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "Australia/Adelaide",
+}).format(new Date());
+
+export function Wordmark() {
+  return (
+    <span className="inline-flex items-center gap-2.5 text-ink select-none">
+      <span aria-hidden className="size-[11px] translate-y-[1px] bg-signal" />
+      <span className="display text-[25px] leading-none tracking-[-0.02em]">
+        <span className="mr-[0.06em] font-normal italic" style={{ fontVariationSettings: '"opsz" 144, "SOFT" 100, "WONK" 1' }}>
+          Seek
+        </span>
+        <span className="font-bold" style={{ fontVariationSettings: '"opsz" 144, "SOFT" 0, "WONK" 0' }}>
+          Hunter
+        </span>
+      </span>
+    </span>
+  );
+}
+
 export function Layout() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
-          <span className="font-semibold">🎯 SeekHunter</span>
-          <nav className="flex gap-1">
+    <div className="flex min-h-dvh flex-col lg:h-dvh">
+      <a
+        href="#main"
+        className="kicker sr-only z-50 bg-ink px-3 py-2 text-paper focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+      >
+        Skip to content
+      </a>
+      <header className="paper z-30 border-b-[3px] border-double border-ink">
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-2 px-5 pt-3 pb-2 lg:h-14 lg:flex-nowrap lg:px-6 lg:py-0">
+          <NavLink to="/" aria-label="SeekHunter, jobs" className="shrink-0">
+            <Wordmark />
+          </NavLink>
+          <div className="ml-auto flex items-center gap-5 lg:order-last">
+            <span className="kicker hidden text-ink-faint xl:inline">Adelaide · {dateline}</span>
+            <TokenDialog />
+          </div>
+          <nav
+            aria-label="Main"
+            className="-mx-1 flex w-full gap-5 overflow-x-auto px-1 pb-1 lg:w-auto lg:overflow-visible lg:pb-0"
+          >
             {links.map((l) => (
               <NavLink
                 key={l.to}
                 to={l.to}
                 end={l.to === "/"}
                 className={({ isActive }) =>
-                  cn("rounded-md px-3 py-1.5 text-sm", isActive ? "bg-muted font-medium" : "text-muted-foreground")
+                  cn(
+                    "kicker shrink-0 py-1 underline-offset-[7px] transition-colors",
+                    isActive
+                      ? "text-ink underline decoration-signal decoration-2"
+                      : "text-ink-muted hover:text-ink hover:underline hover:decoration-rule-strong hover:decoration-1",
+                  )
                 }
               >
                 {l.label}
               </NavLink>
             ))}
           </nav>
-          <div className="ml-auto">
-            <TokenDialog />
-          </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main id="main" className="flex-1 lg:min-h-0 lg:overflow-y-auto">
         <Outlet />
       </main>
       <Toaster />

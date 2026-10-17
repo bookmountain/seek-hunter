@@ -1,49 +1,28 @@
-"use client"
-
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
-const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
-  return (
-    <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
-      icons={{
-        success: (
-          <CircleCheckIcon className="size-4" />
-        ),
-        info: (
-          <InfoIcon className="size-4" />
-        ),
-        warning: (
-          <TriangleAlertIcon className="size-4" />
-        ),
-        error: (
-          <OctagonXIcon className="size-4" />
-        ),
-        loading: (
-          <Loader2Icon className="size-4 animate-spin" />
-        ),
-      }}
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
-        } as React.CSSProperties
-      }
-      toastOptions={{
-        classNames: {
-          toast: "cn-toast",
-        },
-      }}
-      {...props}
-    />
-  )
-}
+/** Toasts as small printed slips: paper, ink border, mono text, no icons. */
+const Toaster = ({ ...props }: ToasterProps) => (
+  <Sonner
+    theme="light"
+    position="bottom-left"
+    className="toaster group"
+    icons={{ success: null, info: null, warning: null, error: null }}
+    style={
+      {
+        "--normal-bg": "var(--paper-lift)",
+        "--normal-text": "var(--ink)",
+        "--normal-border": "var(--ink)",
+        "--border-radius": "0px",
+      } as React.CSSProperties
+    }
+    toastOptions={{
+      classNames: {
+        toast: "!font-mono !text-[12px] !tracking-[0.04em] !shadow-[3px_3px_0_0_rgb(22_20_18/0.12)]",
+        error: "!text-signal !border-signal",
+      },
+    }}
+    {...props}
+  />
+)
 
 export { Toaster }

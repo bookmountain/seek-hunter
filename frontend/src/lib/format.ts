@@ -1,0 +1,22 @@
+import type { Job, WorkType } from "./types";
+import { parseIsoUtc } from "./utils";
+
+/** Compact age, e.g. "5h", "3d". */
+export function since(iso: string, now = Date.now()): string {
+  const h = Math.max(0, Math.round((now - parseIsoUtc(iso).getTime()) / 3_600_000));
+  return h < 24 ? `${h}h` : `${Math.round(h / 24)}d`;
+}
+
+export const FLEXIBLE_TYPES: ReadonlySet<WorkType> = new Set(["part_time", "contract", "casual"]);
+
+export const isFlexible = (j: Pick<Job, "work_type">) => FLEXIBLE_TYPES.has(j.work_type);
+
+export const WORK_TYPE_CAPS: Record<WorkType, string> = {
+  full_time: "Full-time",
+  part_time: "Part-time",
+  contract: "Contract",
+  casual: "Casual",
+  unknown: "Type n/a",
+};
+
+export const sourceName = (s: Job["source"]) => (s === "seek" ? "SEEK" : "Jora");

@@ -1,44 +1,67 @@
 import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Page, PageHead } from "@/components/PageHead";
 import { api } from "@/lib/api";
-import { parseIsoUtc } from "@/lib/utils";
+import { cn, parseIsoUtc } from "@/lib/utils";
 
 const fmt = (iso: string | null) =>
-  iso ? parseIsoUtc(iso).toLocaleString("en-AU", { timeZone: "Australia/Adelaide" }) : "—";
+  iso
+    ? parseIsoUtc(iso).toLocaleString("en-AU", {
+        timeZone: "Australia/Adelaide",
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+    : "—";
+
+const TH = "kicker px-3 py-2 text-left text-[10.5px] font-medium text-ink-muted";
 
 export function RunsPage() {
-  const { data = [] } = useQuery({ queryKey: ["runs"], queryFn: api.runs, refetchInterval: 30_000 });
+  const { data = [], isLoading } = useQuery({ queryKey: ["runs"], queryFn: api.runs, refetchInterval: 30_000 });
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Started</TableHead>
-          <TableHead>Sources</TableHead>
-          <TableHead>New</TableHead>
-          <TableHead>Notified</TableHead>
-          <TableHead>AI</TableHead>
-          <TableHead>Error</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {data.map((r) => (
-          <TableRow key={r.id}>
-            <TableCell>{fmt(r.started_at)}</TableCell>
-            <TableCell className="space-x-1">
-              {Object.entries(r.source_status).map(([name, st]) => (
-                <Badge key={name} variant={st.status === "ok" ? "secondary" : "destructive"} title={st.error ?? ""}>
-                  {name} {st.new}/{st.found} · {st.requests} req{st.blocked ? ` · ${st.blocked}×403` : ""}
-                </Badge>
-              ))}
-            </TableCell>
-            <TableCell>{r.new_jobs}</TableCell>
-            <TableCell>{r.notified}</TableCell>
-            <TableCell>{r.llm_provider ?? "rules"}</TableCell>
-            <TableCell className="max-w-xs truncate text-sm text-destructive">{r.error}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <Page>
+      <PageHead kicker="Press log" title="Runs" dek="Every crawl, what each source returned, and what went out to Telegram. Refreshes every 30 seconds." />
+      <div className="mt-6 overflow-x-auto">
+        <table className="num w-full min-w-[720px] border-collapse text-[12.5px]">
+          <thead>
+            <tr className="border-b border-ink">
+              <th className={TH}>Started · Adelaide</th>
+              <th className={TH}>Sources · new/found · requests</th>
+              <th className={cn(TH, "text-right")}>New</th>
+              <th className={cn(TH, "text-right")}>Notified</th>
+              <th className={TH}>AI</th>
+              <th className={TH}>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((r) => (
+              <tr key={r.id} className="border-b border-rule align-top hover:bg-ink/[0.03]">
+                <td className="px-3 py-2.5 whitespace-nowrap">{fmt(r.started_at)}</td>
+                <td className="px-3 py-2.5">
+                  <div className="flex flex-col gap-0.5">
+                    {Object.entries(r.source_status).map(([name, st]) => (
+                      <span key={name} title={st.error ?? ""} className={st.status === "ok" ? "text-ink" : "text-signal"}>
+                        <span className="inline-block w-12 uppercase">{name}</span>
+                        {st.new}/{st.found} · {st.requests} req
+                        {st.blocked ? ` · ${st.blocked}×403` : ""}
+                        {st.status !== "ok" && <span className="kicker ml-2 text-[10px]">degraded</span>}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td className={cn("px-3 py-2.5 text-right", r.new_jobs > 0 ? "font-medium" : "text-ink-faint")}>{r.new_jobs}</td>
+                <td className={cn("px-3 py-2.5 text-right", r.notified > 0 ? "" : "text-ink-faint")}>{r.notified}</td>
+                <td className="px-3 py-2.5 text-ink-muted">{r.llm_provider ?? "rules"}</td>
+                <td className="max-w-xs truncate px-3 py-2.5 text-signal" title={r.error ?? ""}>
+                  {r.error}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!isLoading && !data.length && <p className="py-12 text-center text-sm text-ink-muted italic">No runs recorded yet.</p>}
+      </div>
+    </Page>
   );
 }

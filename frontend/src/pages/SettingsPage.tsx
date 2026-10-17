@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Page, PageHead, SectionHead } from "@/components/PageHead";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -75,82 +75,78 @@ export function SettingsPage() {
   });
   const run = useMutation({ mutationFn: api.triggerRun, onSuccess: () => toast.success("Run started"), onError: fail });
   const test = useMutation({ mutationFn: api.notifyTest, onSuccess: () => toast.success("Test sent"), onError: fail });
-  if (!s) return <p>Loading…</p>;
+  if (!s) return <Page><p className="kicker text-ink-muted">Loading settings…</p></Page>;
+
+  const numberField = (id: string, label: string, value: number, onChange: (n: number) => void) => (
+    <div key={id} className="grid content-end gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} type="number" step={1} min={0} className="num w-32" value={value} onChange={(e) => onChange(parseInt0(e.target.value))} />
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex gap-2">
-        <Button onClick={() => save.mutate()}>Save settings</Button>
-        <Button variant="outline" onClick={() => run.mutate()}>
-          Run now
-        </Button>
-        <Button variant="outline" onClick={() => test.mutate()}>
-          Send test notification
-        </Button>
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Toggles & weights</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+    <Page>
+      <PageHead
+        kicker="House rules"
+        title="Settings"
+        dek="How jobs are filtered, scored and announced. Changes apply from the next run."
+        actions={
+          <>
+            <Button onClick={() => save.mutate()}>Save settings</Button>
+            <Button variant="outline" onClick={() => run.mutate()}>
+              Run now
+            </Button>
+            <Button variant="outline" onClick={() => test.mutate()}>
+              Send test notification
+            </Button>
+          </>
+        }
+      />
+
+      <section className="mt-10">
+        <SectionHead>Switches</SectionHead>
+        <div className="grid sm:grid-cols-2">
           {TOGGLES.map(([k, label]) => (
-            <div key={k} className="flex items-center gap-2">
+            <label key={k} className="flex cursor-pointer items-center justify-between gap-4 border-b border-rule py-3 sm:odd:pr-6 sm:even:pl-6">
+              <span className="text-[15px]">{label}</span>
               <Switch checked={s[k] as boolean} onCheckedChange={(v) => setS({ ...s, [k]: v })} />
-              <Label>{label}</Label>
-            </div>
+            </label>
           ))}
-          {WEIGHTS.map(([k, label]) => (
-            <div key={k} className="space-y-1">
-              <Label>{label}</Label>
-              <Input
-                type="number"
-                step={1}
-                min={0}
-                value={s.weights[k]}
-                onChange={(e) => setS({ ...s, weights: { ...s.weights, [k]: parseInt0(e.target.value) } })}
-              />
-            </div>
-          ))}
-          <div className="space-y-1">
-            <Label>Max notified per run</Label>
-            <Input
-              type="number"
-              step={1}
-              min={0}
-              value={s.max_notify_per_run}
-              onChange={(e) => setS({ ...s, max_notify_per_run: parseInt0(e.target.value) })}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label>Max pages per search</Label>
-            <Input
-              type="number"
-              step={1}
-              min={0}
-              value={s.max_pages_per_search}
-              onChange={(e) => setS({ ...s, max_pages_per_search: parseInt0(e.target.value) })}
-            />
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Lists (one per line)</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        </div>
+      </section>
+
+      <section className="mt-10">
+        <SectionHead>Weights &amp; limits</SectionHead>
+        <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
+          {WEIGHTS.map(([k, label]) =>
+            numberField(`w-${k}`, label, s.weights[k], (n) => setS({ ...s, weights: { ...s.weights, [k]: n } })),
+          )}
+          {numberField("max-notify", "Max notified per run", s.max_notify_per_run, (n) => setS({ ...s, max_notify_per_run: n }))}
+          {numberField("max-pages", "Max pages per search", s.max_pages_per_search, (n) => setS({ ...s, max_pages_per_search: n }))}
+        </div>
+      </section>
+
+      <section className="mt-12">
+        <SectionHead>Lists, one entry per line</SectionHead>
+        <div className="mt-5 grid gap-x-6 gap-y-6 sm:grid-cols-2">
           {LISTS.map(([k, label]) => (
-            <div key={k} className="space-y-1">
-              <Label>{label}</Label>
+            <div key={k} className="grid content-start gap-1.5">
+              <Label htmlFor={`l-${k}`}>{label}</Label>
               <Textarea
+                id={`l-${k}`}
                 rows={6}
-                className="font-mono text-xs"
+                className="font-mono text-[12px] leading-[1.6]"
                 value={listText[k] ?? ""}
                 onChange={(e) => setListText({ ...listText, [k]: e.target.value })}
               />
             </div>
           ))}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </section>
+
+      <div className="mt-10 flex justify-end border-t border-ink pt-5">
+        <Button onClick={() => save.mutate()}>Save settings</Button>
+      </div>
+    </Page>
   );
 }

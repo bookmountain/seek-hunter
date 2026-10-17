@@ -10,8 +10,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<JobsPage view="active" />} />
-          <Route path="excluded" element={<JobsPage view="excluded" />} />
+          <Route index element={<JobsPage key="active" view="active" />} />
+          <Route path="excluded" element={<JobsPage key="excluded" view="excluded" />} />
           <Route path="searches" element={<SearchesPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="runs" element={<RunsPage />} />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { highlight } from "./JobDrawer";
+import { highlight } from "./JobDetail";
 
 describe("highlight", () => {
   it("sanitizes script tags and event handler attributes", () => {
