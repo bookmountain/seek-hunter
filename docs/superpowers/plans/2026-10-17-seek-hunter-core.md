@@ -5144,13 +5144,12 @@ jobs:
         with:
           name: frontend-dist
           path: frontend/dist
-      - name: Sync app and resume
+      - name: Sync app  # resume sections arrive via book-cv's own deploy (Task 26 Step 9b)
         run: |
           rsync -az --delete -e "ssh $SSH_OPTS" \
             --exclude '.git/' --exclude '.github/' --exclude 'backend/.venv/' --exclude 'backend/data/' \
             --exclude 'frontend/node_modules/' --exclude '.env' \
             ./ "$TARGET:/opt/seek-hunter/app/"
-          rsync -az --delete -e "ssh $SSH_OPTS" /work/book-cv/latex/sections/ "$TARGET:/opt/seek-hunter/book-cv/sections/"
       - name: Install and restart
         run: ssh $SSH_OPTS "$TARGET" 'bash /opt/seek-hunter/app/deploy/deploy.sh'
       - name: Health check from runner
