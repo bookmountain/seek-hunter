@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlmodel import Session, col, select
 
 from seekhunter.domain import JobData, company_key, dedupe_key, derive_city
@@ -104,10 +104,13 @@ def set_insights(session: Session, job: Job, data: dict | None, checked_at: date
     session.commit()
 
 
-def jobs_needing_insights(session: Session, now: datetime, limit: int) -> list[Job]:
+def jobs_needing_insights(session: Session, now: datetime, limit: int,
+                          notify_cities: list[str] | None = None) -> list[Job]:
     """SEEK jobs eligible for an insights refresh: canonical (not a duplicate), not hidden, first
-    seen within the last 7 days, and not checked within the last 3 hours. Never-checked jobs
-    (`insights_checked_at IS NULL`) sort first, then the longest-stale ones."""
+    seen within the last 7 days, and not checked within the last 3 hours. When `notify_cities` is
+    given, jobs in those cities sort first (they're the ones that actually reach Telegram); within
+    each group, never-checked jobs (`insights_checked_at IS NULL`) sort first, then the longest-
+    stale ones."""
     cutoff = now - timedelta(hours=3)
     window = now - timedelta(days=7)
     stmt = (
@@ -115,9 +118,12 @@ def jobs_needing_insights(session: Session, now: datetime, limit: int) -> list[J
         .where(Job.source == "seek", col(Job.canonical_job_id).is_(None), Job.status != "hidden",
                Job.first_seen_at >= window,
                or_(col(Job.insights_checked_at).is_(None), Job.insights_checked_at < cutoff))
-        .order_by(col(Job.insights_checked_at).asc())
-        .limit(limit)
     )
+    order_cols = []
+    if notify_cities:
+        order_cols.append(case((col(Job.city).in_(notify_cities), 0), else_=1))
+    order_cols.append(col(Job.insights_checked_at).asc())
+    stmt = stmt.order_by(*order_cols).limit(limit)
     return list(session.exec(stmt).all())
 
 
@@ -176,13 +182,20 @@ def _active_clause():
     )
 
 
-def notification_candidates(session: Session, now: datetime) -> list[tuple[Job, JobEvaluation]]:
+def notification_candidates(session: Session, now: datetime,
+                            notify_cities: list[str] | None = None) -> list[tuple[Job, JobEvaluation]]:
+    """Jobs eligible for a Telegram digest. `notify_cities`, when given, restricts this to jobs in
+    those cities (e.g. settings.notify_cities, Adelaide-only by default) — jobs from other cities
+    are still crawled/scored/notified_at never set, so enabling a city later only notifies jobs
+    seen in the last 48h, not a backlog."""
     stmt = (
         select(Job, JobEvaluation).join(JobEvaluation, JobEvaluation.job_id == Job.id)
         .where(*_active_clause(), col(Job.notified_at).is_(None),
                Job.first_seen_at >= now - timedelta(hours=48))
-        .order_by(col(JobEvaluation.final_score).desc(), col(Job.first_seen_at).desc())
     )
+    if notify_cities is not None:
+        stmt = stmt.where(col(Job.city).in_(notify_cities))
+    stmt = stmt.order_by(col(JobEvaluation.final_score).desc(), col(Job.first_seen_at).desc())
     return list(session.exec(stmt).all())
 
 
@@ -195,7 +208,8 @@ def mark_notified(session: Session, job_ids: list[int], when: datetime) -> None:
 
 def list_jobs(session: Session, view: str = "active", status: str | None = None, work_type: str | None = None,
               source: str | None = None, q: str | None = None, since: datetime | None = None,
-              limit: int = 200, offset: int = 0) -> list[tuple[Job, JobEvaluation]]:
+              city: str | None = None, cities: list[str] | None = None, limit: int = 200,
+              offset: int = 0) -> list[tuple[Job, JobEvaluation]]:
     stmt = select(Job, JobEvaluation).join(JobEvaluation, JobEvaluation.job_id == Job.id)
     if view == "excluded":
         stmt = stmt.where(JobEvaluation.excluded == True, Job.force_include == False)  # noqa: E712
@@ -211,6 +225,10 @@ def list_jobs(session: Session, view: str = "active", status: str | None = None,
         stmt = stmt.where(Job.source == source)
     if since:
         stmt = stmt.where(Job.first_seen_at >= since)
+    if city:
+        stmt = stmt.where(Job.city == city)
+    if cities is not None:
+        stmt = stmt.where(col(Job.city).in_(cities))
     if q:
         escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         like = f"%{escaped}%"
@@ -219,13 +237,29 @@ def list_jobs(session: Session, view: str = "active", status: str | None = None,
     return list(session.exec(stmt.offset(offset).limit(limit)).all())
 
 
-def count_excluded_since(session: Session, since: datetime) -> int:
+def count_excluded_since(session: Session, since: datetime, cities: list[str] | None = None) -> int:
     stmt = (
         select(func.count()).select_from(Job).join(JobEvaluation, JobEvaluation.job_id == Job.id)
         .where(JobEvaluation.excluded == True, Job.force_include == False,  # noqa: E712
                Job.first_seen_at >= since)
     )
+    if cities is not None:
+        stmt = stmt.where(col(Job.city).in_(cities))
     return session.exec(stmt).one()
+
+
+def job_city_counts(session: Session, view: str = "active") -> list[tuple[str | None, int]]:
+    """`[(city, count)]` for the given jobs-list `view`, mirroring `list_jobs`'s filtering — used by
+    the Jobs page location filter to show counts per city."""
+    stmt = select(Job.city, func.count()).select_from(Job).join(JobEvaluation, JobEvaluation.job_id == Job.id)
+    if view == "excluded":
+        stmt = stmt.where(JobEvaluation.excluded == True, Job.force_include == False)  # noqa: E712
+    else:
+        stmt = stmt.where(col(Job.canonical_job_id).is_(None),
+                          or_(JobEvaluation.excluded == False, Job.force_include == True),  # noqa: E712
+                          Job.status != "hidden")
+    stmt = stmt.group_by(Job.city)
+    return list(session.exec(stmt).all())
 
 
 def load_settings(session: Session) -> AppSettings:

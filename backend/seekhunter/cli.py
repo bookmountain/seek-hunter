@@ -159,7 +159,9 @@ def main(argv: list[str] | None = None) -> int:
                 from seekhunter.pipeline import run_insights_refresh
                 from seekhunter.sources.seek import SeekSource
 
-                report = run_insights_refresh(session, SeekSource(PoliteClient()), limit=args.limit)
+                notify_cities = repo.load_settings(session).notify_cities
+                report = run_insights_refresh(session, SeekSource(PoliteClient()), limit=args.limit,
+                                              notify_cities=notify_cities)
                 print(json.dumps(report, indent=1))
                 return 0
 

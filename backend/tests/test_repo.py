@@ -218,6 +218,90 @@ def test_notification_candidates(session):
     assert repo.notification_candidates(session, utcnow()) == []
 
 
+def test_notification_candidates_restricted_to_notify_cities(session):
+    adelaide, _ = repo.upsert_job(session, data(ext="ade", title="Adelaide role"),
+                                  profile_location="All Adelaide SA")
+    melbourne, _ = repo.upsert_job(session, data(ext="mel", title="Melbourne role"),
+                                   profile_location="All Melbourne VIC")
+    for job in (adelaide, melbourne):
+        repo.save_evaluation(session, job.id, excluded=False, reasons=[], snippets={}, rule_score=70,
+                             llm_score=None, llm_note=None, llm_provider=None, final_score=70,
+                             matched_skills=[], flags=[])
+
+    cands = repo.notification_candidates(session, utcnow(), notify_cities=["adelaide"])
+    assert [c[0].id for c in cands] == [adelaide.id]
+
+    # melbourne is never marked notified just because it was excluded from this run's candidates —
+    # enabling melbourne later must still pick it up (within the existing 48h window).
+    repo.mark_notified(session, [j.id for j, _ in cands], utcnow())
+    session.refresh(melbourne)
+    assert melbourne.notified_at is None
+
+    both = repo.notification_candidates(session, utcnow(), notify_cities=["adelaide", "melbourne"])
+    assert {c[0].id for c in both} == {melbourne.id}
+
+
+def test_job_city_counts_matches_active_view_filtering(session):
+    active = _with_eval(session, "cc1", title="Active")
+    active.city = "adelaide"
+    excluded = _with_eval(session, "cc2", title="Excluded", excluded=True)
+    excluded.city = "adelaide"
+    hidden = _with_eval(session, "cc3", title="Hidden")
+    hidden.city = "melbourne"
+    hidden.status = "hidden"
+    other = _with_eval(session, "cc4", title="Other")
+    other.city = "melbourne"
+    session.add_all([active, excluded, hidden, other])
+    session.commit()
+
+    counts = dict(repo.job_city_counts(session, view="active"))
+    assert counts == {"adelaide": 1, "melbourne": 1}
+
+    excluded_counts = dict(repo.job_city_counts(session, view="excluded"))
+    assert excluded_counts == {"adelaide": 1}
+
+
+def test_list_jobs_filters_by_city(session):
+    adelaide = _with_eval(session, "lc1", title="A")
+    adelaide.city = "adelaide"
+    melbourne = _with_eval(session, "lc2", title="B")
+    melbourne.city = "melbourne"
+    session.add_all([adelaide, melbourne])
+    session.commit()
+
+    assert [j.id for j, _ in repo.list_jobs(session, view="active", city="melbourne")] == [melbourne.id]
+    ids = {j.id for j, _ in repo.list_jobs(session, view="active", cities=["adelaide"])}
+    assert ids == {adelaide.id}
+
+
+def test_count_excluded_since_filters_by_cities(session):
+    excluded_adelaide = _with_eval(session, "ce1", title="A", excluded=True)
+    excluded_adelaide.city = "adelaide"
+    excluded_melbourne = _with_eval(session, "ce2", title="B", excluded=True)
+    excluded_melbourne.city = "melbourne"
+    session.add_all([excluded_adelaide, excluded_melbourne])
+    session.commit()
+
+    since = utcnow() - timedelta(days=1)
+    assert repo.count_excluded_since(session, since, cities=["adelaide"]) == 1
+    assert repo.count_excluded_since(session, since) == 2
+
+
+def test_jobs_needing_insights_prioritises_notify_cities(session):
+    melbourne, _ = repo.upsert_job(session, data(ext="m1", source="seek"),
+                                   profile_location="All Melbourne VIC")
+    adelaide, _ = repo.upsert_job(session, data(ext="a1", source="seek"),
+                                  profile_location="All Adelaide SA")
+    session.commit()
+
+    jobs = repo.jobs_needing_insights(session, utcnow(), limit=10, notify_cities=["adelaide"])
+    assert [j.id for j in jobs] == [adelaide.id, melbourne.id]
+
+    # without a notify_cities filter, order falls back to the existing insights_checked_at rule
+    jobs_unfiltered = repo.jobs_needing_insights(session, utcnow(), limit=10)
+    assert {j.id for j in jobs_unfiltered} == {adelaide.id, melbourne.id}
+
+
 def test_set_insights_applies_data_and_checked_at(session):
     job, _ = repo.upsert_job(session, data())
     now = utcnow()

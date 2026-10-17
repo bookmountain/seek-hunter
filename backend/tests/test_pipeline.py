@@ -14,6 +14,7 @@ from seekhunter.models import utcnow as _utcnow
 from seekhunter.notify import NotifyError
 from seekhunter.pipeline import (
     _lookup_linkedin,
+    _max_pages_for,
     digest_item,
     run_contacts_backfill,
     run_crawl,
@@ -155,6 +156,102 @@ def test_health_alert_after_three_all_failed_runs(session):
     assert sum("SeekHunter: all sources failing" in m for m in n.sent) == 1
     run_crawl(session, blocked, FakeChain(), n, PROFILE, "https://sh")
     assert sum("SeekHunter: all sources failing" in m for m in n.sent) == 1
+
+
+def test_max_pages_for_caps_non_notify_cities(session):
+    from seekhunter.models import SearchProfile
+
+    settings = repo.load_settings(session)
+    settings.max_pages_per_search = 5
+    settings.other_city_max_pages = 2
+    adelaide = SearchProfile(name="a", keywords="dev", location="All Adelaide SA")
+    melbourne = SearchProfile(name="m", keywords="dev", location="All Melbourne VIC")
+    assert _max_pages_for(adelaide, settings) == 5
+    assert _max_pages_for(melbourne, settings) == 2
+
+    settings.other_city_max_pages = 10  # never *raises* the cap above max_pages_per_search
+    assert _max_pages_for(melbourne, settings) == 5
+
+
+def test_crawl_caps_pages_for_non_notify_city_profiles(session):
+    melbourne_profile = next(
+        p for p in repo.list_search_profiles(session) if p.location == "All Melbourne VIC")
+    melbourne_profile.enabled = True
+    session.add(melbourne_profile)
+    session.commit()
+
+    settings = repo.load_settings(session)
+    settings.max_pages_per_search = 5
+    settings.other_city_max_pages = 2
+    repo.save_settings(session, settings)
+
+    class RecordingSource(FakeSource):
+        def __init__(self, name, jobs):
+            super().__init__(name, jobs)
+            self.max_pages_seen = {}
+
+        def search(self, profile, max_pages):
+            self.max_pages_seen[profile.location] = max_pages
+            return super().search(profile, max_pages)
+
+    seek = RecordingSource("seek", [jd("seek", "1")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+
+    assert seek.max_pages_seen["All Adelaide SA"] == 5
+    assert seek.max_pages_seen["All Melbourne VIC"] == 2
+
+
+def test_crawl_only_notifies_notify_cities_but_still_evaluates_other_cities(session):
+    melbourne_profile = next(
+        p for p in repo.list_search_profiles(session) if p.location == "All Melbourne VIC")
+    melbourne_profile.enabled = True
+    session.add(melbourne_profile)
+    session.commit()
+
+    class MultiCitySource(FakeSource):
+        def search(self, profile, max_pages):
+            ext = "mel1" if profile.location == "All Melbourne VIC" else "ade1"
+            return [j for j in self.jobs if j.external_id == ext]
+
+    seek = MultiCitySource("seek", [jd("seek", "ade1", title="Adelaide Dev"),
+                                    jd("seek", "mel1", title="Melbourne Dev")])
+    notifier = FakeNotifier()
+    run_crawl(session, {"seek": seek}, FakeChain(), notifier, PROFILE, "https://sh")
+
+    jobs = {j.title: j for j in session.exec(select(Job)).all()}
+    adelaide_job, melbourne_job = jobs["Adelaide Dev"], jobs["Melbourne Dev"]
+    assert melbourne_job.city == "melbourne"
+    # Melbourne is still fully evaluated/scored (not just crawled and dropped)...
+    melbourne_eval = session.exec(
+        select(JobEvaluation).where(JobEvaluation.job_id == melbourne_job.id)).one()
+    assert melbourne_eval.final_score > 0
+    # ...but only Adelaide (the default notify_cities) reaches Telegram and gets notified_at set.
+    assert adelaide_job.notified_at is not None
+    assert melbourne_job.notified_at is None
+    assert "Melbourne Dev" not in notifier.sent[0]
+    assert "Adelaide Dev" in notifier.sent[0]
+
+
+def test_recap_respects_notify_cities(session):
+    melbourne_profile = next(
+        p for p in repo.list_search_profiles(session) if p.location == "All Melbourne VIC")
+    melbourne_profile.enabled = True
+    session.add(melbourne_profile)
+    session.commit()
+
+    class MultiCitySource(FakeSource):
+        def search(self, profile, max_pages):
+            ext = "mel1" if profile.location == "All Melbourne VIC" else "ade1"
+            return [j for j in self.jobs if j.external_id == ext]
+
+    seek = MultiCitySource("seek", [jd("seek", "ade1", title="Adelaide Dev"),
+                                    jd("seek", "mel1", title="Melbourne Dev")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+
+    n = FakeNotifier()
+    run_recap(session, n, "https://sh")
+    assert "1 new jobs, 0 excluded" in n.sent[0]
+    assert "Melbourne Dev" not in n.sent[0]
 
 
 def test_recap(session):

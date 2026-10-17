@@ -250,12 +250,14 @@ def _evaluate(session: Session, jobs: list[Job], profile: Profile, settings, llm
     return used
 
 
-def run_insights_refresh(session: Session, seek_source, limit: int = 30) -> dict:  # noqa: ANN001
+def run_insights_refresh(session: Session, seek_source, limit: int = 30,  # noqa: ANN001
+                         notify_cities: list[str] | None = None) -> dict:
     """Refreshes SEEK applicant insights for up to `limit` eligible jobs (see
     `repo.jobs_needing_insights`). A `SourceBlocked` from the source stops the loop early (SEEK is
     rate-limiting us this run); any other per-job error is logged and skipped so one bad job
-    doesn't block the rest."""
-    jobs = repo.jobs_needing_insights(session, utcnow(), limit)
+    doesn't block the rest. `notify_cities` prioritises jobs in those cities (see
+    `repo.jobs_needing_insights`)."""
+    jobs = repo.jobs_needing_insights(session, utcnow(), limit, notify_cities=notify_cities)
     refreshed = 0
     error = None
     for job in jobs:
@@ -276,7 +278,8 @@ def _refresh_insights(session: Session, sources: dict, status: dict, settings) -
     seek_source = sources.get("seek")
     if not seek_source:
         return
-    report = run_insights_refresh(session, seek_source, settings.max_insights_per_run)
+    report = run_insights_refresh(session, seek_source, settings.max_insights_per_run,
+                                  notify_cities=settings.notify_cities)
     seek_status = status.setdefault("seek", {})
     seek_status["insights_refreshed"] = report["refreshed"]
     if report["error"]:
@@ -341,7 +344,7 @@ def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, 
         flag_modified(run, "source_status")
 
         now = utcnow()
-        candidates = repo.notification_candidates(session, now)
+        candidates = repo.notification_candidates(session, now, notify_cities=settings.notify_cities)
         if candidates and settings.notify_enabled:
             top = candidates[: settings.max_notify_per_run]
             degraded = [k for k, v in status.items() if v["status"] != "ok"]
@@ -375,8 +378,8 @@ def run_recap(session: Session, notifier, public_url: str, dry_run: bool = False
     local_now = _local(utcnow())
     start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     since = start_local.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-    rows = repo.list_jobs(session, view="active", since=since, limit=500)
-    excluded = repo.count_excluded_since(session, since)
+    rows = repo.list_jobs(session, view="active", since=since, limit=500, cities=settings.notify_cities)
+    excluded = repo.count_excluded_since(session, since, cities=settings.notify_cities)
     now = utcnow()
     due = repo.follow_ups_due(session, now)[:3]
     follow_ups = [{"company": a.company, "title": a.title, "days": (now - a.applied_at).days} for a in due]
