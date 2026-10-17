@@ -56,6 +56,12 @@ function Card({ t }: { t: TailoringListItem }) {
           ) : (
             <span className="kicker text-[10px] text-ink-muted">Failed</span>
           )}
+          {t.ats_tailored != null && (
+            <span className="num text-[11.5px] text-ink" title="ATS score, current → tailored (Resume-Matcher formula)">
+              ATS <span className="text-ink-muted">{t.ats_current != null ? Math.round(t.ats_current) : "—"} →</span>{" "}
+              {Math.round(t.ats_tailored)}
+            </span>
+          )}
           {t.applied_application_id && (
             <Link to="/history?tab=applications" className="kicker border border-blue px-1.5 py-[2px] text-[10px] text-blue hover:bg-selected">
               Applied with this

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ChangesPanel } from "@/components/tailor/ChangesPanel";
 import { CoverLetterSection } from "@/components/tailor/CoverLetterSection";
 import { PagePreviews } from "@/components/tailor/PagePreviews";
+import { AtsBlock, InterviewPrepSection, OutreachSection } from "@/components/tailor/ResumeMatcher";
 import { Button } from "@/components/ui/button";
 import { api, errMsg } from "@/lib/api";
 import { adelaideTime, WORK_TYPE_CAPS } from "@/lib/format";
@@ -12,6 +13,7 @@ import type { TailoringDetail, TailoringStatus, TailoringSummary } from "@/lib/t
 import { cn, parseIsoUtc } from "@/lib/utils";
 
 const isActive = (s?: TailoringStatus) => s === "queued" || s === "running";
+const rmBusy = (t?: TailoringDetail) => t?.resume_matcher?.status === "queued" || t?.resume_matcher?.status === "running";
 
 const STEPS = ["Reading resume", "Rendering current resume", "Tailoring with AI", "Compiling PDFs"];
 
@@ -112,6 +114,9 @@ function Done({ t, jobId, onRegenerate, regenerating }: { t: TailoringDetail; jo
     onError: (e: Error) => toast.error(errMsg(e)),
   });
   const sentAt = send.data?.sent_at ?? t.sent_at;
+  const rm = t.resume_matcher;
+  const prep = rm?.status === "done" ? rm.interview_prep : null;
+  const hasQuestions = !!(prep?.resume_questions?.length || prep?.project_follow_ups?.length);
 
   return (
     <>
@@ -132,6 +137,8 @@ function Done({ t, jobId, onRegenerate, regenerating }: { t: TailoringDetail; jo
           {regenerating ? "Starting…" : "Regenerate"}
         </Button>
       </div>
+
+      {t.ats?.tailored && <AtsBlock ats={t.ats} tid={t.id} rm={rm} />}
 
       <div className="mt-8 grid gap-10 min-[1440px]:grid-cols-[minmax(0,1fr)_400px]">
         <PagePreviews
@@ -158,6 +165,10 @@ function Done({ t, jobId, onRegenerate, regenerating }: { t: TailoringDetail; jo
       </div>
 
       {t.cover_letter && <CoverLetterSection letter={t.cover_letter} pages={t.files?.cover_letter_pages ?? []} />}
+      {prep && hasQuestions && <InterviewPrepSection prep={prep} />}
+      {rm?.status === "done" && rm.outreach_message && (
+        <OutreachSection message={rm.outreach_message} recruiter={t.job.contact_name} />
+      )}
     </>
   );
 }
@@ -178,7 +189,8 @@ export function TailorPage() {
     queryKey: ["tailoring", runId],
     queryFn: () => api.tailoring(runId!),
     enabled: runId !== null,
-    refetchInterval: (q) => (isActive(q.state.data?.status) ? 2000 : false),
+    refetchInterval: (q) =>
+      isActive(q.state.data?.status) ? 2000 : rmBusy(q.state.data) ? 4000 : false,
   });
 
   // Keep the run list (and the job detail's status line) fresh when a run finishes.

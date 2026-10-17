@@ -68,6 +68,13 @@ describe("ResumesPage", () => {
     expect(screen.getByText("tectonic exited 1")).toBeTruthy();
   });
 
+  it("shows the ATS score current → tailored on a card", async () => {
+    vi.spyOn(api, "allTailorings").mockResolvedValue([row({ ats_current: 61.6, ats_tailored: 80.6 })]);
+    renderPage();
+    const view = await screen.findByRole("link", { name: "View tailored resume for Full Stack Developer" });
+    expect(within(view.closest("li")!).getByTitle(/ATS score/).textContent).toBe("ATS 62 → 81");
+  });
+
   it("shows the empty state", async () => {
     vi.spyOn(api, "allTailorings").mockResolvedValue([]);
     renderPage();

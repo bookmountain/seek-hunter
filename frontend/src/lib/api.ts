@@ -23,6 +23,7 @@ import type {
   JobDetail,
   JobStatus,
   ResumeCurrent,
+  ResumeMatcherHealth,
   Run,
   SearchProfile,
   TailorStart,
@@ -138,6 +139,9 @@ export const api = {
   putUiPrefs: (page: string, prefs: Record<string, string>) =>
     request<Record<string, Record<string, unknown>>>("PUT", `/api/ui-prefs/${encodeURIComponent(page)}`, prefs),
   history: (limit = 100) => request<HistoryEvent[]>("GET", `/api/history${qs({ limit: String(limit) })}`),
+  rerunResumeMatcher: (tid: number) =>
+    request<{ status: string; started: boolean }>("POST", `/api/tailorings/${tid}/resume-matcher`),
+  resumeMatcherStatus: () => request<ResumeMatcherHealth>("GET", "/api/resume-matcher/status"),
   sendTailoring: (tid: number) =>
     request<{ sent: boolean; sent_at: string | null }>("POST", `/api/tailorings/${tid}/send`),
 };

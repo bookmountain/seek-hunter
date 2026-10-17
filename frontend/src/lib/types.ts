@@ -239,6 +239,81 @@ export interface TailoringDetail extends TailoringSummary {
   files: { resume_pdf: string; cover_letter_pdf: string; resume_pages: string[]; cover_letter_pages: string[] } | null;
   current: ResumeCurrent | null;
   change_counts?: ChangeCounts;
+  /** Resume-Matcher's ATS formula on the current and tailored resume; nulls until done. */
+  ats?: AtsPair;
+  /** null when Resume-Matcher never ran for this tailoring (disabled, or older run). */
+  resume_matcher?: ResumeMatcherResult | null;
+}
+
+export interface AtsBreakdown {
+  keyword_match: number | null;
+  skills_coverage: number | null;
+  title_alignment: number | null;
+  section_completeness: number | null;
+  date_consistency: number | null;
+}
+
+export interface AtsScore {
+  score: number;
+  breakdown: AtsBreakdown;
+  missing_keywords: string[];
+  matched_keywords: string[];
+}
+
+export interface AtsPair {
+  current: AtsScore | null;
+  tailored: AtsScore | null;
+  /** Whose keyword list was scored against: SeekHunter's own analysis, or Resume-Matcher's extraction. */
+  keywords_source: "seekhunter" | "resume_matcher" | null;
+}
+
+export interface InterviewQuestion {
+  question: string;
+  focus_area?: string | null;
+  suggested_answer_points: string[];
+}
+
+export interface InterviewPrep {
+  role_fit_analysis?: string[];
+  resume_questions?: InterviewQuestion[];
+  project_follow_ups?: InterviewQuestion[];
+  skill_gaps?: { skill: string; why_it_matters: string; preparation_suggestion: string }[];
+  talking_points?: string[];
+}
+
+export type ResumeMatcherRunStatus = "queued" | "running" | "done" | "failed" | "unavailable";
+
+export interface ResumeMatcherResult {
+  status: ResumeMatcherRunStatus;
+  error: string | null;
+  warnings: string[];
+  started_at: string | null;
+  finished_at: string | null;
+  ats_score: number | null;
+  sub_scores: Record<string, number | null>;
+  matched_keywords: string[];
+  missing_keywords: string[];
+  injectable_keywords: string[];
+  recommendations: string[];
+  interview_prep: InterviewPrep | null;
+  outreach_message: string | null;
+  rm_master_id: string | null;
+  rm_job_id: string | null;
+  rm_resume_id: string | null;
+  /** Link to the tailored resume inside Resume-Matcher. */
+  rm_url: string | null;
+}
+
+export interface ResumeMatcherHealth {
+  enabled: boolean;
+  reachable: boolean;
+  ready: boolean;
+  llm_configured: boolean;
+  llm_healthy: boolean;
+  status: string | null;
+  base_url: string | null;
+  settings_url: string | null;
+  error: string | null;
 }
 
 export interface TailoringListItem extends TailoringSummary {
@@ -250,6 +325,9 @@ export interface TailoringListItem extends TailoringSummary {
   /** Page-1 PNG URL, when done. */
   thumbnail: string | null;
   applied_application_id: number | null;
+  /** ATS score (Resume-Matcher formula) of the current and the tailored resume, when done. */
+  ats_current?: number | null;
+  ats_tailored?: number | null;
 }
 
 // ---------------------------------------------------------------- market insights
