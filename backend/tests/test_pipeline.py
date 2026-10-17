@@ -9,7 +9,7 @@ from seekhunter.llm.base import LLMScore
 from seekhunter.lock import RunLocked, run_lock
 from seekhunter.models import Job, JobEvaluation, Outbox, Run
 from seekhunter.notify import NotifyError
-from seekhunter.pipeline import run_crawl, run_recap, run_rescore
+from seekhunter.pipeline import _lookup_linkedin, run_contacts_backfill, run_crawl, run_recap, run_rescore
 from seekhunter.profile import Profile
 
 PROFILE = Profile(skills={"React", "TypeScript"}, summary="s", titles=[], skill_lines=[], bullets=[])
@@ -296,3 +296,183 @@ def test_blocking_lock_waits(tmp_path):
         elapsed = time.monotonic() - start
     proc.join()
     assert elapsed >= 0.15
+
+
+class ContactLLMChain:
+    """Fake LLM that returns a fixed contact_name for every job."""
+
+    def __init__(self, contact_name=None, fit=50):
+        self.contact_name, self.fit = contact_name, fit
+
+    def score_batch(self, profile, jobs):
+        return {j.key: LLMScore(fit=self.fit, why="ok", contact_name=self.contact_name) for j in jobs}, "fake"
+
+
+def test_contact_extracted_from_ad_text_on_new_job(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc=(
+        "React TypeScript role. To apply please call Brayden Mackay on 08 8216 3534 for a "
+        "confidential discussion."))])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    assert job.contact_name == "Brayden Mackay"
+    assert job.contact_phone == "08 8216 3534"
+
+
+def test_structured_seek_contact_phone_preferred_over_regex_text():
+    """SEEK's structured contactMatches phone/email should win over a different phone found by
+    regex in the ad text."""
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        repo.ensure_seed(s)
+        for p in repo.list_search_profiles(s)[1:]:
+            p.enabled = False
+            s.add(p)
+        s.commit()
+
+        class StructuredSource(FakeSource):
+            def details(self, job):
+                self.detail_calls += 1
+                base = next(j for j in self.jobs if j.external_id == job.external_id)
+                from dataclasses import replace
+                return replace(base, contact_phone="08 8216 3534", contact_email="jobs@acme.com")
+
+        seek = StructuredSource("seek", [jd("seek", "1", desc=(
+            "React role. Call Jane Doe on 0412 345 678 for details."))])
+        run_crawl(s, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+        job = s.exec(select(Job).where(Job.external_id == "1")).one()
+        assert job.contact_phone == "08 8216 3534"
+        assert job.contact_email == "jobs@acme.com"
+        assert job.contact_name == "Jane Doe"
+
+
+def test_llm_contact_name_used_when_no_regex_name_and_verbatim_in_text(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="React TypeScript. Our hiring manager is Pat Lee.")])
+    run_crawl(session, {"seek": seek}, ContactLLMChain(contact_name="Pat Lee"), FakeNotifier(), PROFILE,
+             "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    assert job.contact_name == "Pat Lee"
+
+
+def test_llm_contact_name_rejected_when_not_verbatim_in_text(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="React TypeScript role, no contact mentioned.")])
+    run_crawl(session, {"seek": seek}, ContactLLMChain(contact_name="Made Up Name"), FakeNotifier(), PROFILE,
+             "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    assert job.contact_name is None
+
+
+def test_llm_contact_name_does_not_override_regex_name(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc=(
+        "React role. Call Brayden Mackay on 08 8216 3534. Pat Lee also helps out."))])
+    run_crawl(session, {"seek": seek}, ContactLLMChain(contact_name="Pat Lee"), FakeNotifier(), PROFILE,
+             "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    assert job.contact_name == "Brayden Mackay"
+
+
+def test_contact_lookup_fills_linkedin_for_new_jobs_with_names(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="Call Brayden Mackay on 08 8216 3534.")])
+    calls = []
+
+    def fake_lookup(name, company):
+        calls.append((name, company))
+        return "https://www.linkedin.com/in/brayden-mackay"
+
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh",
+             contact_lookup=fake_lookup)
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    assert job.contact_linkedin == "https://www.linkedin.com/in/brayden-mackay"
+    assert calls == [("Brayden Mackay", "Acme")]
+
+
+def test_contact_lookup_skipped_without_name(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="No contact mentioned here at all.")])
+    calls = []
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh",
+             contact_lookup=lambda n, c: calls.append((n, c)) or "https://x")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    assert job.contact_linkedin is None
+    assert calls == []
+
+
+def test_contact_lookup_failure_is_swallowed(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="Call Brayden Mackay on 08 8216 3534.")])
+
+    def failing_lookup(name, company):
+        raise RuntimeError("brave down")
+
+    report = run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh",
+                       contact_lookup=failing_lookup)
+    assert report.new_jobs == 1
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    assert job.contact_linkedin is None
+
+
+def test_lookup_linkedin_respects_cap():
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        jobs = []
+        for i in range(5):
+            job, _ = repo.upsert_job(s, jd("seek", str(i)))
+            repo.set_contacts(s, job, name=f"Name {i}")
+            jobs.append(job)
+        calls = []
+
+        def lookup(name, company):
+            calls.append(name)
+            return f"https://linkedin.com/in/{name}"
+
+        _lookup_linkedin(s, jobs, lookup, cap=2)
+        assert len(calls) == 2
+        linked = [j for j in jobs if j.contact_linkedin]
+        assert len(linked) == 2
+
+
+def test_run_contacts_backfill_fills_regex_contacts_and_seek_details():
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        job, _ = repo.upsert_job(s, jd("seek", "1", desc="Call Brayden Mackay on 08 8216 3534."))
+
+        class BackfillSeekSource:
+            def details(self, data):
+                from dataclasses import replace
+                return replace(data, contact_email="jobs@acme.com")
+
+        report = run_contacts_backfill(s, BackfillSeekSource(), days=7)
+        s.refresh(job)
+        assert job.contact_name == "Brayden Mackay"
+        assert job.contact_phone == "08 8216 3534"
+        assert job.contact_email == "jobs@acme.com"
+        assert report["jobs_checked"] == 1
+        assert report["updated"] == 1
+
+
+def test_run_contacts_backfill_looks_up_linkedin_when_configured():
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        job, _ = repo.upsert_job(s, jd("jora", "1", desc="Call Brayden Mackay on 08 8216 3534."))
+
+        report = run_contacts_backfill(
+            s, seek_source=type("S", (), {"details": lambda self, d: d})(),
+            contact_lookup=lambda name, company: "https://www.linkedin.com/in/brayden", days=7)
+        s.refresh(job)
+        assert job.contact_linkedin == "https://www.linkedin.com/in/brayden"
+        assert report["linkedin_found"] == 1
+
+
+def test_run_contacts_backfill_ignores_jobs_outside_window():
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        job, _ = repo.upsert_job(s, jd("seek", "1", desc="Call Brayden Mackay on 08 8216 3534."))
+        job.first_seen_at = job.first_seen_at.replace(year=job.first_seen_at.year - 1)
+        s.add(job)
+        s.commit()
+
+        report = run_contacts_backfill(s, seek_source=type("S", (), {"details": lambda self, d: d})(),
+                                       days=7)
+        assert report["jobs_checked"] == 0

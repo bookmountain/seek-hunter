@@ -23,12 +23,14 @@ class LLMJobInput:
 class LLMScore:
     fit: int
     why: str
+    contact_name: str | None = None
 
 
 class JobFit(BaseModel):
     key: str
     fit: int
     why: str
+    contact_name: str | None = None
 
 
 class BatchFit(BaseModel):

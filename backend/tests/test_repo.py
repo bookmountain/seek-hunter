@@ -28,6 +28,36 @@ def test_upsert_marks_new_once(session):
     assert not is_new2 and job2.id == job.id
 
 
+def test_set_contacts_updates_only_given_fields(session):
+    job, _ = repo.upsert_job(session, data())
+    repo.set_contacts(session, job, name="Brayden Mackay", phone="08 8216 3534")
+    session.refresh(job)
+    assert job.contact_name == "Brayden Mackay"
+    assert job.contact_phone == "08 8216 3534"
+    assert job.contact_email is None
+    assert job.contact_linkedin is None
+
+    repo.set_contacts(session, job, linkedin="https://www.linkedin.com/in/brayden")
+    session.refresh(job)
+    assert job.contact_name == "Brayden Mackay"
+    assert job.contact_linkedin == "https://www.linkedin.com/in/brayden"
+
+
+def test_update_job_details_fills_contact_phone_and_email_without_clobbering(session):
+    job, _ = repo.upsert_job(session, data())
+    job.contact_phone = "0412 345 678"
+    session.add(job)
+    session.commit()
+
+    repo.update_job_details(session, job, JobData(
+        source="seek", external_id="1", title="Dev", company="Acme", location="Adelaide SA",
+        work_type="part_time", url="https://x/1", contact_phone="08 8216 3534",
+        contact_email="jobs@acme.com"))
+    session.refresh(job)
+    assert job.contact_phone == "0412 345 678"  # existing value preserved
+    assert job.contact_email == "jobs@acme.com"
+
+
 def test_settings_roundtrip_and_seed(session):
     repo.ensure_seed(session)
     s = repo.load_settings(session)

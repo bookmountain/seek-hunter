@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -6,6 +7,7 @@ from zoneinfo import ZoneInfo
 from sqlmodel import Session
 
 from seekhunter import repo
+from seekhunter.contacts import extract_contacts
 from seekhunter.filters import evaluate_exclusions
 from seekhunter.http import SourceBlocked
 from seekhunter.llm.base import LLMJobInput
@@ -17,6 +19,8 @@ from seekhunter.scoring import blend, score_job
 log = logging.getLogger(__name__)
 TZ = ZoneInfo("Australia/Adelaide")
 LLM_BATCH = 8
+LINKEDIN_LOOKUP_CAP = 25
+BACKFILL_LINKEDIN_LOOKUP_CAP = 60
 
 
 @dataclass
@@ -34,7 +38,34 @@ def _local(dt: datetime) -> datetime:
 def digest_item(job: Job, ev: JobEvaluation) -> DigestItem:
     return DigestItem(job_id=job.id, score=ev.final_score, title=job.title, company=job.company,
                       location=job.location, work_type=job.work_type, matched=ev.matched_skills,
-                      why=ev.llm_note, url=job.url, flags=ev.flags)
+                      why=ev.llm_note, url=job.url, flags=ev.flags, contact_name=job.contact_name,
+                      contact_phone=job.contact_phone, contact_email=job.contact_email)
+
+
+def _apply_contacts(session: Session, job: Job) -> None:
+    """Fill contact_name/phone/email from the job's own ad text, preferring structured source data
+    (already on `job` via `update_job_details`) over regex extraction for phone/email."""
+    extracted = extract_contacts(repo.to_jobdata(job).text)
+    repo.set_contacts(session, job, name=extracted.name, phone=job.contact_phone or extracted.phone,
+                      email=job.contact_email or extracted.email)
+
+
+def _lookup_linkedin(session: Session, jobs: list[Job],
+                     contact_lookup: Callable[[str, str], str | None], cap: int) -> None:
+    done = 0
+    for job in jobs:
+        if done >= cap:
+            break
+        if job.canonical_job_id or not job.contact_name or job.contact_linkedin:
+            continue
+        done += 1
+        try:
+            url = contact_lookup(job.contact_name, job.company)
+        except Exception as e:  # noqa: BLE001  a bad lookup must not abort the run
+            log.warning("linkedin lookup failed for job %s: %s", job.id, e)
+            continue
+        if url:
+            repo.set_contacts(session, job, linkedin=url)
 
 
 def _send(session: Session, notifier, text: str) -> bool:  # noqa: ANN001
@@ -92,6 +123,7 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
                             repo.delete_evaluation(session, other.id)
                             try:
                                 repo.update_job_details(session, job, source.details(data))
+                                _apply_contacts(session, job)
                             except Exception as e:  # noqa: BLE001  one bad detail page mustn't abort the rest
                                 session.rollback()
                                 log.warning("details failed for %s %s: %s", name, data.external_id, e)
@@ -103,6 +135,7 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
                         continue
                     try:
                         repo.update_job_details(session, job, source.details(data))
+                        _apply_contacts(session, job)
                     except Exception as e:  # noqa: BLE001  one bad detail page must not abort the source
                         session.rollback()
                         log.warning("details failed for %s %s: %s", name, data.external_id, e)
@@ -141,11 +174,15 @@ def _evaluate(session: Session, jobs: list[Job], profile: Profile, settings, llm
                               text=d.text) for j, d, _ in batch]
         scores, provider = llm.score_batch(profile, inputs)
         used = used or provider
-        for job, _, sr in batch:
+        for job, d, sr in batch:
             s = scores.get(str(job.id))
             if s:
                 repo.save_evaluation(session, job.id, llm_score=s.fit, llm_note=s.why, llm_provider=provider,
                                      final_score=blend(sr.rule_score, s.fit))
+                # LLM-supplied name is only trusted when it appears verbatim in the ad text, to
+                # avoid storing a hallucinated name.
+                if not job.contact_name and s.contact_name and s.contact_name in d.text:
+                    repo.set_contacts(session, job, name=s.contact_name)
     return used
 
 
@@ -167,13 +204,17 @@ def _maybe_health_alert(session: Session, notifier, run: Run) -> None:  # noqa: 
 
 
 def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, public_url: str,  # noqa: ANN001
-             dry_run: bool = False) -> RunReport:
+             dry_run: bool = False,
+             contact_lookup: Callable[[str, str], str | None] | None = None) -> RunReport:
     """Crawl, evaluate, and notify.
 
     Notification is at-least-once, not exactly-once: digest messages are sent via the notifier
     *before* `repo.mark_notified` runs, and a send failure is parked in the outbox (flushed on the
     next run) rather than silently dropped. A crash between sending and `mark_notified` can
     therefore resend a job on the next run, but a job is never silently skipped.
+
+    `contact_lookup(name, company) -> url | None` is an optional LinkedIn-profile lookup (e.g. Brave
+    Search), called at most `LINKEDIN_LOOKUP_CAP` times per run for new jobs with a contact name.
     """
     settings = repo.load_settings(session)
     run = Run(kind="crawl")
@@ -190,6 +231,9 @@ def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, 
         seen_ids = {j.id for j in new_jobs}
         recovered = [j for j in repo.unevaluated_jobs(session) if j.id not in seen_ids]
         run.llm_provider = _evaluate(session, new_jobs + recovered, profile, settings, llm)
+
+        if contact_lookup:
+            _lookup_linkedin(session, new_jobs + recovered, contact_lookup, LINKEDIN_LOOKUP_CAP)
 
         now = utcnow()
         candidates = repo.notification_candidates(session, now)
@@ -252,3 +296,57 @@ def run_rescore(session: Session, profile: Profile, days: int = 7) -> int:
     session.add(Run(kind="rescore", finished_at=utcnow(), new_jobs=count))
     session.commit()
     return count
+
+
+def run_contacts_backfill(session: Session, seek_source, contact_lookup=None,  # noqa: ANN001
+                          days: int = 7) -> dict:
+    """Backfill recruiter contacts for jobs first seen in the last `days` days.
+
+    For every such job, re-runs `extract_contacts` on the stored ad text. SEEK jobs still missing a
+    phone or email are re-fetched via `seek_source.details()` to pick up `contactMatches`. If
+    `contact_lookup` is given, looks up a LinkedIn profile for jobs that have a contact name but no
+    LinkedIn URL yet, capped at `BACKFILL_LINKEDIN_LOOKUP_CAP` lookups.
+    """
+    jobs = repo.jobs_since(session, utcnow() - timedelta(days=days))
+    updated = 0
+    for job in jobs:
+        if job.source == "seek" and (not job.contact_phone or not job.contact_email):
+            try:
+                refreshed = seek_source.details(repo.to_jobdata(job))
+            except Exception as e:  # noqa: BLE001  a bad detail fetch must not abort the backfill
+                log.warning("contacts backfill: details failed for seek %s: %s", job.external_id, e)
+            else:
+                job.contact_phone = job.contact_phone or refreshed.contact_phone
+                job.contact_email = job.contact_email or refreshed.contact_email
+                if refreshed.description_html:
+                    job.description_html = refreshed.description_html
+                session.add(job)
+                session.commit()
+
+        extracted = extract_contacts(repo.to_jobdata(job).text)
+        name = job.contact_name or extracted.name
+        phone = job.contact_phone or extracted.phone
+        email = job.contact_email or extracted.email
+        if (name, phone, email) != (job.contact_name, job.contact_phone, job.contact_email):
+            updated += 1
+        repo.set_contacts(session, job, name=name, phone=phone, email=email)
+
+    linkedin_lookups = linkedin_found = 0
+    if contact_lookup:
+        for job in jobs:
+            if linkedin_lookups >= BACKFILL_LINKEDIN_LOOKUP_CAP:
+                break
+            if job.canonical_job_id or not job.contact_name or job.contact_linkedin:
+                continue
+            linkedin_lookups += 1
+            try:
+                url = contact_lookup(job.contact_name, job.company)
+            except Exception as e:  # noqa: BLE001  a bad lookup must not abort the backfill
+                log.warning("linkedin lookup failed for job %s: %s", job.id, e)
+                continue
+            if url:
+                linkedin_found += 1
+                repo.set_contacts(session, job, linkedin=url)
+
+    return {"jobs_checked": len(jobs), "updated": updated, "linkedin_lookups": linkedin_lookups,
+           "linkedin_found": linkedin_found}

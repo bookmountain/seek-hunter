@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 
 from seekhunter import repo
 from seekhunter.config import get_env
+from seekhunter.contacts import linkedin_search_urls
 from seekhunter.db import get_session, init_db
 from seekhunter.models import Job, JobEvaluation, Run, SearchProfile, utcnow
 from seekhunter.notify import Notifier, NotifyError, format_brief
@@ -49,6 +50,11 @@ class JobOut(BaseModel):
     final_score: int
     matched_skills: list[str]
     flags: list[str]
+    contact_name: str | None
+    contact_phone: str | None
+    contact_email: str | None
+    contact_linkedin: str | None
+    contact_search: dict[str, str]
 
 
 class JobDetailOut(JobOut):
@@ -81,7 +87,10 @@ def _job_out(job: Job, ev: JobEvaluation, detail: bool = False) -> JobOut:
         first_seen_at=job.first_seen_at, url=job.url, status=job.status, notes=job.notes,
         force_include=job.force_include, excluded=ev.excluded, reasons=ev.reasons, snippets=ev.snippets,
         rule_score=ev.rule_score, llm_score=ev.llm_score, llm_note=ev.llm_note, final_score=ev.final_score,
-        matched_skills=ev.matched_skills, flags=ev.flags,
+        matched_skills=ev.matched_skills, flags=ev.flags, contact_name=job.contact_name,
+        contact_phone=job.contact_phone, contact_email=job.contact_email,
+        contact_linkedin=job.contact_linkedin,
+        contact_search=linkedin_search_urls(job.contact_name, job.company),
     )
     if detail:
         return JobDetailOut(**base, description_html=job.description_html, teaser=job.teaser)
@@ -227,6 +236,9 @@ def create_app(init: bool = True) -> FastAPI:
             rule_score=ev.rule_score, llm_score=ev.llm_score, llm_note=ev.llm_note,
             matched=ev.matched_skills, missing=missing, flags=ev.flags, reasons=ev.reasons,
             status=job.status, url=job.url, description=data.text,
+            contact_name=job.contact_name, contact_phone=job.contact_phone,
+            contact_email=job.contact_email, contact_linkedin=job.contact_linkedin,
+            contact_search=linkedin_search_urls(job.contact_name, job.company),
         )
 
     @app.get("/api/summary", response_class=PlainTextResponse)

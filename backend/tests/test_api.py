@@ -196,6 +196,39 @@ def test_notify_test_message_matches_cli(client, monkeypatch):
     assert sent["text"] == "SeekHunter test message"
 
 
+def test_job_out_includes_contact_fields_and_search_urls(client):
+    active = client.get("/api/jobs").json()
+    job = active[0]
+    assert job["contact_name"] is None
+    assert job["contact_phone"] is None
+    assert job["contact_email"] is None
+    assert job["contact_linkedin"] is None
+    assert job["contact_search"]["linkedin"].startswith(
+        "https://www.linkedin.com/search/results/people/?keywords=")
+    assert "Acme" in job["contact_search"]["linkedin"]
+
+    detail = client.get(f"/api/jobs/{job['id']}").json()
+    assert "contact_search" in detail
+
+
+def test_brief_includes_recruiter_line_when_job_has_contact(client, monkeypatch):
+    job_id = client.get("/api/jobs").json()[0]["id"]
+
+    from seekhunter import api as api_module
+
+    original = api_module._get_job
+
+    def patched(session, jid):
+        job, ev = original(session, jid)
+        job.contact_name = "Brayden Mackay"
+        job.contact_phone = "08 8216 3534"
+        return job, ev
+
+    monkeypatch.setattr(api_module, "_get_job", patched)
+    r = client.get(f"/api/jobs/{job_id}/brief")
+    assert "Recruiter: Brayden Mackay · 08 8216 3534" in r.text
+
+
 def test_unexclude_allowlist_is_case_insensitive_dedupe(client):
     job_id = client.get("/api/jobs", params={"view": "excluded"}).json()[0]["id"]
     client.post(f"/api/jobs/{job_id}/unexclude", json={"allowlist_employer": True}, headers=AUTH)

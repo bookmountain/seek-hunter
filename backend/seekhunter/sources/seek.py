@@ -13,7 +13,8 @@ GRAPHQL_URL = "https://www.seek.com.au/graphql"
 PAGE_SIZE = 22
 WORKTYPE_IDS = {"full_time": "242", "part_time": "243", "contract": "244", "casual": "245"}
 DETAILS_QUERY = (
-    "query jobDetails($jobId: ID!) { jobDetails(id: $jobId) { job { id content(platform: WEB) } } }"
+    "query jobDetails($jobId: ID!) { jobDetails(id: $jobId) { job { id content(platform: WEB) "
+    "contactMatches { type value } } } }"
 )
 
 
@@ -28,6 +29,12 @@ def _parse_json(resp) -> dict:  # noqa: ANN001
         return resp.json()
     except ValueError as exc:
         raise SourceBlocked("non-JSON response from SEEK") from exc
+
+
+def _parse_contacts(matches: list[dict]) -> tuple[str | None, str | None]:
+    phone = next((m.get("value") for m in matches if m.get("type") == "Phone"), None)
+    email = next((m.get("value") for m in matches if m.get("type") == "Email"), None)
+    return phone, email
 
 
 def parse_search_item(item: dict) -> JobData:
@@ -86,5 +93,14 @@ class SeekSource:
         if "errors" in payload:
             logger.warning("SEEK details for job %s returned errors: %s", job.external_id, payload["errors"])
             return job
-        content = ((((payload.get("data") or {}).get("jobDetails") or {}).get("job")) or {}).get("content")
-        return replace(job, description_html=content) if content else job
+        job_data = (((payload.get("data") or {}).get("jobDetails") or {}).get("job")) or {}
+        content = job_data.get("content")
+        phone, email = _parse_contacts(job_data.get("contactMatches") or [])
+        updates = {}
+        if content:
+            updates["description_html"] = content
+        if phone:
+            updates["contact_phone"] = phone
+        if email:
+            updates["contact_email"] = email
+        return replace(job, **updates) if updates else job

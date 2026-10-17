@@ -60,6 +60,8 @@ class JobData:
     listed_at: datetime | None = None
     teaser: str = ""
     description_html: str = ""
+    contact_phone: str | None = None
+    contact_email: str | None = None
 
     @property
     def text(self) -> str:

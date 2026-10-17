@@ -126,6 +126,62 @@ def test_details_raises_source_blocked_on_non_json(fixtures_dir):
         SeekSource(BadJsonClient()).details(parse_search_item(item))
 
 
+def test_details_fills_contact_phone_and_email_from_contact_matches(fixtures_dir):
+    item = json.loads((fixtures_dir / "seek_search.json").read_text())["data"][0]
+    payload = {
+        "data": {
+            "jobDetails": {
+                "job": {
+                    "id": "95229403",
+                    "content": "<p>Some ad text</p>",
+                    "contactMatches": [
+                        {"type": "Phone", "value": "08 8216 3534"},
+                        {"type": "Email", "value": "jobs@virginianursery.com.au"},
+                    ],
+                }
+            }
+        }
+    }
+    src = SeekSource(FakeClient({}, payload))
+    job = src.details(parse_search_item(item))
+    assert job.contact_phone == "08 8216 3534"
+    assert job.contact_email == "jobs@virginianursery.com.au"
+    assert job.description_html == "<p>Some ad text</p>"
+
+
+def test_details_without_contact_matches_leaves_contacts_none(fixtures_dir):
+    item = json.loads((fixtures_dir / "seek_search.json").read_text())["data"][0]
+    details = json.loads((fixtures_dir / "seek_details.json").read_text())
+    src = SeekSource(FakeClient({}, details))
+    job = src.details(parse_search_item(item))
+    assert job.contact_phone is None
+    assert job.contact_email is None
+
+
+def test_details_uses_first_phone_and_email_when_multiple_present(fixtures_dir):
+    item = json.loads((fixtures_dir / "seek_search.json").read_text())["data"][0]
+    payload = {
+        "data": {
+            "jobDetails": {
+                "job": {
+                    "id": "95229403",
+                    "content": "<p>ad</p>",
+                    "contactMatches": [
+                        {"type": "Phone", "value": "08 8216 3534"},
+                        {"type": "Phone", "value": "0412 345 678"},
+                        {"type": "Email", "value": "first@example.com"},
+                        {"type": "Email", "value": "second@example.com"},
+                    ],
+                }
+            }
+        }
+    }
+    src = SeekSource(FakeClient({}, payload))
+    job = src.details(parse_search_item(item))
+    assert job.contact_phone == "08 8216 3534"
+    assert job.contact_email == "first@example.com"
+
+
 def test_details_returns_job_unchanged_on_errors(fixtures_dir):
     item = json.loads((fixtures_dir / "seek_search.json").read_text())["data"][0]
     job = parse_search_item(item)

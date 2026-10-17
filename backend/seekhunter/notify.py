@@ -29,6 +29,9 @@ class DigestItem:
     why: str | None
     url: str
     flags: list[str] = field(default_factory=list)
+    contact_name: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
 
 
 def _strip_scheme(url: str) -> str:
@@ -91,8 +94,22 @@ def _meta_line(it: DigestItem) -> str:
     return line
 
 
+def _contact_line(it: DigestItem) -> str | None:
+    parts = []
+    if it.contact_name:
+        parts.append(it.contact_name)
+    if it.contact_phone:
+        parts.append(it.contact_phone)
+    elif it.contact_email:
+        parts.append(it.contact_email)
+    return " · ".join(parts) if parts else None
+
+
 def _format_item(it: DigestItem) -> str:
     lines = [f"#{it.job_id} · {it.score} · {it.title}", _meta_line(it)]
+    contact_line = _contact_line(it)
+    if contact_line:
+        lines.append(contact_line)
     note_line = _note_line(it)
     if note_line:
         lines.append(note_line)
@@ -191,7 +208,10 @@ def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: s
 def format_brief(*, job_id: int, title: str, company: str, location: str, work_type: str,
                  salary: str | None, score: int, rule_score: int, llm_score: int | None,
                  llm_note: str | None, matched: list[str], missing: list[str], flags: list[str],
-                 reasons: list[str], status: str, url: str, description: str) -> str:
+                 reasons: list[str], status: str, url: str, description: str,
+                 contact_name: str | None = None, contact_phone: str | None = None,
+                 contact_email: str | None = None, contact_linkedin: str | None = None,
+                 contact_search: dict | None = None) -> str:
     lines = [
         f"#{job_id} {title} — {company} · {location} · {WORK_TYPE_LABELS.get(work_type, work_type)}"
         + (f" · {salary}" if salary else ""),
@@ -206,6 +226,12 @@ def format_brief(*, job_id: int, title: str, company: str, location: str, work_t
         lines.append(f"Flags: {', '.join(flags)}")
     if reasons:
         lines.append(f"Excluded for: {', '.join(reasons)}")
+    contact_bits = [b for b in (contact_name, contact_phone, contact_email) if b]
+    if contact_bits:
+        lines.append(f"Recruiter: {' · '.join(contact_bits)}")
+    linkedin = contact_linkedin or (contact_search or {}).get("linkedin")
+    if linkedin:
+        lines.append(f"LinkedIn: {linkedin}")
     lines.append(f"URL: {url}")
     lines.append("")
     lines.append(description[:3500])

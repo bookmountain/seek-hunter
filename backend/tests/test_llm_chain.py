@@ -77,3 +77,26 @@ def test_parse_batch_text_truncates_long_why():
     out = parse_batch_text(raw)
     assert out["1"].fit == 100
     assert len(out["1"].why) == 200
+
+
+def test_prompt_mentions_contact_name_field():
+    system, _ = build_prompt(PROFILE, JOBS)
+    assert "contact_name" in system
+
+
+def test_parse_batch_text_extracts_contact_name_when_present():
+    raw = json.dumps({"results": [{"key": "1", "fit": 80, "why": "ok", "contact_name": "Jane Smith"}]})
+    out = parse_batch_text(raw)
+    assert out["1"].contact_name == "Jane Smith"
+
+
+def test_parse_batch_text_contact_name_defaults_to_none():
+    raw = json.dumps({"results": [{"key": "1", "fit": 80, "why": "ok"}]})
+    out = parse_batch_text(raw)
+    assert out["1"].contact_name is None
+
+
+def test_parse_batch_text_blank_contact_name_becomes_none():
+    raw = json.dumps({"results": [{"key": "1", "fit": 80, "why": "ok", "contact_name": "  "}]})
+    out = parse_batch_text(raw)
+    assert out["1"].contact_name is None

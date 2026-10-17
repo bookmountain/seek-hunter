@@ -12,6 +12,7 @@ class Env(BaseSettings):
     static_dir: Path = Path("../frontend/dist")
     data_dir: Path = Path("./data")
     anthropic_api_key: str | None = None
+    brave_api_key: str | None = None
     api_write_token: str = "dev-token"
     allowed_cidrs: str = "127.0.0.1/32,192.168.4.0/24,100.64.0.0/10"
     allowed_public_ips: str = ""

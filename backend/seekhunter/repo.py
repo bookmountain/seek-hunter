@@ -34,6 +34,8 @@ def update_job_details(session: Session, job: Job, data: JobData) -> None:
     job.description_html = data.description_html or job.description_html
     if job.work_type == "unknown" and data.work_type != "unknown":
         job.work_type = data.work_type
+    job.contact_phone = job.contact_phone or data.contact_phone
+    job.contact_email = job.contact_email or data.contact_email
     session.add(job)
     session.commit()
 
@@ -41,7 +43,22 @@ def update_job_details(session: Session, job: Job, data: JobData) -> None:
 def to_jobdata(job: Job) -> JobData:
     return JobData(source=job.source, external_id=job.external_id, title=job.title, company=job.company,
                    location=job.location, work_type=job.work_type, url=job.url, salary_label=job.salary_label,
-                   listed_at=job.listed_at, teaser=job.teaser, description_html=job.description_html)
+                   listed_at=job.listed_at, teaser=job.teaser, description_html=job.description_html,
+                   contact_phone=job.contact_phone, contact_email=job.contact_email)
+
+
+def set_contacts(session: Session, job: Job, *, name: str | None = None, phone: str | None = None,
+                 email: str | None = None, linkedin: str | None = None) -> None:
+    if name is not None:
+        job.contact_name = name
+    if phone is not None:
+        job.contact_phone = phone
+    if email is not None:
+        job.contact_email = email
+    if linkedin is not None:
+        job.contact_linkedin = linkedin
+    session.add(job)
+    session.commit()
 
 
 def find_duplicate(session: Session, job: Job) -> int | None:

@@ -33,6 +33,10 @@ class Job(SQLModel, table=True):
     notes: str = ""
     force_include: bool = False
     notified_at: NaiveDatetime | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
+    contact_linkedin: str | None = None
 
 
 class JobEvaluation(SQLModel, table=True):
