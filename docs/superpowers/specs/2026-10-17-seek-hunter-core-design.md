@@ -32,7 +32,7 @@ Out of scope for A (see §11 TODO): resume/cover-letter tailoring (B), market in
 
 ## 3. Stack
 
-- **Backend:** Python 3.12 (managed by `uv`, isolated from system Python), FastAPI, SQLModel + SQLite, Alembic, `curl_cffi`, `selectolax` (HTML parsing), `anthropic` SDK. Scheduling via systemd timers (no in-process scheduler).
+- **Backend:** Python 3.12 (managed by `uv`, isolated from system Python), FastAPI, SQLModel + SQLite (tables created with `create_all`; Alembic deferred until a column migration is needed), `curl_cffi`, `selectolax` (HTML parsing), `anthropic` SDK. Scheduling via systemd timers (no in-process scheduler).
 - **Frontend:** React + Vite + TypeScript, React Router, TanStack Query, Tailwind + shadcn/ui. Built to static files and served by FastAPI. No Node process at runtime.
 - **Tests:** pytest, ruff; Vitest for frontend.
 
@@ -56,8 +56,8 @@ seek-hunter/
 │   │   ├── scoring.py         rule score + LLM blend (§5.2)
 │   │   ├── llm/
 │   │   │   ├── base.py        LLMProvider protocol: score(profile, job) -> LLMScore | raises Unavailable
-│   │   │   ├── anthropic.py   Claude Haiku 4.5 (claude-haiku-4-5-20251001)
-│   │   │   ├── openclaw.py    `openclaw agent` CLI (Codex via OpenAI OAuth) fallback
+│   │   │   ├── anthropic_provider.py   Claude Haiku 4.5 (claude-haiku-4-5)
+│   │   │   ├── openclaw_provider.py    `openclaw agent` CLI (Codex via OpenAI OAuth) fallback
 │   │   │   └── chain.py       tries providers in configured order; None if all unavailable
 │   │   ├── notify.py          format + `openclaw message send`; outbox retry
 │   │   ├── pipeline.py        run orchestration (§7)
@@ -109,8 +109,8 @@ All lists, regexes, and an employer **allowlist** (overrides blocklists) live in
 ## 6. Data model (SQLite at `/opt/seek-hunter/data/seekhunter.db`)
 
 - `jobs`: id, source (`seek`|`jora`), external_id (unique with source), title, company, location, work_type, salary_label, listed_at, url, description_html, description_text, dedupe_key (normalized title+company), canonical_job_id (nullable; set when a Jora listing duplicates a SEEK one), first_seen_at.
-- `job_evaluations`: job_id, excluded (bool), exclusion_reasons (JSON), rule_score, llm_score, llm_note, llm_provider, final_score, matched_skills (JSON), flags (JSON), created_at. Latest row per job is current.
-- `job_status`: job_id, status (`new`|`saved`|`applied`|`hidden`), notes, updated_at.
+- `job_evaluations`: job_id, excluded (bool), exclusion_reasons (JSON), rule_score, llm_score, llm_note, llm_provider, final_score, matched_skills (JSON), flags (JSON), created_at. One row per job (overwritten on re-evaluation).
+- `jobs` also carries status (`new`|`saved`|`applied`|`hidden`), notes, force_include (manual un-exclude), notified_at.
 - `search_profiles`: id, name, keywords, location, work_types (JSON), sources (JSON), enabled.
   Defaults (location "All Adelaide SA"): "software engineer", "developer", "full stack", "frontend", "AI engineer", "graduate developer".
 - `settings`: single JSON document (blocklists, allowlist, regexes, weights, schedule display, LLM provider order, notify on/off, recap on/off).
@@ -125,7 +125,7 @@ All lists, regexes, and an employer **allowlist** (overrides blocklists) live in
 4. Fetch details only for new jobs.
 5. Dedupe: if a new Jora job's `dedupe_key` matches an existing SEEK job, link it via `canonical_job_id` and don't notify it separately.
 6. Filter → score → LLM blend (only for non-excluded new jobs) → store evaluation.
-7. If ≥ 1 new non-excluded job: format message, send; on failure, write to `outbox`. Flush older outbox entries first.
+7. Notification candidates = active jobs (not excluded or force_include, not duplicates, not hidden) with `notified_at IS NULL` first seen within 48 h. Send the top 20 by score; mark all candidates notified; append "+N more" if truncated. On send failure, write to `outbox`.
 8. Record the run. If every source has failed for 3 consecutive runs, send a one-line ⚠️ health alert (at most once per 24 h).
 
 **Politeness/anti-block (`http.py`):** one `curl_cffi` session per source with `impersonate="chrome"`, random 2–5 s delay between requests, max ~3 search pages per profile, exponential backoff (30 s, 90 s) on 403/429, then mark the source `degraded` for this run and continue with the others. The digest notes "Jora unavailable this run" when relevant.
@@ -179,7 +179,7 @@ Up to 10 jobs per message; overflow is split into multiple messages. 💼 = casu
   1. `npm ci && npm run build` in `frontend/`.
   2. rsync `backend/` and `frontend/dist/` to `root@192.168.4.50:/opt/seek-hunter/app/` (excluding `.env`, `data/`).
   3. rsync `/work/book-cv/latex/sections/` from vm100 to `/opt/seek-hunter/book-cv/sections/`.
-  4. Over SSH: `uv sync --frozen`, `alembic upgrade head`, `systemctl restart seekhunter-web`, `systemctl daemon-reload` if units changed.
+  4. Over SSH: `uv sync --frozen`, `systemctl restart seekhunter-web`, `systemctl daemon-reload` if units changed.
   5. Health check: `curl -fsS http://192.168.4.50:8090/api/health`.
 
 ## 11. Testing

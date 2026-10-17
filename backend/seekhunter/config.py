@@ -1,0 +1,33 @@
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Env(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    database_url: str = "sqlite:///./data/seekhunter.db"
+    resume_dir: Path = Path("../../book-cv/latex/sections/resume")
+    static_dir: Path = Path("../frontend/dist")
+    data_dir: Path = Path("./data")
+    anthropic_api_key: str | None = None
+    api_write_token: str = "dev-token"
+    allowed_cidrs: str = "127.0.0.1/32,192.168.4.0/24,100.64.0.0/10"
+    allowed_public_ips: str = ""
+    telegram_target: str = "1635495359"
+    openclaw_bin: str = "openclaw"
+    public_url: str = "http://localhost:8090"
+
+    @property
+    def allowed_cidr_list(self) -> list[str]:
+        return [c.strip() for c in self.allowed_cidrs.split(",") if c.strip()]
+
+    @property
+    def allowed_public_ip_list(self) -> list[str]:
+        return [c.strip() for c in self.allowed_public_ips.split(",") if c.strip()]
+
+
+@lru_cache
+def get_env() -> Env:
+    return Env()
