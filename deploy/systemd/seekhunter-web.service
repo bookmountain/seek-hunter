@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 WorkingDirectory=/opt/seek-hunter/app/backend
 EnvironmentFile=/opt/seek-hunter/.env
+Environment=PYTHONUNBUFFERED=1
 Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/root/.local/bin/uv run --frozen --no-dev uvicorn seekhunter.api:create_app --factory --host 0.0.0.0 --port 8090
 Restart=always

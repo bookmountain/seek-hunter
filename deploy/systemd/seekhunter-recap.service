@@ -5,6 +5,7 @@ Description=SeekHunter daily recap
 Type=oneshot
 WorkingDirectory=/opt/seek-hunter/app/backend
 EnvironmentFile=/opt/seek-hunter/.env
+Environment=PYTHONUNBUFFERED=1
 Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/root/.local/bin/uv run --frozen --no-dev seekhunter recap
 SuccessExitStatus=75
