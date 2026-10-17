@@ -12,12 +12,20 @@ _NAME_WORD = r"[A-Z][a-zA-Z'’-]+"
 _NAME = rf"{_NAME_WORD}(?:\s+{_NAME_WORD}){{1,2}}"
 _VERB = r"(?:call|contact|speak(?:\s+(?:to|with))?|reach out to|email|chat(?:\s+(?:to|with))?)"
 
+_PHONE_AHEAD = r"(?:\+61|\(?0[2-478]\)?|1[38]00)[\s\d()-]{6,}"
+_TITLE = (r"(?:Senior\s+|Principal\s+|Lead\s+)?(?:[A-Z][a-z]+\s+)?"
+          r"(?:Consultant|Recruiter|Manager|Partner|Director|Specialist|Associate|Advisor|Adviser)\b")
+
+# Ordered from most to least specific. Each match must sit in real contact phrasing.
 _NAME_PATTERNS = (
-    re.compile(rf"\b(?i:{_VERB})\s+({_NAME})\b"),
-    re.compile(rf"\b({_NAME})\s+(?:on|at)\s+(?=(?:\+61|\(?0[2-478]\)?|1[38]00)[\s\d()-]{{6,}})"),
-    re.compile(rf"\b({_NAME}),\s+(?:Senior\s+|Principal\s+|Lead\s+)?(?:[A-Z][a-z]+\s+)?"
-               r"(?:Consultant|Recruiter|Manager|Partner|Director|Specialist|Associate|Advisor|Adviser)\b"),
+    # "call Brayden Mackay on 08 8216 3534"
+    re.compile(rf"\b(?i:{_VERB})\s+({_NAME})\s+(?:on|at|via)\s+(?={_PHONE_AHEAD})"),
+    # "contact Sarah O'Neil, Senior Consultant" / "Sarah O'Neil, Senior Consultant, on ..."
+    re.compile(rf"\b({_NAME}),\s+{_TITLE}"),
 )
+# "contact Jane Smith for a confidential chat ... 0412 345 678": verb + name with phone/email soon after
+_VERB_NAME = re.compile(rf"\b(?i:{_VERB})\s+({_NAME})\b")
+_CONTACT_SOON = re.compile(rf"{_PHONE_AHEAD}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{{2,}}")
 
 _NAME_BLOCKLIST = {
     "pty", "ltd", "group", "team", "recruitment", "talent", "australia", "seek", "us", "hr",
@@ -26,7 +34,8 @@ _NAME_BLOCKLIST = {
     "engineering", "consultant", "officer", "director", "head", "senior", "principal", "services",
     "service", "solutions", "department", "government", "university", "council", "office", "support",
     "desk", "operations", "digital", "technology", "technologies", "it", "ict", "people", "careers",
-    "acquisition", "resourcing", "partner", "partners", "client", "clients", "company", "agency",
+    "acquisition", "resourcing", "owner", "product", "chain", "supply", "graph", "microsoft",
+    "partner", "partners", "client", "clients", "company", "agency",
     # tech words that look capitalised in ads
     "azure", "api", "apis", "aws", "cloud", "data", "java", "python", "react", "net", "sql",
     # places
@@ -83,6 +92,10 @@ def _extract_name(text: str) -> str | None:
             candidate = match.group(1).strip()
             if _valid_name(candidate):
                 return candidate
+    for match in _VERB_NAME.finditer(text):
+        candidate = match.group(1).strip()
+        if _valid_name(candidate) and _CONTACT_SOON.search(text, match.end(), match.end() + 100):
+            return candidate
     return None
 
 

@@ -57,12 +57,14 @@ def test_noreply_email_is_ignored():
 
 
 def test_reach_out_to_verb():
-    c = extract_contacts("Please reach out to Tom Baker for a chat about the role.")
+    c = extract_contacts("Please reach out to Tom Baker for a chat about the role on 0412 345 678.")
     assert c.name == "Tom Baker"
+    # a capitalised phrase after a verb with no phone/email nearby is not trusted as a name
+    assert extract_contacts("Please reach out to Tom Baker for a chat about the role.").name is None
 
 
 def test_speak_to_verb():
-    c = extract_contacts("Speak to Alex Turner about this exciting opportunity.")
+    c = extract_contacts("Speak to Alex Turner about this exciting opportunity: alex@agency.com.au")
     assert c.name == "Alex Turner"
 
 
@@ -191,3 +193,10 @@ def test_linkedin_match_requires_name_in_title_start_or_slug():
     slug = [{"url": "https://au.linkedin.com/in/laura-mason-au", "title": "Laura M. | LinkedIn"}]
     assert find_linkedin_profile("Laura Mason", "CSIRO", "k", http_get=results(slug),
                                  sleep=lambda s: None) == "https://au.linkedin.com/in/laura-mason-au"
+
+
+def test_capitalised_phrases_without_contact_phrasing_rejected():
+    for text in ["Experience with Microsoft Graph on 3 projects",
+                 "Report to the Product Owner on 08 8216 3534",
+                 "Contact Supply Chain systems", "brands like Krispy Kreme at 1300 123 456"]:
+        assert extract_contacts(text).name is None, text

@@ -325,20 +325,16 @@ def run_contacts_backfill(session: Session, seek_source, contact_lookup=None,  #
                 session.commit()
 
         extracted = extract_contacts(repo.to_jobdata(job).text)
-        if job.contact_name and not is_plausible_name(job.contact_name, job.title, job.company):
-            job.contact_name = None  # clear names stored by an older, looser extractor
-            job.contact_linkedin = None
-            updated += 1
-        if is_plausible_name(job.contact_name, job.title, job.company):
-            name = job.contact_name
-        elif is_plausible_name(extracted.name, job.title, job.company):
-            name = extracted.name
-        else:
-            name = None
+        # Re-derive the name from scratch with the current extractor (drops names an older,
+        # looser extractor stored); an LLM-supplied name is kept only if it still passes the checks.
+        name = extracted.name if is_plausible_name(extracted.name, job.title, job.company) else None
         phone = normalize_phone(job.contact_phone or extracted.phone)
         email = job.contact_email or extracted.email
         if (name, phone, email) != (job.contact_name, job.contact_phone, job.contact_email):
             updated += 1
+        if name != job.contact_name:
+            job.contact_name = name  # may clear a name stored by an older, looser extractor
+            job.contact_linkedin = None
         repo.set_contacts(session, job, name=name, phone=phone, email=email)
 
     linkedin_lookups = linkedin_found = 0
