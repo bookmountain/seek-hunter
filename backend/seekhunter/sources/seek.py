@@ -86,12 +86,12 @@ class SeekSource:
     def __init__(self, client) -> None:  # noqa: ANN001
         self.client = client
 
-    def search(self, profile: SearchProfile, max_pages: int) -> list[JobData]:
+    def search(self, profile: SearchProfile, max_pages: int, daterange: int = 7) -> list[JobData]:
         jobs: list[JobData] = []
         for page in range(1, max_pages + 1):
             params = {
                 "siteKey": "AU-Main", "where": profile.location, "keywords": profile.keywords, "page": page,
-                "pageSize": PAGE_SIZE, "daterange": 7, "locale": "en-AU",
+                "pageSize": PAGE_SIZE, "daterange": daterange, "locale": "en-AU",
             }
             ids = [WORKTYPE_IDS[w] for w in profile.work_types if w in WORKTYPE_IDS]
             if ids:

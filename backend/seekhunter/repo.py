@@ -4,7 +4,17 @@ from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
 from seekhunter.domain import JobData, dedupe_key
-from seekhunter.models import Job, JobEvaluation, Outbox, Run, SearchProfile, SettingsRow, Tailoring
+from seekhunter.models import (
+    Job,
+    JobEvaluation,
+    MarketJob,
+    MarketSnapshot,
+    Outbox,
+    Run,
+    SearchProfile,
+    SettingsRow,
+    Tailoring,
+)
 from seekhunter.settings_model import AppSettings
 
 DEFAULT_KEYWORDS = [
@@ -238,6 +248,98 @@ def recent_runs(session: Session, kind: str = "crawl", limit: int = 50) -> list[
 def pending_outbox(session: Session) -> list[Outbox]:
     stmt = select(Outbox).where(col(Outbox.sent_at).is_(None), Outbox.attempts < 10).order_by(col(Outbox.id))
     return list(session.exec(stmt).all())
+
+
+def upsert_market_job(session: Session, data: JobData, city: str, keyword: str, now: datetime, *,
+                      role_family: str, skills: list[str], salary_min_hourly: float | None,
+                      salary_max_hourly: float | None) -> tuple[MarketJob, bool]:
+    """Upserts into `market_jobs` (separate from `jobs`): a job already seen just gets
+    `last_seen_at` bumped; a new one is inserted with the role family, extracted skills, and
+    normalised hourly salary computed by the caller (`seekhunter.market`)."""
+    existing = session.exec(
+        select(MarketJob).where(MarketJob.source == data.source, MarketJob.external_id == data.external_id)
+    ).first()
+    if existing:
+        existing.last_seen_at = now
+        session.add(existing)
+        session.commit()
+        return existing, False
+    job = MarketJob(
+        source=data.source, external_id=data.external_id, city=city, keyword=keyword, title=data.title,
+        company=data.company, work_type=data.work_type, salary_label=data.salary_label,
+        salary_min_hourly=salary_min_hourly, salary_max_hourly=salary_max_hourly, listed_at=data.listed_at,
+        role_family=role_family, skills=skills, details_fetched=False, first_seen_at=now, last_seen_at=now,
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job, True
+
+
+def apply_market_details(session: Session, job: MarketJob, skills: list[str]) -> None:
+    job.skills = skills
+    job.details_fetched = True
+    session.add(job)
+    session.commit()
+
+
+def market_jobs_needing_details(session: Session, city: str, limit: int) -> list[MarketJob]:
+    """Not-yet-detailed `market_jobs` for one city, newest first, capped at `limit`."""
+    stmt = (
+        select(MarketJob)
+        .where(MarketJob.city == city, MarketJob.details_fetched == False)  # noqa: E712
+        .order_by(col(MarketJob.first_seen_at).desc())
+        .limit(limit)
+    )
+    return list(session.exec(stmt).all())
+
+
+def to_market_jobdata(job: MarketJob) -> JobData:
+    return JobData(source=job.source, external_id=job.external_id, title=job.title, company=job.company,
+                   location=job.city, work_type=job.work_type,
+                   url=f"https://www.seek.com.au/job/{job.external_id}", salary_label=job.salary_label,
+                   listed_at=job.listed_at)
+
+
+def market_jobs_scope(session: Session, city: str | None = None, since: datetime | None = None,
+                      role_family: str | None = None, detailed_only: bool = False) -> list[MarketJob]:
+    stmt = select(MarketJob)
+    if city:
+        stmt = stmt.where(MarketJob.city == city)
+    if since:
+        stmt = stmt.where(MarketJob.last_seen_at >= since)
+    if role_family:
+        stmt = stmt.where(MarketJob.role_family == role_family)
+    if detailed_only:
+        stmt = stmt.where(MarketJob.details_fetched == True)  # noqa: E712
+    return list(session.exec(stmt).all())
+
+
+def save_market_snapshot(session: Session, city: str, date: datetime, stats: dict) -> MarketSnapshot:
+    """Upserts the one `market_snapshots` row for (city, date) — re-running the market crawl on
+    the same day replaces, rather than duplicates, today's snapshot."""
+    existing = session.exec(
+        select(MarketSnapshot).where(MarketSnapshot.city == city, MarketSnapshot.date == date)
+    ).first()
+    row = existing or MarketSnapshot(city=city, date=date)
+    row.total = stats["total"]
+    row.detailed_count = stats["detailed_count"]
+    row.by_work_type = stats["by_work_type"]
+    row.by_role_family = stats["by_role_family"]
+    row.skill_counts = stats["skill_counts"]
+    row.salary_percentiles = stats["salary_percentiles"]
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def market_snapshots_scope(session: Session, city: str,
+                           since: datetime | None = None) -> list[MarketSnapshot]:
+    stmt = select(MarketSnapshot).where(MarketSnapshot.city == city)
+    if since:
+        stmt = stmt.where(MarketSnapshot.date >= since)
+    return list(session.exec(stmt.order_by(col(MarketSnapshot.date))).all())
 
 
 TAILORING_STALE_AFTER = timedelta(minutes=30)

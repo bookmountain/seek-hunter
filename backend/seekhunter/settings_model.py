@@ -76,6 +76,14 @@ class AppSettings(BaseModel):
     max_pages_per_search: int = 3
     max_notify_per_run: int = 20
     max_insights_per_run: int = 30
+    market_enabled: bool = True
+    market_cities: list[str] = Field(
+        default_factory=lambda: ["adelaide", "melbourne", "sydney", "perth"])
+    market_keywords: list[str] = Field(default_factory=lambda: [
+        "software engineer", "developer", "full stack", "frontend", "backend", "AI engineer",
+        "data engineer", "devops", "IT support",
+    ])
+    market_details_per_city: int = 40
 
     @field_validator(
         "clearance_patterns",

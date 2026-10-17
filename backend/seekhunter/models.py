@@ -106,6 +106,45 @@ class Outbox(SQLModel, table=True):
     sent_at: NaiveDatetime | None = None
 
 
+class MarketJob(SQLModel, table=True):
+    __tablename__ = "market_jobs"
+    __table_args__ = (UniqueConstraint("source", "external_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    source: str = Field(default="seek", index=True)
+    external_id: str
+    city: str = Field(index=True)
+    keyword: str = ""
+    title: str
+    company: str = ""
+    work_type: str = "unknown"
+    salary_label: str | None = None
+    salary_min_hourly: float | None = None
+    salary_max_hourly: float | None = None
+    listed_at: NaiveDatetime | None = None
+    role_family: str = "other"
+    skills: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    details_fetched: bool = False
+    first_seen_at: NaiveDatetime = Field(default_factory=utcnow, index=True)
+    last_seen_at: NaiveDatetime = Field(default_factory=utcnow, index=True)
+
+
+class MarketSnapshot(SQLModel, table=True):
+    __tablename__ = "market_snapshots"
+    __table_args__ = (UniqueConstraint("city", "date"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    city: str = Field(index=True)
+    date: NaiveDatetime = Field(index=True)
+    total: int = 0
+    detailed_count: int = 0
+    by_work_type: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    by_role_family: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    skill_counts: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    salary_percentiles: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: NaiveDatetime = Field(default_factory=utcnow)
+
+
 class Tailoring(SQLModel, table=True):
     __tablename__ = "tailorings"
 

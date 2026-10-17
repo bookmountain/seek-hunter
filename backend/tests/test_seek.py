@@ -57,6 +57,16 @@ def test_search_builds_params_and_stops_at_total(fixtures_dir):
     assert params["daterange"] == 7
 
 
+def test_search_daterange_override(fixtures_dir):
+    payload = json.loads((fixtures_dir / "seek_search.json").read_text())
+    payload["totalCount"] = 5
+    client = FakeClient(payload, {})
+    src = SeekSource(client)
+    src.search(SearchProfile(name="t", keywords="developer", location="All Adelaide SA", work_types=[]),
+              max_pages=1, daterange=14)
+    assert client.calls[0][2]["params"]["daterange"] == 14
+
+
 def test_details_fills_description(fixtures_dir):
     item = json.loads((fixtures_dir / "seek_search.json").read_text())["data"][0]
     details = json.loads((fixtures_dir / "seek_details.json").read_text())
