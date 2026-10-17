@@ -150,6 +150,16 @@ Sent via `openclaw message send --channel telegram --target 1635495359 --message
 
 Up to 10 jobs per message; overflow is split into multiple messages. 💼 = casual/part-time/contract; ⚠️ = hours flag.
 
+## 8b. Conversational control through OpenClaw
+
+OpenClaw already owns the Telegram bot and reads Book's replies, so SeekHunter never polls Telegram. Instead an OpenClaw **skill** (`openclaw-skill/seekhunter/SKILL.md`, installed by the deploy with `openclaw skills install`) teaches OpenClaw's agent to call the SeekHunter API through a local wrapper (`/usr/local/bin/seekhunter-api`, which reads the write token from `/opt/seek-hunter/.env`).
+
+- Digest lines start with a job id (`#142`) and end with a hint: reply "save #id", "hide #id", "why #id?".
+- Supported in A: status changes and notes, "why does #id fit / what am I missing", un-exclude, adding and changing searches, changing settings and blocklists in plain language, "anything new?", and "run now".
+- Agent-friendly endpoints return plain text: `GET /api/jobs/{id}/brief` (fit, matched/missing skills, AI note, description) and `GET /api/summary?hours=N`.
+- These conversations run on OpenClaw's own model (OpenAI/Codex OAuth), not the Anthropic credit.
+- Later: company research (sub-project D) and "tailor #id" delivering PDFs to Telegram (sub-project B).
+
 ## 9. Web UI and API
 
 **Pages:**
@@ -159,7 +169,7 @@ Up to 10 jobs per message; overflow is split into multiple messages. 💼 = casu
 4. **Settings:** blocklists, allowlist, regexes, weights, LLM provider order, notify/recap toggles, "Send test notification", "Run now".
 5. **Runs:** run history and per-source health.
 
-**API (prefix `/api`):** `GET /health`, `GET /jobs`, `GET /jobs/{id}`, `PATCH /jobs/{id}/status`, `POST /jobs/{id}/unexclude`, `GET|POST|PUT|DELETE /search-profiles`, `GET|PUT /settings`, `GET /runs`, `POST /runs` (trigger), `POST /notify/test`.
+**API (prefix `/api`):** `GET /health`, `GET /summary` (text), `GET /jobs/{id}/brief` (text), `GET /jobs`, `GET /jobs/{id}`, `PATCH /jobs/{id}/status`, `POST /jobs/{id}/unexclude`, `GET|POST|PUT|DELETE /search-profiles`, `GET|PUT /settings`, `GET /runs`, `POST /runs` (trigger), `POST /notify/test`.
 
 **Access control (`security.py`):**
 - IP allowlist middleware. Allowed: client IP within `ALLOWED_CIDRS` (default `192.168.4.0/24,100.64.0.0/10,127.0.0.1/32`), or `CF-Connecting-IP` within `ALLOWED_PUBLIC_IPS` (default `180.150.112.113`). Everything else returns 403. Values come from `.env`.

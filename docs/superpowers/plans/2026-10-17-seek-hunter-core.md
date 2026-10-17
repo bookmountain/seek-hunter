@@ -2392,7 +2392,7 @@ from seekhunter.notify import DigestItem, Notifier, NotifyError, format_digest, 
 
 
 def item(i, score=80, flags=("flexible",)):
-    return DigestItem(score=score, title=f"Dev {i}", company="Acme", location="Adelaide SA",
+    return DigestItem(job_id=100 + i, score=score, title=f"Dev {i}", company="Acme", location="Adelaide SA",
                       work_type="contract", matched=["React", "TypeScript"], why="Strong React match",
                       url=f"https://www.seek.com.au/job/{i}", flags=list(flags))
 
@@ -2401,7 +2401,8 @@ def test_digest_format_and_split():
     msgs = format_digest([item(i) for i in range(12)], datetime(2026, 10, 17, 13, 0), "https://sh", [], extra=3)
     assert len(msgs) == 2
     assert msgs[0].startswith("🎯 SeekHunter · 12 new (13:00)")
-    assert "1. [80] Dev 0 — Acme · Adelaide SA · Contract 💼" in msgs[0]
+    assert "#100 [80] Dev 0 — Acme · Adelaide SA · Contract 💼" in msgs[0]
+    assert "Reply to OpenClaw" in msgs[-1]
     assert "React, TypeScript ✓" in msgs[0]
     assert '"Strong React match"' in msgs[0]
     assert "+3 more" in msgs[-1]
@@ -2456,6 +2457,7 @@ from datetime import datetime
 WORK_TYPE_LABELS = {"full_time": "Full time", "part_time": "Part time", "contract": "Contract",
                     "casual": "Casual", "unknown": "Type n/a"}
 PER_MESSAGE = 10
+REPLY_HINT = "💬 Reply to OpenClaw: \"save #id\", \"hide #id\", \"why #id?\""
 
 
 class NotifyError(Exception):
@@ -2464,6 +2466,7 @@ class NotifyError(Exception):
 
 @dataclass
 class DigestItem:
+    job_id: int
     score: int
     title: str
     company: str
@@ -2475,9 +2478,9 @@ class DigestItem:
     flags: list[str] = field(default_factory=list)
 
 
-def _format_item(n: int, it: DigestItem) -> str:
+def _format_item(it: DigestItem) -> str:
     badges = (" 💼" if "flexible" in it.flags else "") + (" ⚠️ hours" if "hours" in it.flags else "")
-    line1 = f"{n}. [{it.score}] {it.title} — {it.company} · {it.location} · {WORK_TYPE_LABELS[it.work_type]}{badges}"
+    line1 = f"#{it.job_id} [{it.score}] {it.title} — {it.company} · {it.location} · {WORK_TYPE_LABELS[it.work_type]}{badges}"
     details = []
     if it.matched:
         details.append(f"{', '.join(it.matched[:5])} ✓")
@@ -2498,19 +2501,20 @@ def format_digest(items: list[DigestItem], when: datetime, public_url: str, degr
     chunks = [items[i : i + PER_MESSAGE] for i in range(0, len(items), PER_MESSAGE)] or [[]]
     messages = []
     for idx, chunk in enumerate(chunks):
-        body = "\n".join(_format_item(idx * PER_MESSAGE + n + 1, it) for n, it in enumerate(chunk))
+        body = "\n".join(_format_item(it) for it in chunk)
         parts = [header if idx == 0 else f"🎯 SeekHunter · cont. ({idx + 1}/{len(chunks)})", body]
         if idx == len(chunks) - 1:
             if extra:
                 parts.append(f"+{extra} more in the web UI")
             parts.append(f"→ {public_url}")
+            parts.append(REPLY_HINT)
         messages.append("\n".join(p for p in parts if p))
     return messages
 
 
 def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: str) -> str:
     lines = [f"🎯 SeekHunter daily recap · {day}", f"{len(items)} new jobs · {excluded} excluded"]
-    lines += [_format_item(n + 1, it) for n, it in enumerate(items[:15])]
+    lines += [_format_item(it) for it in items[:15]]
     if len(items) > 15:
         lines.append(f"+{len(items) - 15} more in the web UI")
     lines.append(f"→ {public_url}")
@@ -2723,6 +2727,11 @@ def run_lock(data_dir: Path) -> Iterator[None]:
             fcntl.flock(fh, fcntl.LOCK_UN)
 ```
 
+
+**Review addenda for Task 15 (from the Tasks 9–11 code review; implement these on top of the code below):**
+1. Jobs stored by a crashed earlier run must not vanish. At the start of `_evaluate`'s input, also include jobs that have **no** `JobEvaluation` row and `canonical_job_id IS NULL` (add `repo.unevaluated_jobs(session) -> list[Job]` using an outer join where `JobEvaluation.id IS NULL`). Test: upsert a job without evaluation, run the pipeline with a source returning nothing new, and assert the job now has an evaluation and was notified.
+2. In `_collect`, wrap each `source.details(data)` call in `except Exception` (not only `SourceBlocked`), log it, and record `st["error"] = f"details: ..."`, so one bad detail page doesn't abort the rest of the source.
+
 - [ ] **Step 4: Implement `backend/seekhunter/pipeline.py`**
 
 ```python
@@ -2760,7 +2769,7 @@ def _local(dt: datetime) -> datetime:
 
 
 def _digest_item(job: Job, ev: JobEvaluation) -> DigestItem:
-    return DigestItem(score=ev.final_score, title=job.title, company=job.company, location=job.location,
+    return DigestItem(job_id=job.id, score=ev.final_score, title=job.title, company=job.company, location=job.location,
                       work_type=job.work_type, matched=ev.matched_skills, why=ev.llm_note, url=job.url,
                       flags=ev.flags)
 
@@ -3641,6 +3650,125 @@ Expected: all green.
 ```bash
 git add backend/seekhunter/api.py backend/seekhunter/security.py backend/tests/test_api.py
 git commit -m "feat: add REST API, run trigger, and SPA serving"
+```
+
+---
+
+### Task 18b: Agent-friendly endpoints (for the OpenClaw skill)
+
+OpenClaw talks to SeekHunter through the API (Task 24b installs the skill). Agents work best with compact plain text, so add two read endpoints that return `text/plain`.
+
+**Files:**
+- Modify: `backend/seekhunter/api.py`, `backend/seekhunter/notify.py`
+- Test: `backend/tests/test_api.py`, `backend/tests/test_notify.py`
+
+- [ ] **Step 1: Add failing tests**
+
+Append to `backend/tests/test_notify.py`:
+```python
+from seekhunter.notify import format_brief
+
+
+def test_format_brief():
+    text = format_brief(
+        job_id=7, title="React Dev", company="Acme", location="Adelaide SA", work_type="contract",
+        salary="$90/h", score=80, rule_score=75, llm_score=88, llm_note="Strong React",
+        matched=["React"], missing=["Kotlin"], flags=["flexible"], reasons=[], status="new",
+        url="https://x/7", description="We need React. " * 500,
+    )
+    assert text.startswith("#7 React Dev — Acme")
+    assert "Matched: React" in text and "Missing: Kotlin" in text
+    assert "AI 88" in text
+    assert len(text) < 5000
+```
+
+Append to `backend/tests/test_api.py` (uses the existing `client` fixture; the `RESUME_DIR` env must point at the test resume fixture, so add `monkeypatch.setenv("RESUME_DIR", str(Path(__file__).parent / "fixtures" / "resume"))` to the fixture, with `from pathlib import Path` at the top):
+```python
+def test_brief_and_summary_are_plain_text(client):
+    job_id = client.get("/api/jobs").json()[0]["id"]
+    r = client.get(f"/api/jobs/{job_id}/brief")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
+    assert r.text.startswith(f"#{job_id} React Dev")
+    s = client.get("/api/summary", params={"hours": 24})
+    assert s.headers["content-type"].startswith("text/plain")
+    assert f"#{job_id}" in s.text
+    assert client.get("/api/jobs/99999/brief").status_code == 404
+```
+
+- [ ] **Step 2: Run to verify fail**
+
+Run: `cd backend && uv run pytest tests/test_notify.py tests/test_api.py -v`
+Expected: FAIL, `ImportError: cannot import name 'format_brief'`
+
+- [ ] **Step 3: Add `format_brief` to `backend/seekhunter/notify.py`**
+
+```python
+def format_brief(*, job_id: int, title: str, company: str, location: str, work_type: str, salary: str | None,
+                 score: int, rule_score: int, llm_score: int | None, llm_note: str | None, matched: list[str],
+                 missing: list[str], flags: list[str], reasons: list[str], status: str, url: str,
+                 description: str) -> str:
+    lines = [
+        f"#{job_id} {title} — {company} · {location} · {WORK_TYPE_LABELS.get(work_type, work_type)}"
+        + (f" · {salary}" if salary else ""),
+        f"Score {score} (rules {rule_score}" + (f", AI {llm_score}" if llm_score is not None else "") + ")"
+        + f" · status {status}",
+    ]
+    if llm_note:
+        lines.append(f"AI note: {llm_note}")
+    lines.append(f"Matched: {', '.join(matched) or '-'}")
+    lines.append(f"Missing: {', '.join(missing) or '-'}")
+    if flags:
+        lines.append(f"Flags: {', '.join(flags)}")
+    if reasons:
+        lines.append(f"Excluded for: {', '.join(reasons)}")
+    lines.append(f"URL: {url}")
+    lines.append("")
+    lines.append(description[:3500])
+    return "\n".join(lines)
+```
+
+- [ ] **Step 4: Add the endpoints to `backend/seekhunter/api.py`**
+
+Add imports: `from datetime import timedelta`, `from fastapi.responses import PlainTextResponse`, `from seekhunter.models import utcnow`, `from seekhunter.notify import format_brief`, `from seekhunter.profile import load_profile`, `from seekhunter.skills import extract_skills`, and import `_digest_item` as `digest_item` from `seekhunter.pipeline` (rename `_digest_item` to `digest_item` in `pipeline.py` and update its callers). Inside `create_app`, before the SPA catch-all route:
+
+```python
+    @app.get("/api/jobs/{job_id}/brief", response_class=PlainTextResponse)
+    def job_brief(job_id: int, session: Session = Depends(get_session)):
+        job, ev = _get_job(session, job_id)
+        data = repo.to_jobdata(job)
+        try:
+            profile_skills = load_profile(env.resume_dir).skills
+        except FileNotFoundError:
+            profile_skills = set()
+        missing = sorted(extract_skills(f"{job.title} {data.text}") - profile_skills)
+        return format_brief(
+            job_id=job.id, title=job.title, company=job.company, location=job.location, work_type=job.work_type,
+            salary=job.salary_label, score=ev.final_score, rule_score=ev.rule_score, llm_score=ev.llm_score,
+            llm_note=ev.llm_note, matched=ev.matched_skills, missing=missing, flags=ev.flags,
+            reasons=ev.reasons, status=job.status, url=job.url, description=data.text,
+        )
+
+    @app.get("/api/summary", response_class=PlainTextResponse)
+    def summary(hours: int = 24, session: Session = Depends(get_session)):
+        rows = repo.list_jobs(session, view="active", since=utcnow() - timedelta(hours=hours), limit=30)
+        if not rows:
+            return f"No new jobs in the last {hours}h."
+        return "\n".join(
+            f"#{j.id} [{e.final_score}] {j.title} — {j.company} · {j.location} · {j.work_type} · {j.status}"
+            for j, e in rows
+        )
+```
+
+- [ ] **Step 5: Run to verify pass**
+
+Run: `cd backend && uv run pytest -q && uv run ruff check .`
+Expected: all passed.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add backend
+git commit -m "feat: add plain-text brief and summary endpoints for agents"
 ```
 
 ---
@@ -4855,6 +4983,94 @@ git commit -m "chore: add systemd units and VPS deploy scripts"
 
 ---
 
+### Task 24b: OpenClaw skill + API wrapper
+
+OpenClaw already owns the Telegram bot and reads Book's replies. This skill teaches its agent to drive SeekHunter, so Book can say "save #142", "why #142?", "only contract roles", "add Melbourne react searches", or "anything new?" in Telegram.
+
+**Files:**
+- Create: `deploy/bin/seekhunter-api`, `openclaw-skill/seekhunter/SKILL.md`
+- Modify: `deploy/deploy.sh`
+
+- [ ] **Step 1: Create `deploy/bin/seekhunter-api`** (installed to `/usr/local/bin` on .50)
+
+```bash
+#!/usr/bin/env bash
+# Usage: seekhunter-api METHOD PATH [JSON_BODY]
+#   seekhunter-api GET /api/summary?hours=24
+#   seekhunter-api PATCH /api/jobs/142 '{"status":"saved"}'
+set -euo pipefail
+METHOD="${1:?method}"; PATH_="${2:?path}"; BODY="${3:-}"
+TOKEN="$(grep -E '^API_WRITE_TOKEN=' /opt/seek-hunter/.env | cut -d= -f2-)"
+ARGS=(-sS -X "$METHOD" "http://127.0.0.1:8090${PATH_}" -w '\n[HTTP %{http_code}]\n')
+if [ "$METHOD" != "GET" ]; then ARGS+=(-H "Authorization: Bearer ${TOKEN}"); fi
+if [ -n "$BODY" ]; then ARGS+=(-H "Content-Type: application/json" -d "$BODY"); fi
+exec curl "${ARGS[@]}"
+```
+
+- [ ] **Step 2: Create `openclaw-skill/seekhunter/SKILL.md`**
+
+````markdown
+---
+name: seekhunter
+description: "Book's job-hunt tracker (SeekHunter). Use when Book mentions jobs, a job #id from a SeekHunter digest, saving/hiding/applying, why a job fits, job searches/filters, or asks what's new on SEEK/Jora."
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "🎯",
+        "requires": { "bins": ["seekhunter-api"] },
+      },
+  }
+---
+
+# SeekHunter
+
+SeekHunter crawls SEEK and Jora every 2 hours (07:00–21:00 Adelaide). It drops jobs needing security clearance, citizenship/PR, defence, or banks, scores the rest against Book's resume (part-time/contract/casual first because of his student visa), and posts digests to this Telegram chat. Each digest line starts with a job id like `#142`.
+
+All access goes through the `seekhunter-api METHOD PATH [JSON]` command (localhost API; auth is handled). Never invent job data; read it from the API. Keep replies short.
+
+## Read
+- What's new: `seekhunter-api GET "/api/summary?hours=24"` (plain text, one job per line)
+- One job in detail (fit, matched/missing skills, AI note, description): `seekhunter-api GET /api/jobs/142/brief`
+- List as JSON: `seekhunter-api GET "/api/jobs?view=active&status=saved"` (`view=excluded` for excluded; filters: `work_type=part_time|contract|casual|full_time`, `source=seek|jora`, `q=text`)
+- Searches: `seekhunter-api GET /api/search-profiles`
+- Settings: `seekhunter-api GET /api/settings`
+- Recent runs/health: `seekhunter-api GET /api/runs`
+
+## Act
+- Status: `seekhunter-api PATCH /api/jobs/142 '{"status":"saved"}'` (`saved|applied|hidden|new`); notes: `'{"notes":"..."}'`
+- Wrongly excluded job: `seekhunter-api POST /api/jobs/142/unexclude '{"allowlist_employer":false}'`
+- Add a search: `seekhunter-api POST /api/search-profiles '{"name":"Melbourne · react","keywords":"react","location":"All Melbourne VIC","work_types":[],"sources":["seek","jora"],"enabled":true}'` (locations: "All Adelaide SA", "All Melbourne VIC", "All Sydney NSW", "All Perth WA"; work_types empty = all)
+- Change a search: GET it from the list, then `PUT /api/search-profiles/{id}` with the full object
+- Settings (blocklists, weights, toggles): GET `/api/settings`, modify the field, then `PUT /api/settings` with the **full** JSON (never send a partial object)
+- Run a crawl now: `seekhunter-api POST /api/runs`
+
+## How to answer
+- "why #142?" / "am I a fit?": read the brief, then explain the overlap and the gaps in 3–5 lines. Mention visa fit (hours flag) when relevant.
+- Before destructive changes (deleting searches, editing blocklists), restate the change in one line and do it. If ambiguous, ask.
+- When Book states a lasting preference ("no recruiter X", "only contract"), apply it via settings/searches and remember it.
+- Don't touch other cron jobs or channels.
+````
+
+- [ ] **Step 3: Install wrapper and skill in `deploy/deploy.sh`**
+
+Insert after the `uv sync` line:
+```bash
+install -m 755 /opt/seek-hunter/app/deploy/bin/seekhunter-api /usr/local/bin/seekhunter-api
+openclaw skills install /opt/seek-hunter/app/openclaw-skill/seekhunter --as seekhunter --force \
+  --acknowledge-install-policy-warning || echo "WARN: openclaw skill install failed"
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+chmod +x deploy/bin/seekhunter-api
+git add deploy openclaw-skill
+git commit -m "feat: add OpenClaw skill and API wrapper for Telegram control"
+```
+
+---
+
 ### Task 25: GitHub Actions CI/CD
 
 **Files:**
@@ -5066,6 +5282,13 @@ In `/Users/book/Documents/code/book-cv/.github/workflows/deploy.yml`, append thi
           ssh -i /home/book/.ssh/seekhunter_deploy root@192.168.4.50 'systemctl start --no-block seekhunter-rescore.service'
 ```
 Check the runner user first: `systemctl show -p User actions.runner.bookmountain-book-cv.vm100.service` must print `User=book` (so `/home/book/.ssh/seekhunter_deploy` is readable). Commit in the book-cv repo (`git -C ../book-cv add .github/workflows/deploy.yml && git -C ../book-cv commit -m "ci: sync resume sections to SeekHunter"`). **Ask Book before pushing**, because a push to `master` also redeploys the website. After the push, verify on `.50`: `journalctl -u seekhunter-rescore -n 5 --no-pager` shows "rescored N jobs".
+
+- [ ] **Step 9c: Verify the OpenClaw skill end to end**
+
+```bash
+sshpass -p 'Book1995*' ssh root@192.168.4.50 'openclaw skills info seekhunter; seekhunter-api GET "/api/summary?hours=48" | head'
+```
+Expected: the skill shows as ready (its `seekhunter-api` requirement is satisfied) and the summary lists jobs. Then ask Book to send OpenClaw in Telegram: "anything new on SeekHunter?" and "why #<id>?" for an id from the digest, and to try "save #<id>". Confirm the status changed in the web UI.
 
 - [ ] **Step 10: Update TODO and commit**
 
