@@ -67,6 +67,7 @@ class JobOut(BaseModel):
     title: str
     company: str
     location: str
+    city: str
     work_type: str
     salary_label: str | None
     listed_at: datetime | None
@@ -101,6 +102,11 @@ class JobOut(BaseModel):
 class JobDetailOut(JobOut):
     description_html: str
     teaser: str
+
+
+class CityCountOut(BaseModel):
+    city: str
+    count: int
 
 
 class JobPatch(BaseModel):
@@ -456,6 +462,7 @@ def _job_out(job: Job, ev: JobEvaluation, application: Application | None = None
             priors: list[PriorApplicationOut] | None = None, detail: bool = False) -> JobOut:
     base = dict(
         id=job.id, source=job.source, title=job.title, company=job.company, location=job.location,
+        city=job.city or "other",
         work_type=job.work_type, salary_label=job.salary_label, listed_at=job.listed_at,
         first_seen_at=job.first_seen_at, url=job.url, status=job.status, notes=job.notes,
         force_include=job.force_include, excluded=ev.excluded, reasons=ev.reasons, snippets=ev.snippets,
@@ -593,10 +600,11 @@ def create_app(init: bool = True) -> FastAPI:
 
     @app.get("/api/jobs", response_model=list[JobOut])
     def list_jobs(view: str = "active", status: str | None = None, work_type: str | None = None,
-                  source: str | None = None, q: str | None = None, limit: int = Query(200, ge=1, le=500),
-                  offset: int = Query(0, ge=0), session: Session = Depends(get_session)):
+                  source: str | None = None, q: str | None = None, city: str | None = None,
+                  limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0),
+                  session: Session = Depends(get_session)):
         rows = repo.list_jobs(session, view=view, status=status, work_type=work_type, source=source, q=q,
-                              limit=limit, offset=offset)
+                              city=city, limit=limit, offset=offset)
         # Batched (not per-job) so this stays O(1) queries regardless of list size (~300 jobs).
         job_ids = [j.id for j, _ in rows]
         apps_by_job = repo.applications_by_job_ids(session, job_ids)
@@ -607,6 +615,10 @@ def create_app(init: bool = True) -> FastAPI:
                     priors=_prior_applications(apps_by_key.get(company_key(j.company), []), j.id))
             for j, e in rows
         ]
+
+    @app.get("/api/jobs/cities", response_model=list[CityCountOut])
+    def jobs_cities(view: str = "active", session: Session = Depends(get_session)):
+        return [CityCountOut(city=c or "other", count=n) for c, n in repo.job_city_counts(session, view=view)]
 
     @app.get("/api/jobs/{job_id}", response_model=JobDetailOut)
     def get_job(job_id: int, session: Session = Depends(get_session)):

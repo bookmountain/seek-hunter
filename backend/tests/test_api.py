@@ -58,8 +58,59 @@ def test_list_jobs_views(client):
     active = client.get("/api/jobs").json()
     assert [j["title"] for j in active] == ["React Dev"]
     assert active[0]["matched_skills"] == ["React"]
+    assert active[0]["city"] == "adelaide"
     excluded = client.get("/api/jobs", params={"view": "excluded"}).json()
     assert excluded[0]["reasons"] == ["bank"]
+
+
+@pytest.fixture
+def multi_city_client(monkeypatch, tmp_path):
+    """A second client/engine pair (independent of `client`) seeded with jobs in two cities, for
+    the city-filter and /api/jobs/cities tests."""
+    monkeypatch.setenv("API_WRITE_TOKEN", "t0k")
+    monkeypatch.setenv("ALLOWED_CIDRS", "127.0.0.1/32,testclient/32")
+    monkeypatch.setenv("STATIC_DIR", str(tmp_path))
+    monkeypatch.setenv("RESUME_DIR", str(Path(__file__).parent / "fixtures" / "resume"))
+    (tmp_path / "index.html").write_text("<html>spa</html>")
+    get_env.cache_clear()
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        repo.ensure_seed(s)
+        adelaide, _ = repo.upsert_job(s, JobData(source="seek", external_id="1", title="Adelaide Dev",
+                                                 company="Acme", location="Adelaide SA", work_type="contract",
+                                                 url="u1"), profile_location="All Adelaide SA")
+        repo.save_evaluation(s, adelaide.id, excluded=False, reasons=[], snippets={}, rule_score=50,
+                             llm_score=None, llm_note=None, llm_provider=None, final_score=50,
+                             matched_skills=[], flags=[])
+        melbourne, _ = repo.upsert_job(s, JobData(source="seek", external_id="2", title="Melbourne Dev",
+                                                  company="Acme", location="Melbourne VIC",
+                                                  work_type="contract", url="u2"),
+                                       profile_location="All Melbourne VIC")
+        repo.save_evaluation(s, melbourne.id, excluded=False, reasons=[], snippets={}, rule_score=50,
+                             llm_score=None, llm_note=None, llm_provider=None, final_score=50,
+                             matched_skills=[], flags=[])
+
+    def override():
+        with Session(engine) as s:
+            yield s
+
+    app = create_app(init=False)
+    app.dependency_overrides[get_session] = override
+    yield TestClient(app)
+    get_env.cache_clear()
+
+
+def test_list_jobs_city_filter(multi_city_client):
+    melbourne = multi_city_client.get("/api/jobs", params={"city": "melbourne"}).json()
+    assert [j["title"] for j in melbourne] == ["Melbourne Dev"]
+    adelaide = multi_city_client.get("/api/jobs", params={"city": "adelaide"}).json()
+    assert [j["title"] for j in adelaide] == ["Adelaide Dev"]
+
+
+def test_jobs_cities_counts(multi_city_client):
+    counts = {row["city"]: row["count"] for row in multi_city_client.get("/api/jobs/cities").json()}
+    assert counts == {"adelaide": 1, "melbourne": 1}
 
 
 def test_job_detail_and_status_update_requires_token(client):
