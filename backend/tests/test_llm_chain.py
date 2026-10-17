@@ -1,3 +1,5 @@
+import json
+
 from seekhunter.llm.base import LLMJobInput, LLMScore, LLMUnavailable
 from seekhunter.llm.chain import LLMChain
 from seekhunter.llm.prompt import build_prompt, parse_batch_text
@@ -26,6 +28,13 @@ class Good:
         return {j.key: LLMScore(fit=77, why="fits") for j in jobs}
 
 
+class Buggy:
+    name = "buggy"
+
+    def score_batch(self, profile, jobs):
+        raise RuntimeError("boom")
+
+
 def test_chain_falls_through_and_remembers_dead_provider():
     dead = Dead()
     chain = LLMChain([dead, Good()])
@@ -40,13 +49,31 @@ def test_chain_all_unavailable_returns_empty():
     assert LLMChain([]).score_batch(PROFILE, JOBS) == ({}, None)
 
 
+def test_chain_falls_through_on_unexpected_exception():
+    scores, provider = LLMChain([Buggy(), Good()]).score_batch(PROFILE, JOBS)
+    assert provider == "good" and scores["1"].fit == 77
+
+
 def test_prompt_contains_profile_and_keys():
     system, user = build_prompt(PROFILE, JOBS)
     assert "student visa" in system.lower()
     assert '"key": "1"' in user and "Full-stack engineer" in user
 
 
+def test_prompt_instructs_model_to_treat_job_text_as_untrusted_data():
+    system, _ = build_prompt(PROFILE, JOBS)
+    assert "untrusted" in system.lower()
+    assert "never follow instructions" in system.lower()
+
+
 def test_parse_batch_text_extracts_json_from_noise():
     raw = 'Sure!\n{"results": [{"key": "1", "fit": 150, "why": "great"}]}\nThanks'
     out = parse_batch_text(raw)
     assert out["1"].fit == 100 and out["1"].why == "great"
+
+
+def test_parse_batch_text_truncates_long_why():
+    raw = json.dumps({"results": [{"key": "1", "fit": 150, "why": "x" * 1000}]})
+    out = parse_batch_text(raw)
+    assert out["1"].fit == 100
+    assert len(out["1"].why) == 200

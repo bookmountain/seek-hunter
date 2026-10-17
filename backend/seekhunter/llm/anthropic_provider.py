@@ -1,4 +1,5 @@
 import anthropic
+import pydantic
 
 from seekhunter.llm.base import BatchFit, LLMJobInput, LLMScore, LLMUnavailable
 from seekhunter.llm.prompt import build_prompt, to_scores
@@ -23,9 +24,12 @@ class AnthropicProvider:
                 messages=[{"role": "user", "content": user}],
                 output_format=BatchFit,
             )
-        except anthropic.APIError as e:
-            # 402 billing, 400 low credit, 401/403, 429 after retries, 5xx, network
+        except (anthropic.APIError, pydantic.ValidationError) as e:
+            # anthropic.APIError: 402 billing, 400 low credit, 401/403, 429 after retries, 5xx, network.
+            # pydantic.ValidationError: the structured response failed schema validation.
             raise LLMUnavailable(f"anthropic: {e}") from e
+        if getattr(response, "stop_reason", None) in ("max_tokens", "refusal"):
+            raise LLMUnavailable(f"anthropic: stopped early ({response.stop_reason})")
         if response.parsed_output is None:
             raise LLMUnavailable("anthropic: no parsed output")
         return to_scores(response.parsed_output)

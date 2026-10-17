@@ -5,6 +5,7 @@ from datetime import datetime
 WORK_TYPE_LABELS = {"full_time": "Full time", "part_time": "Part time", "contract": "Contract",
                     "casual": "Casual", "unknown": "Type n/a"}
 PER_MESSAGE = 10
+MAX_CHARS = 3800
 REPLY_HINT = "💬 Reply to OpenClaw: \"save #id\", \"hide #id\", \"why #id?\""
 
 
@@ -28,7 +29,7 @@ class DigestItem:
 
 def _format_item(it: DigestItem) -> str:
     badges = (" 💼" if "flexible" in it.flags else "") + (" ⚠️ hours" if "hours" in it.flags else "")
-    work_type = WORK_TYPE_LABELS[it.work_type]
+    work_type = WORK_TYPE_LABELS.get(it.work_type, "Type n/a")
     line1 = f"#{it.job_id} [{it.score}] {it.title} — {it.company} · {it.location} · {work_type}{badges}"
     details = []
     if it.matched:
@@ -42,12 +43,34 @@ def _format_item(it: DigestItem) -> str:
     return "\n".join(lines)
 
 
+def _pack_items(items: list[DigestItem]) -> list[list[DigestItem]]:
+    """Group items into chunks that fit Telegram's message-size limit.
+
+    A chunk never exceeds PER_MESSAGE items, and starting a new item never pushes the chunk's
+    formatted body past MAX_CHARS (leaving room for the header/footer added around the body).
+    """
+    chunks: list[list[DigestItem]] = []
+    current: list[DigestItem] = []
+    current_len = 0
+    for it in items:
+        text = _format_item(it)
+        added_len = len(text) + (1 if current else 0)
+        if current and (len(current) >= PER_MESSAGE or current_len + added_len > MAX_CHARS):
+            chunks.append(current)
+            current, current_len, added_len = [], 0, len(text)
+        current.append(it)
+        current_len += added_len
+    if current:
+        chunks.append(current)
+    return chunks or [[]]
+
+
 def format_digest(items: list[DigestItem], when: datetime, public_url: str, degraded: list[str],
                   extra: int = 0) -> list[str]:
-    header = f"🎯 SeekHunter · {len(items)} new ({when:%H:%M})"
+    header = f"🎯 SeekHunter · {len(items) + extra} new ({when:%H:%M})"
     if degraded:
         header += "\n" + " ".join(f"⚠️ {s} unavailable this run" for s in degraded)
-    chunks = [items[i : i + PER_MESSAGE] for i in range(0, len(items), PER_MESSAGE)] or [[]]
+    chunks = _pack_items(items)
     messages = []
     for idx, chunk in enumerate(chunks):
         body = "\n".join(_format_item(it) for it in chunk)
@@ -61,13 +84,21 @@ def format_digest(items: list[DigestItem], when: datetime, public_url: str, degr
     return messages
 
 
-def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: str) -> str:
-    lines = [f"🎯 SeekHunter daily recap · {day}", f"{len(items)} new jobs · {excluded} excluded"]
-    lines += [_format_item(it) for it in items[:15]]
-    if len(items) > 15:
-        lines.append(f"+{len(items) - 15} more in the web UI")
-    lines.append(f"→ {public_url}")
-    return "\n".join(lines)
+def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: str) -> list[str]:
+    header = f"🎯 SeekHunter daily recap · {day}"
+    summary = f"{len(items)} new jobs · {excluded} excluded"
+    chunks = _pack_items(items)
+    messages = []
+    for idx, chunk in enumerate(chunks):
+        body = "\n".join(_format_item(it) for it in chunk)
+        parts = [header if idx == 0 else f"🎯 SeekHunter daily recap · cont. ({idx + 1}/{len(chunks)})"]
+        if idx == 0:
+            parts.append(summary)
+        parts.append(body)
+        if idx == len(chunks) - 1:
+            parts.append(f"→ {public_url}")
+        messages.append("\n".join(p for p in parts if p))
+    return messages
 
 
 class Notifier:

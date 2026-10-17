@@ -24,6 +24,9 @@ class LLMChain:
             except LLMUnavailable as e:
                 log.warning("LLM provider %s unavailable: %s", provider.name, e)
                 self._dead.add(provider.name)
+            except Exception:
+                log.exception("LLM provider %s raised unexpectedly", provider.name)
+                self._dead.add(provider.name)
         return {}, None
 
 
@@ -39,5 +42,5 @@ def build_chain(settings: AppSettings, env: Env) -> LLMChain:
         elif name == "openclaw":
             from seekhunter.llm.openclaw_provider import OpenClawProvider
 
-            providers.append(OpenClawProvider(env.openclaw_bin))
+            providers.append(OpenClawProvider(env.openclaw_bin, agent=env.openclaw_agent))
     return LLMChain(providers)

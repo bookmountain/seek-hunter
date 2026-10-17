@@ -17,6 +17,7 @@ class Env(BaseSettings):
     allowed_public_ips: str = ""
     telegram_target: str = "1635495359"
     openclaw_bin: str = "openclaw"
+    openclaw_agent: str = "seekhunter-scorer"
     public_url: str = "http://localhost:8090"
 
     @property
