@@ -1,5 +1,15 @@
 import type {
   AppSettings,
+  Application,
+  ApplicationCreate,
+  ApplicationStage,
+  CompanyHistory,
+  Contact,
+  ContactDetail,
+  ContactIn,
+  HistoryEvent,
+  Interaction,
+  InteractionKind,
   CityOverview,
   CompareResult,
   RoleFamilyRow,
@@ -98,6 +108,23 @@ export const api = {
     request<TrendsResult>("GET", `/api/insights/trends${qs({ city, skills: skills.join(","), weeks: String(weeks) })}`),
   insightsRoles: (city: string, days = 14) =>
     request<RoleFamilyRow[]>("GET", `/api/insights/roles${qs({ city, days: String(days) })}`),
+  applications: (p: { stage?: string; q?: string } = {}) => request<Application[]>("GET", `/api/applications${qs(p)}`),
+  createApplication: (body: ApplicationCreate) => request<Application>("POST", "/api/applications", body),
+  patchApplication: (id: number, body: { stage?: ApplicationStage; notes?: string; applied_at?: string; tailoring_id?: number | null }) =>
+    request<Application>("PATCH", `/api/applications/${id}`, body),
+  deleteApplication: (id: number) => request<void>("DELETE", `/api/applications/${id}`),
+  contacts: (q?: string) => request<Contact[]>("GET", `/api/contacts${qs({ q })}`),
+  contact: (id: number) => request<ContactDetail>("GET", `/api/contacts/${id}`),
+  createContact: (body: ContactIn & { company?: string; notes?: string }) => request<Contact>("POST", "/api/contacts", body),
+  patchContact: (id: number, body: Partial<ContactIn & { company: string; notes: string }>) =>
+    request<Contact>("PATCH", `/api/contacts/${id}`, body),
+  createInteraction: (body: { contact_id?: number; application_id?: number; kind: InteractionKind; at?: string; note?: string }) =>
+    request<Interaction>("POST", "/api/interactions", body),
+  deleteInteraction: (id: number) => request<void>("DELETE", `/api/interactions/${id}`),
+  jobContactLog: (jobId: number, kind: InteractionKind, note = "") =>
+    request<Interaction>("POST", `/api/jobs/${jobId}/contact-log`, { kind, note }),
+  companies: (q?: string) => request<CompanyHistory[]>("GET", `/api/companies${qs({ q })}`),
+  history: (limit = 100) => request<HistoryEvent[]>("GET", `/api/history${qs({ limit: String(limit) })}`),
   sendTailoring: (tid: number) =>
     request<{ sent: boolean; sent_at: string | null }>("POST", `/api/tailorings/${tid}/send`),
 };

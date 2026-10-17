@@ -1,5 +1,6 @@
 import type { Job } from "@/lib/types";
 import { CopyButton } from "./CopyButton";
+import { RecruiterQuickLog } from "./history/JobHistoryBits";
 
 type Contact = Pick<
   Job,
@@ -22,7 +23,8 @@ function ExtLink({ href, children }: { href: string; children: React.ReactNode }
 }
 
 /** Recruiter contact pulled from the ad, plus LinkedIn/Google lookups. */
-export function RecruiterBlock({ job }: { job: Contact }) {
+/** Pass `jobId` to enable quick logging (needs a QueryClient). */
+export function RecruiterBlock({ job, jobId }: { job: Contact; jobId?: number }) {
   const { contact_name: name, contact_phone: phone, contact_email: email, contact_linkedin: profile } = job;
   const hasContact = !!(name || phone || email);
   const search = job.contact_search;
@@ -93,6 +95,7 @@ export function RecruiterBlock({ job }: { job: Contact }) {
           {search.google && <ExtLink href={search.google}>Search Google</ExtLink>}
         </div>
       </div>
+      {jobId !== undefined && name && <RecruiterQuickLog jobId={jobId} />}
     </section>
   );
 }

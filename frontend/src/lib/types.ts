@@ -40,6 +40,10 @@ export interface Job {
   resume_pct: number | null;
   cover_letter_pct: number | null;
   insights_checked_at: string | null;
+  /** This job's own application, when it has been applied to. */
+  application: ApplicationSummary | null;
+  /** Earlier applications to the same company (max 5). */
+  prior_applications: PriorApplication[];
 }
 
 export interface JobDetail extends Job {
@@ -261,4 +265,120 @@ export interface RoleFamilyRow {
   count: number;
   flexible_share: number;
   top_skills: string[];
+}
+
+// ---------------------------------------------------------------- application history
+
+export const APPLICATION_STAGES = ["applied", "screening", "interview", "offer", "rejected", "withdrawn", "no_response"] as const;
+export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
+
+export const INTERACTION_KINDS = ["call", "email", "linkedin_invite", "linkedin_accepted", "linkedin_message", "meeting", "note"] as const;
+export type InteractionKind = (typeof INTERACTION_KINDS)[number];
+
+export interface ApplicationSummary {
+  id: number;
+  stage: ApplicationStage;
+  applied_at: string;
+  tailoring_id: number | null;
+  notes: string;
+}
+
+export interface PriorApplication {
+  application_id: number;
+  title: string;
+  applied_at: string;
+  stage: ApplicationStage;
+}
+
+export interface Application {
+  id: number;
+  job_id: number | null;
+  company: string;
+  company_key: string;
+  title: string;
+  url: string | null;
+  location: string | null;
+  applied_at: string;
+  tailoring_id: number | null;
+  stage: ApplicationStage;
+  source: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactIn {
+  name: string;
+  role?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  linkedin?: string | null;
+}
+
+export interface ApplicationCreate {
+  company: string;
+  title: string;
+  url?: string | null;
+  location?: string | null;
+  applied_at?: string | null;
+  notes?: string;
+  contact?: ContactIn | null;
+}
+
+export interface Contact {
+  id: number;
+  name: string;
+  company: string;
+  company_key: string;
+  role: string | null;
+  phone: string | null;
+  email: string | null;
+  linkedin: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  last_interaction: string | null;
+  interaction_count: number;
+  job_count: number;
+  application_count: number;
+}
+
+export interface Interaction {
+  id: number;
+  contact_id: number | null;
+  application_id: number | null;
+  kind: InteractionKind;
+  at: string;
+  note: string;
+  created_at: string;
+}
+
+export interface ContactDetail extends Contact {
+  interactions: Interaction[];
+  jobs: { id: number; title: string; company: string; url: string }[];
+  applications: Application[];
+}
+
+export interface CompanyHistory {
+  company: string;
+  company_key: string;
+  application_count: number;
+  last_applied_at: string;
+  applications: { id: number; title: string; applied_at: string; stage: ApplicationStage; tailoring_id: number | null }[];
+  contacts: { id: number; name: string }[];
+}
+
+export interface HistoryEvent {
+  at: string;
+  type: "event" | "interaction";
+  /** event: created | stage_changed | note; interaction: an InteractionKind */
+  kind: string;
+  company: string | null;
+  title: string | null;
+  contact_name: string | null;
+  application_id: number | null;
+  contact_id: number | null;
+  note: string;
+  from_stage: string | null;
+  to_stage: string | null;
 }

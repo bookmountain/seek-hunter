@@ -157,6 +157,21 @@ export function JobList({
                           {j.applicant_count} APPS
                         </span>
                       )}
+                      {j.application ? (
+                        <span
+                          title={`Applied · ${j.application.stage.replace("_", " ")}`}
+                          className="ml-2 border border-blue px-1 py-px align-[1px] font-mono text-[9.5px] font-medium tracking-[0.1em] text-blue"
+                        >
+                          APPLIED
+                        </span>
+                      ) : j.prior_applications?.length ? (
+                        <span
+                          title={`${j.company} already has your resume (${j.prior_applications.length})`}
+                          className="ml-2 bg-chip px-1 py-px align-[1px] font-mono text-[9.5px] font-medium tracking-[0.1em] text-ink"
+                        >
+                          HAS RESUME
+                        </span>
+                      ) : null}
                     </span>
                   </span>
                   {firstSnippet && (

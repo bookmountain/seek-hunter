@@ -9,6 +9,7 @@ import { since, sourceName } from "@/lib/format";
 import type { Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CompetitionBlock } from "./CompetitionBlock";
+import { ApplicationRow, PriorApplicationsBox } from "./history/JobHistoryBits";
 import { RecruiterBlock } from "./RecruiterBlock";
 import { Score } from "./Score";
 import { TailorAction } from "./TailorAction";
@@ -60,6 +61,7 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
     toast.success(msg);
     qc.invalidateQueries({ queryKey: ["jobs"] });
     qc.invalidateQueries({ queryKey: ["job", id] });
+    for (const key of ["applications", "contacts", "companies", "history"]) qc.invalidateQueries({ queryKey: [key] });
   };
   const fail = (e: Error) => toast.error(errMsg(e));
   const patch = useMutation({
@@ -123,6 +125,8 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
           )}
         </p>
 
+        {view.prior_applications?.length > 0 && <PriorApplicationsBox company={view.company} prior={view.prior_applications} />}
+
         {/* Score ledger */}
         <div className="mt-6 grid grid-cols-[auto_1fr] items-end gap-x-6 border-y-2 border-ink py-4">
           <Score score={view.final_score} className="text-[56px]" />
@@ -178,7 +182,7 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
 
         <CompetitionBlock job={view} />
 
-        <RecruiterBlock job={view} />
+        <RecruiterBlock job={view} jobId={view.id} />
 
         {/* Actions */}
         <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -208,6 +212,8 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
             })}
           </div>
         </div>
+
+        {view.application && <ApplicationRow jobId={view.id} app={view.application} />}
 
         <div className="mt-6">
           <label htmlFor={`notes-${view.id}`} className="kicker text-ink-muted">

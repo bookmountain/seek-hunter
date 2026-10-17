@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { HistoryPage } from "@/pages/HistoryPage";
 import { InsightsPage } from "@/pages/InsightsPage";
 import { JobsPage } from "@/pages/JobsPage";
 import { RunsPage } from "@/pages/RunsPage";
@@ -14,6 +15,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<JobsPage key="active" view="active" />} />
           <Route path="excluded" element={<JobsPage key="excluded" view="excluded" />} />
+          <Route path="history" element={<HistoryPage />} />
           <Route path="searches" element={<SearchesPage />} />
           <Route path="insights" element={<InsightsPage />} />
           <Route path="settings" element={<SettingsPage />} />
