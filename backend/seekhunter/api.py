@@ -1,6 +1,8 @@
 import subprocess
 import sys
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, Response
@@ -11,12 +13,18 @@ from seekhunter import repo
 from seekhunter.config import get_env
 from seekhunter.contacts import linkedin_search_urls
 from seekhunter.db import get_session, init_db
-from seekhunter.models import Job, JobEvaluation, Run, SearchProfile, utcnow
+from seekhunter.models import Job, JobEvaluation, Run, SearchProfile, Tailoring, utcnow
 from seekhunter.notify import Notifier, NotifyError, format_brief
 from seekhunter.profile import load_profile
+from seekhunter.resume_doc import ResumeDoc
 from seekhunter.security import ensure_safe_write_token, ip_allowlist_middleware, require_write
 from seekhunter.settings_model import AppSettings
 from seekhunter.skills import extract_skills
+from seekhunter.tailor.changes import compute_changes
+from seekhunter.tailor.current import current_dir, read_current
+from seekhunter.tailor.models import CoverLetter
+from seekhunter.tailor.pipeline import download_name, send_tailoring
+from seekhunter.tailor.render import latex_hash
 
 SPA_SECURITY_HEADERS = {
     "Content-Security-Policy": (
@@ -85,6 +93,78 @@ class SearchProfileIn(BaseModel):
     enabled: bool = True
 
 
+class TailorStartOut(BaseModel):
+    tailoring_id: int
+    status: str
+    reused: bool
+
+
+class TailoringOut(BaseModel):
+    id: int
+    job_id: int
+    status: str
+    progress: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    provider: str | None
+    error: str | None
+    send_requested: bool
+    sent_at: datetime | None
+    resume_hash: str | None
+    pages: dict[str, int]
+    warnings_count: int
+
+
+class CoverLetterOut(BaseModel):
+    greeting: str
+    paragraphs: list[str]
+    sign_off: str
+    text: str
+    word_count: int
+
+
+class TailoringFilesOut(BaseModel):
+    resume_pdf: str
+    cover_letter_pdf: str
+    resume_pages: list[str]
+    cover_letter_pages: list[str]
+
+
+class ResumeCurrentOut(BaseModel):
+    hash: str | None
+    ready: bool
+    pages: int
+    pdf_url: str | None
+    page_urls: list[str]
+    error: str | None
+
+
+class TailoringJobOut(BaseModel):
+    id: int
+    title: str
+    company: str
+    location: str
+    work_type: str
+    contact_name: str | None
+
+
+class TailoringDetailOut(TailoringOut):
+    job: TailoringJobOut
+    warnings: list[str]
+    keywords_matched: list[str]
+    gaps: list[str]
+    cover_letter: CoverLetterOut | None
+    changes: list[dict]
+    files: TailoringFilesOut | None
+    current: ResumeCurrentOut | None
+
+
+class SendOut(BaseModel):
+    sent: bool
+    sent_at: datetime | None
+
+
 def _job_out(job: Job, ev: JobEvaluation, detail: bool = False) -> JobOut:
     base = dict(
         id=job.id, source=job.source, title=job.title, company=job.company, location=job.location,
@@ -127,6 +207,80 @@ def _get_job(session: Session, job_id: int) -> tuple[Job, JobEvaluation]:
     if not job or not ev:
         raise HTTPException(404, "job not found")
     return job, ev
+
+
+TAILOR_KINDS = ("resume", "cover_letter")
+PREVIEW_RESPAWN_SECONDS = 60
+IMMUTABLE = {"Cache-Control": "private, max-age=86400"}
+NO_CACHE = {"Cache-Control": "no-cache"}
+
+
+def _spawn_cli(*args: str) -> None:
+    subprocess.Popen([sys.executable, "-m", "seekhunter.cli", *args], start_new_session=True)
+
+
+def _tailoring_out(t: Tailoring) -> TailoringOut:
+    pages = {k: int(v) for k, v in (t.result or {}).get("pages", {}).items()}
+    return TailoringOut(
+        id=t.id, job_id=t.job_id, status=t.status, progress=t.progress, created_at=t.created_at,
+        started_at=t.started_at, finished_at=t.finished_at, provider=t.provider, error=t.error,
+        send_requested=t.send_requested, sent_at=t.sent_at, resume_hash=t.resume_hash, pages=pages,
+        warnings_count=len(t.warnings or []))
+
+
+def _current_out(data_dir: Path, resume_hash: str | None, error: str | None = None) -> ResumeCurrentOut:
+    meta = read_current(data_dir, resume_hash) if resume_hash else None
+    if not meta:
+        return ResumeCurrentOut(hash=resume_hash, ready=False, pages=0, pdf_url=None, page_urls=[],
+                                error=error)
+    h, n = meta["hash"], int(meta["pages"])
+    return ResumeCurrentOut(
+        hash=h, ready=True, pages=n, pdf_url=f"/api/resume/current.pdf?hash={h}",
+        page_urls=[f"/api/resume/current/pages/{i}.png?hash={h}" for i in range(1, n + 1)], error=None)
+
+
+def _tailoring_detail(t: Tailoring, job: Job, data_dir: Path) -> TailoringDetailOut:
+    result = t.result or {}
+    done = t.status == "done" and bool(result)
+    letter = changes = files = current_info = None
+    if done:
+        cl = CoverLetter.model_validate(result.get("cover_letter") or {})
+        letter = CoverLetterOut(greeting=cl.greeting, paragraphs=cl.paragraphs, sign_off=cl.sign_off,
+                                text=cl.text(), word_count=cl.word_count())
+        changes = compute_changes(ResumeDoc.model_validate(result["base"]),
+                                  ResumeDoc.model_validate(result["tailored"]))
+        pages = result.get("pages", {})
+        base = f"/api/tailorings/{t.id}"
+        files = TailoringFilesOut(
+            resume_pdf=f"{base}/resume.pdf", cover_letter_pdf=f"{base}/cover_letter.pdf",
+            resume_pages=[f"{base}/pages/resume/{i}.png" for i in range(1, pages.get("resume", 0) + 1)],
+            cover_letter_pages=[f"{base}/pages/cover_letter/{i}.png"
+                                for i in range(1, pages.get("cover_letter", 0) + 1)])
+        current_info = _current_out(data_dir, t.resume_hash)
+    return TailoringDetailOut(
+        **_tailoring_out(t).model_dump(),
+        job=TailoringJobOut(id=job.id, title=job.title, company=job.company, location=job.location,
+                            work_type=job.work_type, contact_name=job.contact_name),
+        warnings=list(t.warnings or []), keywords_matched=list(result.get("keywords_matched", [])),
+        gaps=list(result.get("gaps", [])), cover_letter=letter, changes=changes or [], files=files,
+        current=current_info)
+
+
+def _get_tailoring(session: Session, tid: int) -> tuple[Tailoring, Job]:
+    t = session.get(Tailoring, tid)
+    job = session.get(Job, t.job_id) if t else None
+    if not t or not job:
+        raise HTTPException(404, "tailoring not found")
+    return t, job
+
+
+def _tailoring_file(t: Tailoring, name: str) -> Path:
+    if t.status != "done" or not t.out_dir:
+        raise HTTPException(404, "tailoring not finished")
+    path = Path(t.out_dir) / name
+    if not path.is_file():
+        raise HTTPException(404, "file not found")
+    return path
 
 
 def create_app(init: bool = True) -> FastAPI:
@@ -275,6 +429,108 @@ def create_app(init: bool = True) -> FastAPI:
             f"#{j.id} [{e.final_score}] {j.title} — {j.company} · {j.location} · {j.work_type} · {j.status}"
             for j, e in rows
         )
+
+    # ------------------------------------------------------------------ tailoring
+    preview_spawned: dict[str, float] = {}
+
+    @app.post("/api/jobs/{job_id}/tailor", response_model=TailorStartOut, status_code=202,
+              dependencies=write)
+    def start_tailoring(job_id: int, send: bool = False, session: Session = Depends(get_session)):
+        if not session.get(Job, job_id):
+            raise HTTPException(404, "job not found")
+        active = repo.active_tailoring(session, job_id, utcnow())
+        if active:
+            if send and not active.send_requested:
+                active.send_requested = True
+                repo.save_tailoring(session, active)
+            return TailorStartOut(tailoring_id=active.id, status=active.status, reused=True)
+        t = repo.create_tailoring(session, job_id, send=send)
+        _spawn_cli("tailor", str(job_id), "--tailoring-id", str(t.id), *(["--send"] if send else []))
+        return TailorStartOut(tailoring_id=t.id, status=t.status, reused=False)
+
+    @app.get("/api/jobs/{job_id}/tailorings", response_model=list[TailoringOut])
+    def list_tailorings(job_id: int, session: Session = Depends(get_session)):
+        if not session.get(Job, job_id):
+            raise HTTPException(404, "job not found")
+        return [_tailoring_out(t) for t in repo.list_tailorings(session, job_id)]
+
+    @app.get("/api/tailorings/{tid}", response_model=TailoringDetailOut)
+    def get_tailoring(tid: int, session: Session = Depends(get_session)):
+        t, job = _get_tailoring(session, tid)
+        return _tailoring_detail(t, job, env.data_dir)
+
+    @app.get("/api/tailorings/{tid}/{kind}.pdf", include_in_schema=False)
+    def tailoring_pdf(tid: int, kind: str, session: Session = Depends(get_session)):
+        if kind not in TAILOR_KINDS:
+            raise HTTPException(404)
+        t, job = _get_tailoring(session, tid)
+        return FileResponse(_tailoring_file(t, f"{kind}.pdf"), media_type="application/pdf",
+                            filename=download_name(kind, job.company), content_disposition_type="inline",
+                            headers=IMMUTABLE)
+
+    @app.get("/api/tailorings/{tid}/pages/{kind}/{n}.png", include_in_schema=False)
+    def tailoring_page(tid: int, kind: str, n: int, session: Session = Depends(get_session)):
+        if kind not in TAILOR_KINDS or n < 1:
+            raise HTTPException(404)
+        t, _ = _get_tailoring(session, tid)
+        return FileResponse(_tailoring_file(t, f"{kind}-{n}.png"), media_type="image/png", headers=IMMUTABLE)
+
+    @app.post("/api/tailorings/{tid}/send", response_model=SendOut, dependencies=write)
+    def send_tailoring_route(tid: int, session: Session = Depends(get_session)):
+        t, job = _get_tailoring(session, tid)
+        if t.status != "done":
+            raise HTTPException(409, "tailoring is not finished")
+        try:
+            send_tailoring(session, t, job, Notifier(env.openclaw_bin, env.telegram_target))
+        except NotifyError as e:
+            raise HTTPException(502, str(e)) from e
+        except (ValueError, OSError) as e:
+            raise HTTPException(409, str(e)) from e
+        return SendOut(sent=True, sent_at=t.sent_at)
+
+    def _current_hash(requested: str | None) -> tuple[str | None, str | None]:
+        if requested:
+            return requested, None
+        latex_dir = get_env().latex_dir
+        if not (latex_dir / "resume.tex").is_file():
+            return None, f"resume sources not found at {latex_dir}"
+        return latex_hash(latex_dir), None
+
+    @app.get("/api/resume/current", response_model=ResumeCurrentOut)
+    def resume_current(hash: str | None = None):
+        resume_hash, error = _current_hash(hash)
+        out = _current_out(env.data_dir, resume_hash, error)
+        if not out.ready and resume_hash and not hash and not error:
+            now = time.monotonic()
+            if now - preview_spawned.get(resume_hash, -PREVIEW_RESPAWN_SECONDS) >= PREVIEW_RESPAWN_SECONDS:
+                preview_spawned[resume_hash] = now
+                _spawn_cli("resume-preview")
+        return out
+
+    def _current_file(hash: str | None, name: str) -> FileResponse:
+        resume_hash, _ = _current_hash(hash)
+        meta = read_current(env.data_dir, resume_hash) if resume_hash else None
+        if not meta:
+            raise HTTPException(404, "current resume preview not built")
+        path = current_dir(env.data_dir, meta["hash"]) / name
+        if not path.is_file():
+            raise HTTPException(404, "file not found")
+        media = "application/pdf" if name.endswith(".pdf") else "image/png"
+        headers = IMMUTABLE if hash else NO_CACHE
+        if media == "application/pdf":
+            return FileResponse(path, media_type=media, filename="Book_Sam_Resume.pdf",
+                                content_disposition_type="inline", headers=headers)
+        return FileResponse(path, media_type=media, headers=headers)
+
+    @app.get("/api/resume/current.pdf", include_in_schema=False)
+    def resume_current_pdf(hash: str | None = None):
+        return _current_file(hash, "resume.pdf")
+
+    @app.get("/api/resume/current/pages/{n}.png", include_in_schema=False)
+    def resume_current_page(n: int, hash: str | None = None):
+        if n < 1:
+            raise HTTPException(404)
+        return _current_file(hash, f"resume-{n}.png")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
