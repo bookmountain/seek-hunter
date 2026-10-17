@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from seekhunter import repo
+from seekhunter import market, repo
 from seekhunter.config import get_env
 from seekhunter.contacts import linkedin_search_urls
 from seekhunter.db import get_session, init_db
@@ -163,6 +163,64 @@ class TailoringDetailOut(TailoringOut):
 class SendOut(BaseModel):
     sent: bool
     sent_at: datetime | None
+
+
+class CityOverviewOut(BaseModel):
+    city: str
+    total: int
+    flexible: int
+    flexible_share: float
+    work_type_mix: dict[str, int]
+    role_family_mix: dict[str, int]
+    salary_p25: float | None
+    salary_p50: float | None
+    salary_p75: float | None
+    salary_sample_size: int
+    detailed_sample_size: int
+
+
+class SkillShareOut(BaseModel):
+    skill: str
+    count: int
+    share: float
+    you_have: bool
+
+
+class CityShareOut(BaseModel):
+    city: str
+    shares: dict[str, float]
+    detailed_sample_size: int
+
+
+class CompareOut(BaseModel):
+    skills: list[str]
+    cities: list[CityShareOut]
+
+
+class GapOut(BaseModel):
+    skill: str
+    count: int
+    share: float
+    example_titles: list[str]
+    role_families: list[str]
+
+
+class TrendPointOut(BaseModel):
+    date: datetime
+    shares: dict[str, float]
+
+
+class TrendsOut(BaseModel):
+    city: str
+    skills: list[str]
+    points: list[TrendPointOut]
+
+
+class RoleFamilyOut(BaseModel):
+    role_family: str
+    count: int
+    flexible_share: float
+    top_skills: list[str]
 
 
 def _job_out(job: Job, ev: JobEvaluation, detail: bool = False) -> JobOut:
@@ -429,6 +487,58 @@ def create_app(init: bool = True) -> FastAPI:
             f"#{j.id} [{e.final_score}] {j.title} — {j.company} · {j.location} · {j.work_type} · {j.status}"
             for j, e in rows
         )
+
+    # ------------------------------------------------------------------ market insights
+    def _valid_city(city: str) -> str:
+        if city not in market.CITY_ORDER:
+            raise HTTPException(422, f"city must be one of {market.CITY_ORDER}")
+        return city
+
+    def _profile_skills() -> set[str]:
+        try:
+            return load_profile(env.resume_dir).skills
+        except FileNotFoundError:
+            return set()
+
+    def _skill_list(skills: str) -> list[str]:
+        return [s.strip() for s in skills.split(",") if s.strip()]
+
+    @app.get("/api/insights/overview", response_model=list[CityOverviewOut])
+    def insights_overview(days: int = Query(14, ge=1, le=90), session: Session = Depends(get_session)):
+        return market.overview(session, days=days)
+
+    @app.get("/api/insights/skills", response_model=list[SkillShareOut])
+    def insights_skills(city: str, days: int = Query(14, ge=1, le=90), role_family: str | None = None,
+                        session: Session = Depends(get_session)):
+        _valid_city(city)
+        return market.skill_demand(session, city, days=days, role_family=role_family,
+                                   profile_skills=_profile_skills(), top=40)
+
+    @app.get("/api/insights/compare", response_model=CompareOut)
+    def insights_compare(skills: str, days: int = Query(14, ge=1, le=90),
+                         session: Session = Depends(get_session)):
+        skill_list = _skill_list(skills)
+        rows = market.compare(session, skill_list, days=days)
+        return CompareOut(skills=skill_list, cities=[CityShareOut(**r) for r in rows])
+
+    @app.get("/api/insights/gaps", response_model=list[GapOut])
+    def insights_gaps(city: str, days: int = Query(14, ge=1, le=90), session: Session = Depends(get_session)):
+        _valid_city(city)
+        return market.gaps(session, city, days=days, profile_skills=_profile_skills(), top=30)
+
+    @app.get("/api/insights/trends", response_model=TrendsOut)
+    def insights_trends(city: str, skills: str, weeks: int = Query(8, ge=1, le=52),
+                        session: Session = Depends(get_session)):
+        _valid_city(city)
+        skill_list = _skill_list(skills)
+        points = market.trends(session, city, skill_list, weeks=weeks)
+        return TrendsOut(city=city, skills=skill_list, points=points)
+
+    @app.get("/api/insights/roles", response_model=list[RoleFamilyOut])
+    def insights_roles(city: str, days: int = Query(14, ge=1, le=90),
+                       session: Session = Depends(get_session)):
+        _valid_city(city)
+        return market.roles(session, city, days=days)
 
     # ------------------------------------------------------------------ tailoring
     preview_spawned: dict[str, float] = {}
