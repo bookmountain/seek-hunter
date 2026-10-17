@@ -3,8 +3,13 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
-from seekhunter.domain import JobData, dedupe_key
+from seekhunter.domain import JobData, company_key, dedupe_key
 from seekhunter.models import (
+    Application,
+    ApplicationEvent,
+    Contact,
+    ContactJob,
+    Interaction,
     Job,
     JobEvaluation,
     MarketJob,
@@ -14,6 +19,7 @@ from seekhunter.models import (
     SearchProfile,
     SettingsRow,
     Tailoring,
+    utcnow,
 )
 from seekhunter.settings_model import AppSettings
 
@@ -380,3 +386,342 @@ def active_tailoring(session: Session, job_id: int, now: datetime) -> Tailoring 
             active = t
     session.commit()
     return active
+
+
+# ---------------------------------------------------------------------------- applications
+
+
+def latest_done_tailoring(session: Session, job_id: int) -> Tailoring | None:
+    return session.exec(
+        select(Tailoring).where(Tailoring.job_id == job_id, Tailoring.status == "done")
+        .order_by(col(Tailoring.created_at).desc(), col(Tailoring.id).desc())
+    ).first()
+
+
+def get_application_by_job(session: Session, job_id: int) -> Application | None:
+    return session.exec(select(Application).where(Application.job_id == job_id)).first()
+
+
+def create_application(session: Session, *, job_id: int | None, company: str, title: str,
+                       url: str | None = None, location: str | None = None,
+                       applied_at: datetime | None = None, tailoring_id: int | None = None,
+                       stage: str = "applied", source: str = "seekhunter", notes: str = "") -> Application:
+    now = utcnow()
+    applied_at = applied_at or now
+    app = Application(job_id=job_id, company=company, company_key=company_key(company), title=title, url=url,
+                      location=location, applied_at=applied_at, tailoring_id=tailoring_id, stage=stage,
+                      source=source, notes=notes, created_at=now, updated_at=now)
+    session.add(app)
+    session.commit()
+    session.refresh(app)
+    session.add(ApplicationEvent(application_id=app.id, kind="created", to_stage=stage, at=applied_at))
+    session.commit()
+    return app
+
+
+def ensure_application_for_job(session: Session, job: Job, now: datetime | None = None) -> Application:
+    """Idempotent: called when a job's status is set to `applied`. Reuses any existing application
+    for this job rather than creating a duplicate."""
+    existing = get_application_by_job(session, job.id)
+    if existing:
+        return existing
+    tailoring = latest_done_tailoring(session, job.id)
+    return create_application(
+        session, job_id=job.id, company=job.company, title=job.title, url=job.url, location=job.location,
+        applied_at=now or utcnow(), tailoring_id=tailoring.id if tailoring else None)
+
+
+def update_application(session: Session, app: Application, *, stage: str | None = None,
+                       notes: str | None = None, applied_at: datetime | None = None,
+                       tailoring_id: int | None = None) -> Application:
+    now = utcnow()
+    if stage is not None and stage != app.stage:
+        session.add(ApplicationEvent(application_id=app.id, kind="stage_changed", from_stage=app.stage,
+                                     to_stage=stage, at=now))
+        app.stage = stage
+    if notes is not None:
+        app.notes = notes
+    if applied_at is not None:
+        app.applied_at = applied_at
+    if tailoring_id is not None:
+        app.tailoring_id = tailoring_id
+    app.updated_at = now
+    session.add(app)
+    session.commit()
+    session.refresh(app)
+    return app
+
+
+def delete_application(session: Session, app: Application) -> None:
+    for ev in session.exec(select(ApplicationEvent).where(ApplicationEvent.application_id == app.id)).all():
+        session.delete(ev)
+    for interaction in session.exec(
+        select(Interaction).where(Interaction.application_id == app.id)
+    ).all():
+        interaction.application_id = None
+        session.add(interaction)
+    session.delete(app)
+    session.commit()
+
+
+def list_applications(session: Session, stage: str | None = None, q: str | None = None) -> list[Application]:
+    stmt = select(Application)
+    if stage:
+        stmt = stmt.where(Application.stage == stage)
+    if q:
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{escaped}%"
+        stmt = stmt.where(or_(col(Application.title).ilike(like, escape="\\"),
+                              col(Application.company).ilike(like, escape="\\")))
+    return list(session.exec(stmt.order_by(col(Application.applied_at).desc())).all())
+
+
+def applications_by_company_keys(session: Session, keys: set[str]) -> dict[str, list[Application]]:
+    """Batch-loads applications grouped by `company_key`, newest first within each group — one query
+    regardless of how many jobs/companies are being enriched (used by the jobs list endpoint)."""
+    keys = {k for k in keys if k}
+    if not keys:
+        return {}
+    rows = session.exec(
+        select(Application).where(col(Application.company_key).in_(keys))
+        .order_by(col(Application.applied_at).desc())
+    ).all()
+    out: dict[str, list[Application]] = {}
+    for a in rows:
+        out.setdefault(a.company_key, []).append(a)
+    return out
+
+
+def applications_by_job_ids(session: Session, job_ids: list[int]) -> dict[int, Application]:
+    if not job_ids:
+        return {}
+    rows = session.exec(select(Application).where(col(Application.job_id).in_(job_ids))).all()
+    return {a.job_id: a for a in rows}
+
+
+def stage_counts(session: Session) -> dict[str, int]:
+    rows = session.exec(select(Application.stage, func.count()).group_by(Application.stage)).all()
+    return dict(rows)
+
+
+def recent_applications(session: Session, since: datetime) -> list[Application]:
+    return list(session.exec(
+        select(Application).where(Application.applied_at >= since)
+        .order_by(col(Application.applied_at).desc())).all())
+
+
+def follow_ups_due(session: Session, now: datetime, days: int = 7) -> list[Application]:
+    """Applications still in `applied` with no activity (event or interaction) in the last `days`
+    days, oldest-applied first."""
+    cutoff = now - timedelta(days=days)
+    apps = session.exec(
+        select(Application).where(Application.stage == "applied", Application.applied_at <= cutoff)
+    ).all()
+    due = []
+    for a in apps:
+        last_event = session.exec(
+            select(ApplicationEvent).where(ApplicationEvent.application_id == a.id)
+            .order_by(col(ApplicationEvent.at).desc())
+        ).first()
+        last_interaction = session.exec(
+            select(Interaction).where(Interaction.application_id == a.id)
+            .order_by(col(Interaction.at).desc())
+        ).first()
+        last_activity = max(
+            (x.at for x in (last_event, last_interaction) if x is not None), default=a.applied_at)
+        if last_activity <= cutoff:
+            due.append(a)
+    due.sort(key=lambda a: a.applied_at)
+    return due
+
+
+# ---------------------------------------------------------------------------- contacts
+
+
+def upsert_contact(session: Session, *, name: str, company: str = "", role: str | None = None,
+                   phone: str | None = None, email: str | None = None, linkedin: str | None = None,
+                   notes: str | None = None) -> Contact:
+    """Upserts matched by (lower(name), company_key): merges in any missing phone/email/linkedin/role
+    rather than overwriting fields the existing contact already has."""
+    now = utcnow()
+    key = company_key(company)
+    existing = session.exec(
+        select(Contact).where(func.lower(Contact.name) == name.lower(), Contact.company_key == key)
+    ).first()
+    if existing:
+        existing.phone = existing.phone or phone
+        existing.email = existing.email or email
+        existing.linkedin = existing.linkedin or linkedin
+        existing.role = existing.role or role
+        existing.company = existing.company or company
+        if notes:
+            existing.notes = notes
+        existing.updated_at = now
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        return existing
+    contact = Contact(name=name, company=company, company_key=key, role=role, phone=phone, email=email,
+                      linkedin=linkedin, notes=notes or "", created_at=now, updated_at=now)
+    session.add(contact)
+    session.commit()
+    session.refresh(contact)
+    return contact
+
+
+def link_contact_job(session: Session, contact_id: int, job_id: int) -> None:
+    existing = session.exec(
+        select(ContactJob).where(ContactJob.contact_id == contact_id, ContactJob.job_id == job_id)
+    ).first()
+    if existing:
+        return
+    session.add(ContactJob(contact_id=contact_id, job_id=job_id))
+    session.commit()
+
+
+def list_contacts(session: Session, q: str | None = None) -> list[Contact]:
+    stmt = select(Contact)
+    if q:
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{escaped}%"
+        stmt = stmt.where(or_(col(Contact.name).ilike(like, escape="\\"),
+                              col(Contact.company).ilike(like, escape="\\")))
+    return list(session.exec(stmt.order_by(col(Contact.name))).all())
+
+
+def contact_stats(session: Session, contact_id: int) -> dict:
+    interactions = session.exec(
+        select(Interaction).where(Interaction.contact_id == contact_id)
+        .order_by(col(Interaction.at).desc())
+    ).all()
+    job_ids = [cj.job_id for cj in session.exec(
+        select(ContactJob).where(ContactJob.contact_id == contact_id)).all()]
+    application_count = 0
+    if job_ids:
+        application_count = session.exec(
+            select(func.count()).select_from(Application).where(col(Application.job_id).in_(job_ids))
+        ).one()
+    return {
+        "last_interaction": interactions[0].at if interactions else None,
+        "interaction_count": len(interactions),
+        "job_count": len(job_ids),
+        "application_count": application_count,
+    }
+
+
+def interactions_for_contact(session: Session, contact_id: int) -> list[Interaction]:
+    return list(session.exec(
+        select(Interaction).where(Interaction.contact_id == contact_id)
+        .order_by(col(Interaction.at).desc())).all())
+
+
+def interactions_for_application(session: Session, application_id: int) -> list[Interaction]:
+    return list(session.exec(
+        select(Interaction).where(Interaction.application_id == application_id)
+        .order_by(col(Interaction.at).desc())).all())
+
+
+def recent_interactions(session: Session, since: datetime) -> list[Interaction]:
+    return list(session.exec(
+        select(Interaction).where(Interaction.at >= since).order_by(col(Interaction.at).desc())).all())
+
+
+def jobs_for_contact(session: Session, contact_id: int) -> list[Job]:
+    job_ids = [cj.job_id for cj in session.exec(
+        select(ContactJob).where(ContactJob.contact_id == contact_id)).all()]
+    if not job_ids:
+        return []
+    return list(session.exec(select(Job).where(col(Job.id).in_(job_ids))).all())
+
+
+def applications_for_contact(session: Session, contact_id: int) -> list[Application]:
+    jobs = jobs_for_contact(session, contact_id)
+    job_ids = [j.id for j in jobs]
+    if not job_ids:
+        return []
+    return list(session.exec(select(Application).where(col(Application.job_id).in_(job_ids))).all())
+
+
+def create_interaction(session: Session, *, contact_id: int | None = None,
+                       application_id: int | None = None, kind: str, at: datetime | None = None,
+                       note: str = "") -> Interaction:
+    interaction = Interaction(contact_id=contact_id, application_id=application_id, kind=kind,
+                              at=at or utcnow(), note=note)
+    session.add(interaction)
+    session.commit()
+    session.refresh(interaction)
+    return interaction
+
+
+def delete_interaction(session: Session, interaction: Interaction) -> None:
+    session.delete(interaction)
+    session.commit()
+
+
+def list_companies(session: Session, q: str | None = None) -> list[dict]:
+    stmt = select(Application)
+    if q:
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        stmt = stmt.where(col(Application.company).ilike(f"%{escaped}%", escape="\\"))
+    apps = list(session.exec(stmt).all())
+    grouped: dict[str, list[Application]] = {}
+    for a in apps:
+        grouped.setdefault(a.company_key, []).append(a)
+
+    results = []
+    for key, group in grouped.items():
+        group.sort(key=lambda a: a.applied_at, reverse=True)
+        contacts = session.exec(select(Contact).where(Contact.company_key == key)).all()
+        results.append({
+            "company": group[0].company, "company_key": key, "application_count": len(group),
+            "last_applied_at": group[0].applied_at,
+            "applications": [
+                {"id": a.id, "title": a.title, "applied_at": a.applied_at, "stage": a.stage,
+                 "tailoring_id": a.tailoring_id} for a in group],
+            "contacts": [{"id": c.id, "name": c.name} for c in contacts],
+        })
+    results.sort(key=lambda r: r["last_applied_at"], reverse=True)
+    return results
+
+
+def history_timeline(session: Session, limit: int = 100) -> list[dict]:
+    """Unified feed of `application_events` + `interactions`, newest first."""
+    events = list(session.exec(
+        select(ApplicationEvent).order_by(col(ApplicationEvent.at).desc()).limit(limit)).all())
+    interactions = list(session.exec(
+        select(Interaction).order_by(col(Interaction.at).desc()).limit(limit)).all())
+
+    app_ids = {e.application_id for e in events} | {i.application_id for i in interactions
+                                                     if i.application_id is not None}
+    apps = {}
+    if app_ids:
+        apps = {a.id: a for a in session.exec(
+            select(Application).where(col(Application.id).in_(app_ids))).all()}
+    contact_ids = {i.contact_id for i in interactions if i.contact_id is not None}
+    contacts = {}
+    if contact_ids:
+        contacts = {c.id: c for c in session.exec(
+            select(Contact).where(col(Contact.id).in_(contact_ids))).all()}
+
+    combined = []
+    for e in events:
+        app = apps.get(e.application_id)
+        combined.append({
+            "at": e.at, "type": "event", "kind": e.kind,
+            "company": app.company if app else None, "title": app.title if app else None,
+            "contact_name": None, "application_id": e.application_id, "contact_id": None,
+            "note": e.note, "from_stage": e.from_stage, "to_stage": e.to_stage,
+        })
+    for i in interactions:
+        app = apps.get(i.application_id) if i.application_id is not None else None
+        contact = contacts.get(i.contact_id) if i.contact_id is not None else None
+        combined.append({
+            "at": i.at, "type": "interaction", "kind": i.kind,
+            "company": app.company if app else (contact.company if contact else None),
+            "title": app.title if app else None,
+            "contact_name": contact.name if contact else None,
+            "application_id": i.application_id, "contact_id": i.contact_id,
+            "note": i.note, "from_stage": None, "to_stage": None,
+        })
+    combined.sort(key=lambda x: x["at"], reverse=True)
+    return combined[:limit]

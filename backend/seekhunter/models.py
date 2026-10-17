@@ -164,3 +164,73 @@ class Tailoring(SQLModel, table=True):
     out_dir: str | None = None
     send_requested: bool = False
     sent_at: NaiveDatetime | None = None
+
+
+class Application(SQLModel, table=True):
+    __tablename__ = "applications"
+    __table_args__ = (UniqueConstraint("job_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int | None = Field(default=None, foreign_key="jobs.id", index=True)
+    company: str = ""
+    company_key: str = Field(index=True)
+    title: str = ""
+    url: str | None = None
+    location: str | None = None
+    applied_at: NaiveDatetime = Field(default_factory=utcnow, index=True)
+    tailoring_id: int | None = Field(default=None, foreign_key="tailorings.id")
+    stage: str = "applied"
+    source: str = "seekhunter"  # seekhunter | manual
+    notes: str = ""
+    created_at: NaiveDatetime = Field(default_factory=utcnow)
+    updated_at: NaiveDatetime = Field(default_factory=utcnow)
+
+
+class Contact(SQLModel, table=True):
+    __tablename__ = "contacts"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    company: str = ""
+    company_key: str = Field(index=True)
+    role: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    linkedin: str | None = None
+    notes: str = ""
+    created_at: NaiveDatetime = Field(default_factory=utcnow)
+    updated_at: NaiveDatetime = Field(default_factory=utcnow)
+
+
+class ContactJob(SQLModel, table=True):
+    __tablename__ = "contact_jobs"
+    __table_args__ = (UniqueConstraint("contact_id", "job_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    contact_id: int = Field(foreign_key="contacts.id", index=True)
+    job_id: int = Field(foreign_key="jobs.id", index=True)
+    created_at: NaiveDatetime = Field(default_factory=utcnow)
+
+
+class Interaction(SQLModel, table=True):
+    __tablename__ = "interactions"
+
+    id: int | None = Field(default=None, primary_key=True)
+    contact_id: int | None = Field(default=None, foreign_key="contacts.id", index=True)
+    application_id: int | None = Field(default=None, foreign_key="applications.id", index=True)
+    kind: str  # call | email | linkedin_invite | linkedin_accepted | linkedin_message | meeting | note
+    at: NaiveDatetime = Field(default_factory=utcnow, index=True)
+    note: str = ""
+    created_at: NaiveDatetime = Field(default_factory=utcnow)
+
+
+class ApplicationEvent(SQLModel, table=True):
+    __tablename__ = "application_events"
+
+    id: int | None = Field(default=None, primary_key=True)
+    application_id: int = Field(foreign_key="applications.id", index=True)
+    kind: str  # created | stage_changed | note
+    from_stage: str | None = None
+    to_stage: str | None = None
+    at: NaiveDatetime = Field(default_factory=utcnow, index=True)
+    note: str = ""

@@ -1,4 +1,11 @@
-from seekhunter.domain import JobData, dedupe_key, html_to_lines, html_to_text, normalize_work_type
+from seekhunter.domain import (
+    JobData,
+    company_key,
+    dedupe_key,
+    html_to_lines,
+    html_to_text,
+    normalize_work_type,
+)
 
 
 def test_normalize_work_type():
@@ -50,3 +57,14 @@ def test_jobdata_filter_text_uses_lines_and_falls_back_to_teaser():
 def test_dedupe_key_strips_state_suffix():
     key = dedupe_key("Azure Cloud Developer", "Peoplebank Australia SA")
     assert key == dedupe_key("Azure Cloud Developer", "Peoplebank")
+
+
+def test_company_key_normalizes_suffixes_and_punctuation():
+    assert company_key("Acme Pty Ltd") == company_key("ACME")
+    assert company_key("Robert Walters Australia") == company_key("Robert Walters")
+    assert company_key("") == ""
+    assert company_key(None) == ""
+
+
+def test_dedupe_key_reuses_company_key():
+    assert dedupe_key("Dev", "Acme Pty Ltd") == f"dev|{company_key('Acme Pty Ltd')}"

@@ -9,6 +9,11 @@ FLEXIBLE_WORK_TYPES = {"part_time", "contract", "casual"}
 
 _COMPANY_SUFFIXES = re.compile(r"\b(pty|ltd|limited|inc|group|australia|au|sa|nsw|vic|qld|wa|tas|act|nt)\b")
 
+APPLICATION_STAGES = ("applied", "screening", "interview", "offer", "rejected", "withdrawn", "no_response")
+INTERACTION_KINDS = ("call", "email", "linkedin_invite", "linkedin_accepted", "linkedin_message", "meeting",
+                     "note")
+APPLICATION_EVENT_KINDS = ("created", "stage_changed", "note")
+
 
 def normalize_work_type(label: str | None) -> str:
     text = (label or "").lower()
@@ -42,9 +47,16 @@ def _norm(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
 
+def company_key(company: str) -> str:
+    """Normalises a company name for matching/grouping: lowercase, suffixes (pty/ltd/state names/etc.)
+    and punctuation stripped. Used both for job deduping (`dedupe_key`) and for application/contact
+    grouping ("has this company already got my resume?")."""
+    company_clean = _COMPANY_SUFFIXES.sub(" ", (company or "").lower())
+    return _norm(company_clean)
+
+
 def dedupe_key(title: str, company: str) -> str:
-    company_clean = _COMPANY_SUFFIXES.sub(" ", company.lower())
-    return f"{_norm(title)}|{_norm(company_clean)}"
+    return f"{_norm(title)}|{company_key(company)}"
 
 
 @dataclass
