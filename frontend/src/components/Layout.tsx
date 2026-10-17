@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "./NotificationBell";
 import { TokenDialog } from "./TokenDialog";
 
 const links = [
@@ -42,13 +43,14 @@ export function Layout() {
       >
         Skip to content
       </a>
-      <header className="paper z-30 border-b-2 border-ink">
+      <header className="paper relative z-30 border-b-2 border-ink">
         <div className="flex flex-wrap items-center gap-x-8 gap-y-2 px-5 pt-3 pb-2 lg:h-14 lg:flex-nowrap lg:px-6 lg:py-0">
           <NavLink to="/" aria-label="SeekHunter, jobs" className="shrink-0">
             <Wordmark />
           </NavLink>
-          <div className="ml-auto flex items-center gap-5 lg:order-last">
+          <div className="ml-auto flex items-center gap-3 sm:gap-5 lg:order-last">
             <span className="kicker hidden text-ink-muted xl:inline">Adelaide · {dateline}</span>
+            <NotificationBell />
             <TokenDialog />
           </div>
           <nav

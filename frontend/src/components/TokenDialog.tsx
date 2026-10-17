@@ -18,7 +18,11 @@ export function TokenDialog() {
         )}
       >
         <span aria-hidden className={cn("size-[7px]", hasToken ? "bg-ink" : "border border-blue")} />
-        {hasToken ? "Token set" : "Set write token"}
+        {hasToken ? "Token set" : (
+          <>
+            Set<span className="hidden sm:inline"> write</span> token
+          </>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useEffect, useRef } from "react";
-import { since, sourceName } from "@/lib/format";
+import { cityName, since, sourceName } from "@/lib/format";
 import type { Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Score } from "./Score";
@@ -141,6 +141,9 @@ export function JobList({
                     <span className="whitespace-nowrap">
                       <span className="text-ink-faint"> · </span>
                       <span className="font-mono text-[11.5px]">{sourceName(j.source)}</span>
+                      {j.city && j.city !== "adelaide" && (
+                        <span className="ml-2 font-mono text-[10.5px] tracking-[0.1em] text-ink uppercase">{cityName(j.city)}</span>
+                      )}
                       {j.contact_phone && (
                         <span
                           title={`Recruiter phone: ${j.contact_phone}`}

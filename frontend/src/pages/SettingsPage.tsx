@@ -41,6 +41,14 @@ const TOGGLES: [keyof AppSettings, string][] = [
   ["exclude_fintech", "Exclude fintech"],
 ];
 
+const NOTIFY_CITIES: [string, string][] = [
+  ["adelaide", "Adelaide"],
+  ["melbourne", "Melbourne"],
+  ["sydney", "Sydney"],
+  ["perth", "Perth"],
+  ["brisbane", "Brisbane"],
+];
+
 const parseList = (text: string): string[] =>
   text
     .split("\n")
@@ -116,6 +124,38 @@ export function SettingsPage() {
       </section>
 
       <section className="mt-10">
+        <SectionHead>Telegram notification cities</SectionHead>
+        <fieldset className="mt-4">
+          <legend className="sr-only">Telegram notification cities</legend>
+          <div className="flex flex-wrap gap-2">
+            {NOTIFY_CITIES.map(([c, label]) => {
+              const cur = s.notify_cities ?? [];
+              const on = cur.includes(c);
+              return (
+                <label
+                  key={c}
+                  className={`inline-flex h-9 cursor-pointer items-center gap-2 border px-3 font-mono text-[12px] tracking-[0.06em] uppercase ${
+                    on ? "border-ink text-ink" : "border-input text-ink-muted hover:border-ink"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-3.5 accent-[var(--blue)]"
+                    checked={on}
+                    onChange={() =>
+                      setS({ ...s, notify_cities: on ? cur.filter((x) => x !== c) : [...cur, c] })
+                    }
+                  />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[13px] text-ink-muted">Other cities still appear on the website and in the bell.</p>
+        </fieldset>
+      </section>
+
+      <section className="mt-10">
         <SectionHead>Weights &amp; limits</SectionHead>
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
           {WEIGHTS.map(([k, label]) =>
@@ -123,6 +163,7 @@ export function SettingsPage() {
           )}
           {numberField("max-notify", "Max notified per run", s.max_notify_per_run, (n) => setS({ ...s, max_notify_per_run: n }))}
           {numberField("max-pages", "Max pages per search", s.max_pages_per_search, (n) => setS({ ...s, max_pages_per_search: n }))}
+          {numberField("other-pages", "Max pages, other cities", s.other_city_max_pages ?? 2, (n) => setS({ ...s, other_city_max_pages: n }))}
         </div>
       </section>
 

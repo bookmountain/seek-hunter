@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "@/lib/api";
@@ -12,6 +12,7 @@ const job = (id: number, title: string, extra: Partial<Job> = {}): Job => ({
   title,
   company: `Company ${id}`,
   location: "Adelaide SA",
+  city: "adelaide",
   work_type: "contract",
   salary_label: null,
   listed_at: null,
@@ -67,6 +68,10 @@ describe("JobsPage split view", () => {
   beforeEach(() => {
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     vi.spyOn(api, "tailorings").mockResolvedValue([]);
+    vi.spyOn(api, "jobCities").mockResolvedValue([
+      { city: "adelaide", count: 92 },
+      { city: "melbourne", count: 41 },
+    ]);
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -100,5 +105,21 @@ describe("JobsPage split view", () => {
 
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
+  });
+
+  it("sends city= from the URL filter and tags non-Adelaide rows", async () => {
+    const jobs = vi.spyOn(api, "jobs").mockResolvedValue([job(7, "Melbourne Dev", { city: "melbourne" })]);
+    renderPage("/?city=melbourne");
+    expect(await screen.findByRole("button", { name: /Melbourne Dev/ })).toBeTruthy();
+    expect(jobs).toHaveBeenCalledWith(expect.objectContaining({ city: "melbourne" }));
+    expect(within(screen.getByRole("button", { name: /Melbourne Dev/ })).getByText("Melbourne")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Location" }).textContent).toContain("Melbourne 41");
+  });
+
+  it("omits city when All locations", async () => {
+    const jobs = vi.spyOn(api, "jobs").mockResolvedValue(JOBS);
+    renderPage();
+    await screen.findByRole("button", { name: /Frontend Developer/ });
+    expect(jobs.mock.calls[0][0].city).toBeUndefined();
   });
 });

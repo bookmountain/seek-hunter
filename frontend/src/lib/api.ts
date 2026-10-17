@@ -1,5 +1,7 @@
 import type {
   AppSettings,
+  CityCount,
+  NotificationsResult,
   Application,
   ApplicationCreate,
   ApplicationStage,
@@ -76,8 +78,12 @@ const qs = (params: Record<string, string | undefined>) => {
 };
 
 export const api = {
-  jobs: (p: { view?: string; status?: string; work_type?: string; source?: string; q?: string }) =>
+  jobs: (p: { view?: string; status?: string; work_type?: string; source?: string; q?: string; city?: string }) =>
     request<Job[]>("GET", `/api/jobs${qs(p)}`),
+  jobCities: (view = "active") => request<CityCount[]>("GET", `/api/jobs/cities${qs({ view })}`),
+  notifications: (limit = 20) => request<NotificationsResult>("GET", `/api/notifications${qs({ limit: String(limit) })}`),
+  markNotificationsRead: (limit = 20) =>
+    request<NotificationsResult>("POST", `/api/notifications/read${qs({ limit: String(limit) })}`),
   job: (id: number) => request<JobDetail>("GET", `/api/jobs/${id}`),
   patchJob: (id: number, body: { status?: JobStatus; notes?: string }) =>
     request<Job>("PATCH", `/api/jobs/${id}`, body),

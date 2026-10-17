@@ -19,6 +19,17 @@ export const WORK_TYPE_CAPS: Record<WorkType, string> = {
   unknown: "Type n/a",
 };
 
+export const CITY_NAME: Record<string, string> = {
+  adelaide: "Adelaide",
+  melbourne: "Melbourne",
+  sydney: "Sydney",
+  perth: "Perth",
+  brisbane: "Brisbane",
+  other: "Other",
+};
+
+export const cityName = (c: string | null | undefined) => (c ? (CITY_NAME[c] ?? c) : "");
+
 export const sourceName = (s: Job["source"]) => (s === "seek" ? "SEEK" : "Jora");
 
 /** Relative age for status lines, e.g. "just now", "12m ago", "2h ago", "3d ago". */

@@ -1,5 +1,6 @@
 export type WorkType = "full_time" | "part_time" | "contract" | "casual" | "unknown";
 export type JobStatus = "new" | "saved" | "applied" | "hidden";
+export type JobCity = "adelaide" | "melbourne" | "sydney" | "perth" | "brisbane" | "other";
 
 export interface Job {
   id: number;
@@ -7,6 +8,8 @@ export interface Job {
   title: string;
   company: string;
   location: string;
+  /** Normalised city the job is in. */
+  city: JobCity;
   work_type: WorkType;
   salary_label: string | null;
   listed_at: string | null;
@@ -89,6 +92,11 @@ export interface AppSettings {
   max_pages_per_search: number;
   max_notify_per_run: number;
   max_insights_per_run: number;
+  /** Cities that trigger Telegram alerts (others still show on the site and in the bell). */
+  notify_cities: string[];
+  other_city_max_pages: number;
+  /** Server-owned bell marker; preserved by the server on PUT. */
+  notifications_read_at: string | null;
 }
 
 export interface SourceStatus {
@@ -381,4 +389,31 @@ export interface HistoryEvent {
   note: string;
   from_stage: string | null;
   to_stage: string | null;
+}
+
+// ---------------------------------------------------------------- notifications
+
+export interface CityCount {
+  city: JobCity;
+  count: number;
+}
+
+export interface NotificationItem {
+  type: "job" | "tailoring" | "follow_up";
+  at: string;
+  title: string;
+  subtitle: string;
+  city?: JobCity | null;
+  score?: number | null;
+  job_id?: number | null;
+  tailoring_id?: number | null;
+  application_id?: number | null;
+  unread: boolean;
+}
+
+export interface NotificationsResult {
+  read_at: string;
+  unread_count: number;
+  by_city: CityCount[];
+  items: NotificationItem[];
 }

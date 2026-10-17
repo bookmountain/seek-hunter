@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DESKTOP_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { api, errMsg } from "@/lib/api";
+import { cityName } from "@/lib/format";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,7 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
   const navigate = useNavigate();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const selectedId = Number(searchParams.get("job")) || null;
+  const city = searchParams.get("city") ?? "";
   // True when the open detail was pushed onto history from the list, so "Back" can pop it.
   const pushedRef = useRef(false);
   const listScrollRef = useRef(0);
@@ -43,7 +45,24 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
     work_type: workType === ALL ? undefined : workType,
     status: status === ALL ? undefined : status,
     source: source === ALL ? undefined : source,
+    city: city || undefined,
   };
+  const { data: cities = [] } = useQuery({ queryKey: ["job-cities", view], queryFn: () => api.jobCities(view) });
+  const cityOptions: [string, string][] = [
+    [ALL, "All locations"],
+    ...cities.map((c): [string, string] => [c.city, `${cityName(c.city)} ${c.count}`]),
+    ...(city && !cities.some((c) => c.city === city) ? [[city, cityName(city)] as [string, string]] : []),
+  ];
+  const setCity = (v: string) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (v === ALL) next.delete("city");
+        else next.set("city", v);
+        return next;
+      },
+      { replace: true },
+    );
   const { data = [], isLoading, error } = useQuery({ queryKey: ["jobs", params], queryFn: () => api.jobs(params) });
 
   const setJob = useCallback(
@@ -104,7 +123,7 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
 
   const select = (value: string, onChange: (v: string) => void, options: [string, string][], label: string) => (
     <Select value={value} onValueChange={(v) => onChange(v as string)} items={Object.fromEntries(options)}>
-      <SelectTrigger className="min-w-0 flex-1 basis-0 sm:w-36 sm:flex-none sm:basis-auto" aria-label={label}>
+      <SelectTrigger className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:w-[8.25rem] sm:flex-none sm:basis-auto" aria-label={label}>
         <SelectValue placeholder={label} />
       </SelectTrigger>
       <SelectContent>
@@ -135,12 +154,13 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Input
-              className="w-full sm:w-60"
+              className="w-full sm:w-52"
               placeholder="Search title or company"
               aria-label="Search title or company"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
+            {select(city || ALL, setCity, cityOptions, "Location")}
             {select(workType, setWorkType, [[ALL, "All types"], ["part_time", "Part time"], ["contract", "Contract"], ["casual", "Casual"], ["full_time", "Full time"]], "Work type")}
             {view === "active" &&
               select(status, setStatus, [[ALL, "Any status"], ["new", "New"], ["saved", "Saved"], ["applied", "Applied"], ["hidden", "Hidden"]], "Status")}

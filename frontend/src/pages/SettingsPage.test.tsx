@@ -25,6 +25,9 @@ const SETTINGS: AppSettings = {
   max_pages_per_search: 3,
   max_notify_per_run: 20,
   max_insights_per_run: 30,
+  notify_cities: ["adelaide"],
+  other_city_max_pages: 2,
+  notifications_read_at: null,
 };
 
 function renderPage() {
@@ -54,5 +57,18 @@ describe("SettingsPage list textareas", () => {
     }
 
     expect(textarea.value).toBe(typed);
+  });
+
+  it("toggling a notify city saves notify_cities with the full settings PUT", async () => {
+    vi.spyOn(api, "settings").mockResolvedValue(SETTINGS);
+    const save = vi.spyOn(api, "saveSettings").mockResolvedValue({ ...SETTINGS, notify_cities: ["adelaide", "melbourne"] });
+    const { getByRole, getAllByRole, findByRole, getByText } = renderPage();
+    const melb = await findByRole("checkbox", { name: "Melbourne" });
+    expect((getByRole("checkbox", { name: "Adelaide" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(melb);
+    expect((melb as HTMLInputElement).checked).toBe(true);
+    expect(getByText("Other cities still appear on the website and in the bell.")).toBeTruthy();
+    fireEvent.click(getAllByRole("button", { name: "Save settings" })[0]);
+    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ notify_cities: ["adelaide", "melbourne"], defence_employers: ["Existing Co"] })));
   });
 });

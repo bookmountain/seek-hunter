@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errMsg } from "@/lib/api";
-import { since, sourceName } from "@/lib/format";
+import { cityName, since, sourceName } from "@/lib/format";
 import type { Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CompetitionBlock } from "./CompetitionBlock";
@@ -94,6 +94,12 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
       <div className="max-w-[68ch]">
         <p className="kicker flex flex-wrap gap-x-3 gap-y-1 text-ink-muted">
           <span>{sourceName(view.source)}</span>
+          {view.city && (
+            <>
+              <span aria-hidden>/</span>
+              <span className={view.city === "adelaide" ? undefined : "text-ink"}>{cityName(view.city)}</span>
+            </>
+          )}
           <span aria-hidden>/</span>
           <span>No. {view.id}</span>
           <span aria-hidden>/</span>
