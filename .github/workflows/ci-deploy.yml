@@ -1,0 +1,75 @@
+name: CI and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seek-hunter-main
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Backend lint and tests
+        working-directory: backend
+        run: |
+          uv sync --frozen
+          uv run ruff check .
+          uv run pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend tests and build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 3
+
+  deploy:
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, seek-hunter]
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://seekhunter.bookmountain.work
+    env:
+      TARGET: root@192.168.4.50
+      SSH_OPTS: -i /home/book/.ssh/seekhunter_deploy -o StrictHostKeyChecking=accept-new
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Sync app and resume
+        run: |
+          rsync -az --delete -e "ssh $SSH_OPTS" \
+            --exclude '.git/' --exclude '.github/' --exclude 'backend/.venv/' --exclude 'backend/data/' \
+            --exclude 'frontend/node_modules/' --exclude '.env' \
+            ./ "$TARGET:/opt/seek-hunter/app/"
+          rsync -az --delete -e "ssh $SSH_OPTS" /work/book-cv/latex/sections/ "$TARGET:/opt/seek-hunter/book-cv/sections/"
+      - name: Install and restart
+        run: ssh $SSH_OPTS "$TARGET" 'bash /opt/seek-hunter/app/deploy/deploy.sh'
+      - name: Health check from runner
+        run: curl -fsS http://192.168.4.50:8090/api/health
