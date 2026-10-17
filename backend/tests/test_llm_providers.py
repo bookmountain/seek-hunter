@@ -37,7 +37,9 @@ def test_anthropic_success_uses_haiku_and_schema():
 
 def test_anthropic_api_error_becomes_unavailable():
     req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-    err = anthropic.APIStatusError("credit balance too low", response=httpx.Response(400, request=req), body=None)
+    err = anthropic.APIStatusError(
+        "credit balance too low", response=httpx.Response(400, request=req), body=None
+    )
     p = AnthropicProvider("k", client=SimpleNamespace(messages=FakeMessages(error=err)))
     with pytest.raises(LLMUnavailable):
         p.score_batch(PROFILE, JOBS)

@@ -23,7 +23,8 @@ class AnthropicProvider:
                 messages=[{"role": "user", "content": user}],
                 output_format=BatchFit,
             )
-        except anthropic.APIError as e:  # 402 billing, 400 low credit, 401/403, 429 after retries, 5xx, network
+        except anthropic.APIError as e:
+            # 402 billing, 400 low credit, 401/403, 429 after retries, 5xx, network
             raise LLMUnavailable(f"anthropic: {e}") from e
         if response.parsed_output is None:
             raise LLMUnavailable("anthropic: no parsed output")

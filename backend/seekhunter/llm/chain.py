@@ -13,7 +13,9 @@ class LLMChain:
         self.providers = providers
         self._dead: set[str] = set()
 
-    def score_batch(self, profile: Profile, jobs: list[LLMJobInput]) -> tuple[dict[str, LLMScore], str | None]:
+    def score_batch(
+        self, profile: Profile, jobs: list[LLMJobInput]
+    ) -> tuple[dict[str, LLMScore], str | None]:
         for provider in self.providers:
             if provider.name in self._dead:
                 continue
