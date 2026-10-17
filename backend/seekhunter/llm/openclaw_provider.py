@@ -48,23 +48,36 @@ class OpenClawProvider:
 
     def score_batch(self, profile: Profile, jobs: list[LLMJobInput]) -> dict[str, LLMScore]:
         system, user = build_prompt(profile, jobs)
-        prompt = f"{system}\n\n{user}"
-        if len(prompt.encode()) > MAX_PROMPT_BYTES:
-            raise LLMUnavailable("openclaw: prompt too large for argv")
-        cmd = [
-            self.bin_path, "agent", "--agent", self.agent,
-            "--session-id", f"seekhunter-{uuid.uuid4().hex[:12]}",
-            "--thinking", "low", "--json", "-m", prompt,
-        ]
-        try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
-        except (OSError, subprocess.TimeoutExpired) as e:
-            raise LLMUnavailable(f"openclaw: {e}") from e
-        if proc.returncode != 0:
-            raise LLMUnavailable(f"openclaw exit {proc.returncode}: {proc.stderr[-300:]}")
-        envelope = _parse_envelope(proc.stdout)
-        try:
-            text = envelope["result"]["meta"]["finalAssistantVisibleText"]
-        except (KeyError, TypeError) as e:
-            raise LLMUnavailable(f"openclaw: bad envelope: {e}") from e
+        text = run_agent(f"{system}\n\n{user}", bin_path=self.bin_path, agent=self.agent,
+                         timeout=self.timeout)
         return parse_batch_text(text)
+
+
+def run_agent(prompt: str, *, bin_path: str = "openclaw", agent: str = "seekhunter-scorer",
+              timeout: int = 300, thinking: str = "low", session_prefix: str = "seekhunter") -> str:
+    """One OpenClaw agent turn in a fresh session; returns the final visible reply text.
+
+    Raises `LLMUnavailable` on a too-large prompt, launch failure, timeout, non-zero exit, or an
+    unparseable envelope.
+    """
+    if len(prompt.encode()) > MAX_PROMPT_BYTES:
+        raise LLMUnavailable("openclaw: prompt too large for argv")
+    cmd = [
+        bin_path, "agent", "--agent", agent,
+        "--session-id", f"{session_prefix}-{uuid.uuid4().hex[:12]}",
+        "--thinking", thinking, "--json", "-m", prompt,
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise LLMUnavailable(f"openclaw: {e}") from e
+    if proc.returncode != 0:
+        raise LLMUnavailable(f"openclaw exit {proc.returncode}: {proc.stderr[-300:]}")
+    envelope = _parse_envelope(proc.stdout)
+    try:
+        text = envelope["result"]["meta"]["finalAssistantVisibleText"]
+    except (KeyError, TypeError) as e:
+        raise LLMUnavailable(f"openclaw: bad envelope: {e}") from e
+    if not isinstance(text, str):
+        raise LLMUnavailable("openclaw: reply text is not a string")
+    return text
