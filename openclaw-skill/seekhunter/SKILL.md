@@ -1,6 +1,6 @@
 ---
 name: seekhunter
-description: "Book's job-hunt tracker (SeekHunter). Use when Book mentions jobs, a job #id from a SeekHunter digest, saving/hiding/applying, why a job fits, job searches/filters, or asks what's new on SEEK/Jora."
+description: "Book's job-hunt tracker (SeekHunter). Use when Book mentions jobs, a job #id from a SeekHunter digest, saving/hiding/applying, why a job fits, tailoring his resume or a cover letter for a job, job searches/filters, or asks what's new on SEEK/Jora."
 metadata:
   {
     "openclaw":
@@ -31,6 +31,13 @@ All access goes through the `seekhunter-api METHOD PATH [JSON]` command (localho
 - Change a search: GET it from the list, then `PUT /api/search-profiles/{id}` with the full object
 - Settings (blocklists, weights, toggles): GET `/api/settings`, modify the field, then `PUT /api/settings` with the **full** JSON (never send a partial object)
 - Run a crawl now: `seekhunter-api POST /api/runs`
+
+## Tailor resume + cover letter
+SeekHunter can rewrite Book's resume for one job (reorders/trims skills, picks projects, rewords bullets, never invents facts) and write a cover letter, then send both PDFs to this chat.
+- "tailor #7" / "resume for #7" / "cover letter for #7": `seekhunter-api POST "/api/jobs/7/tailor?send=1"` → `{"tailoring_id": N, "status": "queued", "reused": false}`. Reply that the tailored resume and cover letter PDFs will arrive here in about 1–2 minutes, plus the side-by-side view at https://seekhunter.bookmountain.work/jobs/7/tailor. Don't send the files yourself; SeekHunter does. `reused: true` means one was already running — it will still be delivered.
+- "show changes for #7" / "what did you change for #7?": `seekhunter-api GET /api/jobs/7/tailorings` (newest first), take the first `id`, then `seekhunter-api GET /api/tailorings/{id}`. If `status` is `queued`/`running`, say it's still working (`progress`). If `failed`, say so with the first line of `error` and offer to retry. If `done`, summarise in a few lines from `changes`: the summary rewrite, reworded bullets (`status: "reworded"`), removed bullets, skill-order changes, projects included/excluded; then `keywords_matched`, `gaps`, and any `warnings` (validator notes — mention them, don't hide them).
+- "send it again" / "resend #7": find the latest done tailoring as above, then `seekhunter-api POST /api/tailorings/{id}/send`.
+- "show the cover letter for #7": read `cover_letter.text` from the tailoring detail and paste it.
 
 ## How to answer
 - "why #142?" / "am I a fit?": read the brief, then explain the overlap and the gaps in 3–5 lines. Mention visa fit (hours flag) when relevant.

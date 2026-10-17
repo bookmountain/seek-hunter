@@ -11,7 +11,8 @@ Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/root/.local/bin/uv run --frozen --no-dev uvicorn seekhunter.api:create_app --factory --host 0.0.0.0 --port 8090
 Restart=always
 RestartSec=5
-MemoryMax=400M
+# Tailoring runs (spawned by the API) live in this cgroup: OpenClaw + Tectonic need headroom.
+MemoryMax=1G
 
 [Install]
 WantedBy=multi-user.target
