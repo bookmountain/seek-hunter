@@ -339,11 +339,11 @@ def test_notifier_send_file_stages_into_openclaw_media_dir(monkeypatch, tmp_path
     Notifier("openclaw", "123", media_dir=media).send_file(pdf, "#7 resume")
     cmd = calls[0]
     staged = Path(cmd[cmd.index("--media") + 1])
-    assert staged.parent == media and staged.name.endswith("-r.pdf")
+    assert staged.parent.parent == media and staged.name == "r.pdf"
     assert cmd[:7] == ["openclaw", "message", "send", "--channel", "telegram", "--target", "123"]
     assert "--force-document" in cmd and cmd[-2:] == ["--message", "#7 resume"]
     assert seen == {"exists_during_send": True, "content": b"%PDF-1.4 test"}
-    assert not staged.exists()  # cleaned up after sending
+    assert not staged.parent.exists()  # cleaned up after sending
 
 
 OVERVIEW = [

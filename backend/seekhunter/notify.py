@@ -307,9 +307,9 @@ class Notifier:
             print(f"--- [dry-run telegram file → {self.target}] {path} ---\n{caption}\n")
             return
         # OpenClaw only reads local media from its own media dir, so stage a copy there first.
-        staged = self.media_dir / f"{uuid.uuid4().hex[:8]}-{path.name}"
+        staged = self.media_dir / uuid.uuid4().hex[:12] / path.name  # keep the clean file name
         try:
-            self.media_dir.mkdir(parents=True, exist_ok=True)
+            staged.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(path, staged)
         except OSError as e:
             raise NotifyError(f"cannot stage {path} in {self.media_dir}: {e}") from e
@@ -322,6 +322,6 @@ class Notifier:
         except (OSError, subprocess.TimeoutExpired) as e:
             raise NotifyError(str(e)) from e
         finally:
-            staged.unlink(missing_ok=True)
+            shutil.rmtree(staged.parent, ignore_errors=True)
         if proc.returncode != 0:
             raise NotifyError(f"exit {proc.returncode}: {proc.stderr[-300:]}")
