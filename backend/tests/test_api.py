@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
@@ -17,6 +19,7 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("API_WRITE_TOKEN", "t0k")
     monkeypatch.setenv("ALLOWED_CIDRS", "127.0.0.1/32,testclient/32")
     monkeypatch.setenv("STATIC_DIR", str(tmp_path))
+    monkeypatch.setenv("RESUME_DIR", str(Path(__file__).parent / "fixtures" / "resume"))
     (tmp_path / "index.html").write_text("<html>spa</html>")
     get_env.cache_clear()
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -116,3 +119,14 @@ def test_trigger_run_spawns_detached_process(client, monkeypatch):
     r = client.post("/api/runs", headers=AUTH)
     assert r.status_code == 202 and r.json() == {"started": True}
     assert len(calls) == 1
+
+
+def test_brief_and_summary_are_plain_text(client):
+    job_id = client.get("/api/jobs").json()[0]["id"]
+    r = client.get(f"/api/jobs/{job_id}/brief")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
+    assert r.text.startswith(f"#{job_id} React Dev")
+    s = client.get("/api/summary", params={"hours": 24})
+    assert s.headers["content-type"].startswith("text/plain")
+    assert f"#{job_id}" in s.text
+    assert client.get("/api/jobs/99999/brief").status_code == 404

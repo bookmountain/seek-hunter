@@ -1,19 +1,21 @@
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from seekhunter import repo
 from seekhunter.config import get_env
 from seekhunter.db import get_session, init_db
-from seekhunter.models import Job, JobEvaluation, Run, SearchProfile
-from seekhunter.notify import Notifier, NotifyError
+from seekhunter.models import Job, JobEvaluation, Run, SearchProfile, utcnow
+from seekhunter.notify import Notifier, NotifyError, format_brief
+from seekhunter.profile import load_profile
 from seekhunter.security import ip_allowlist_middleware, require_write
 from seekhunter.settings_model import AppSettings
+from seekhunter.skills import extract_skills
 
 
 class JobOut(BaseModel):
@@ -198,6 +200,33 @@ def create_app(init: bool = True) -> FastAPI:
         except NotifyError as e:
             raise HTTPException(502, str(e)) from e
         return {"sent": True}
+
+    @app.get("/api/jobs/{job_id}/brief", response_class=PlainTextResponse)
+    def job_brief(job_id: int, session: Session = Depends(get_session)):
+        job, ev = _get_job(session, job_id)
+        data = repo.to_jobdata(job)
+        try:
+            profile_skills = load_profile(env.resume_dir).skills
+        except FileNotFoundError:
+            profile_skills = set()
+        missing = sorted(extract_skills(f"{job.title} {data.text}") - profile_skills)
+        return format_brief(
+            job_id=job.id, title=job.title, company=job.company, location=job.location,
+            work_type=job.work_type, salary=job.salary_label, score=ev.final_score,
+            rule_score=ev.rule_score, llm_score=ev.llm_score, llm_note=ev.llm_note,
+            matched=ev.matched_skills, missing=missing, flags=ev.flags, reasons=ev.reasons,
+            status=job.status, url=job.url, description=data.text,
+        )
+
+    @app.get("/api/summary", response_class=PlainTextResponse)
+    def summary(hours: int = 24, session: Session = Depends(get_session)):
+        rows = repo.list_jobs(session, view="active", since=utcnow() - timedelta(hours=hours), limit=30)
+        if not rows:
+            return f"No new jobs in the last {hours}h."
+        return "\n".join(
+            f"#{j.id} [{e.final_score}] {j.title} — {j.company} · {j.location} · {j.work_type} · {j.status}"
+            for j, e in rows
+        )
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):

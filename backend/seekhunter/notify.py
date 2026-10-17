@@ -101,6 +101,30 @@ def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: s
     return messages
 
 
+def format_brief(*, job_id: int, title: str, company: str, location: str, work_type: str,
+                 salary: str | None, score: int, rule_score: int, llm_score: int | None,
+                 llm_note: str | None, matched: list[str], missing: list[str], flags: list[str],
+                 reasons: list[str], status: str, url: str, description: str) -> str:
+    lines = [
+        f"#{job_id} {title} — {company} · {location} · {WORK_TYPE_LABELS.get(work_type, work_type)}"
+        + (f" · {salary}" if salary else ""),
+        f"Score {score} (rules {rule_score}" + (f", AI {llm_score}" if llm_score is not None else "") + ")"
+        + f" · status {status}",
+    ]
+    if llm_note:
+        lines.append(f"AI note: {llm_note}")
+    lines.append(f"Matched: {', '.join(matched) or '-'}")
+    lines.append(f"Missing: {', '.join(missing) or '-'}")
+    if flags:
+        lines.append(f"Flags: {', '.join(flags)}")
+    if reasons:
+        lines.append(f"Excluded for: {', '.join(reasons)}")
+    lines.append(f"URL: {url}")
+    lines.append("")
+    lines.append(description[:3500])
+    return "\n".join(lines)
+
+
 class Notifier:
     def __init__(self, bin_path: str, target: str, dry_run: bool = False) -> None:
         self.bin_path, self.target, self.dry_run = bin_path, target, dry_run

@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 
-from seekhunter.notify import DigestItem, Notifier, NotifyError, format_digest, format_recap
+from seekhunter.notify import DigestItem, Notifier, NotifyError, format_brief, format_digest, format_recap
 
 
 def item(i, score=80, flags=("flexible",)):
@@ -88,3 +88,16 @@ def test_notifier_failure_raises(monkeypatch):
 def test_notifier_dry_run_prints(capsys):
     Notifier("openclaw", "123", dry_run=True).send("hello")
     assert "hello" in capsys.readouterr().out
+
+
+def test_format_brief():
+    text = format_brief(
+        job_id=7, title="React Dev", company="Acme", location="Adelaide SA", work_type="contract",
+        salary="$90/h", score=80, rule_score=75, llm_score=88, llm_note="Strong React",
+        matched=["React"], missing=["Kotlin"], flags=["flexible"], reasons=[], status="new",
+        url="https://x/7", description="We need React. " * 500,
+    )
+    assert text.startswith("#7 React Dev — Acme")
+    assert "Matched: React" in text and "Missing: Kotlin" in text
+    assert "AI 88" in text
+    assert len(text) < 5000
