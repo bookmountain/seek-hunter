@@ -19,7 +19,7 @@ All access goes through the `seekhunter-api METHOD PATH [JSON]` command (localho
 ## Read
 - What's new: `seekhunter-api GET "/api/summary?hours=24"` (plain text, one job per line)
 - One job in detail (fit, matched/missing skills, AI note, recruiter contact, competition, description): `seekhunter-api GET /api/jobs/142/brief`. The brief includes a `Recruiter: Name · phone · email` line when known and a `LinkedIn: <url>` line — a real profile URL when one was found, otherwise a LinkedIn search URL for that name/company. For SEEK ads with published applicant stats, it also includes a `Competition: N applicants (volume label) · resume % · cover letter % · checked <time>` line — SEEK's own "how many people applied" numbers. Jora ads and SEEK ads that haven't published stats yet have no `Competition:` line.
-- List as JSON: `seekhunter-api GET "/api/jobs?view=active&status=saved"` (`view=excluded` for excluded; filters: `work_type=part_time|contract|casual|full_time`, `source=seek|jora`, `q=text`)
+- List as JSON: `seekhunter-api GET "/api/jobs?view=active&status=saved"` (`view=excluded` for excluded; filters: `work_type=part_time|contract|casual|full_time`, `source=seek|jora`, `q=text`, `city=adelaide|melbourne|sydney|perth|other`, e.g. `seekhunter-api GET "/api/jobs?city=melbourne"`). Counts per city for the same view: `seekhunter-api GET "/api/jobs/cities?view=active"` → `[{"city":"adelaide","count":12}, ...]`.
 - Searches: `seekhunter-api GET /api/search-profiles`
 - Settings: `seekhunter-api GET /api/settings`
 - Recent runs/health: `seekhunter-api GET /api/runs`
@@ -30,6 +30,7 @@ All access goes through the `seekhunter-api METHOD PATH [JSON]` command (localho
 - Add a search: `seekhunter-api POST /api/search-profiles '{"name":"Melbourne · react","keywords":"react","location":"All Melbourne VIC","work_types":[],"sources":["seek","jora"],"enabled":true}'` (locations: "All Adelaide SA", "All Melbourne VIC", "All Sydney NSW", "All Perth WA"; work_types empty = all)
 - Change a search: GET it from the list, then `PUT /api/search-profiles/{id}` with the full object
 - Settings (blocklists, weights, toggles): GET `/api/settings`, modify the field, then `PUT /api/settings` with the **full** JSON (never send a partial object)
+- "enable Melbourne notifications" / "send me Sydney jobs too": SeekHunter already crawls, scores, and evaluates Melbourne/Sydney/Perth jobs (search profiles exist for all four cities) — only Telegram delivery is gated by `notify_cities` (default `["adelaide"]`). `seekhunter-api GET /api/settings`, add the city (lowercase, e.g. `"melbourne"`) to `notify_cities`, then `PUT /api/settings` with the full JSON. Only jobs first seen in the last 48h get notified once a city is enabled — it never floods the chat with a backlog. "stop Melbourne notifications" is the same flow, removing the city instead.
 - Run a crawl now: `seekhunter-api POST /api/runs`
 
 ## Application history (applications, contacts, companies)

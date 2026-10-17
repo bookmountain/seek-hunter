@@ -52,3 +52,17 @@ def test_skill_md_documents_history_summary_for_pipeline_questions():
 
 def test_skill_md_documents_companies_lookup():
     assert 'seekhunter-api GET "/api/companies?q=<Company>"' in _text()
+
+
+def test_skill_md_documents_city_filter_on_jobs():
+    text = _text()
+    assert 'seekhunter-api GET "/api/jobs?city=melbourne"' in text
+    assert 'seekhunter-api GET "/api/jobs/cities?view=active"' in text
+
+
+def test_skill_md_documents_enabling_city_notifications():
+    text = _text()
+    assert "notify_cities" in text
+    assert "enable Melbourne notifications" in text
+    assert "GET /api/settings" in text
+    assert "PUT /api/settings" in text
