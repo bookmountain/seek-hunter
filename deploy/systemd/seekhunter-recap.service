@@ -1,0 +1,10 @@
+[Unit]
+Description=SeekHunter daily recap
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/seek-hunter/app/backend
+EnvironmentFile=/opt/seek-hunter/.env
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/root/.local/bin/uv run --frozen --no-dev seekhunter recap
+SuccessExitStatus=75

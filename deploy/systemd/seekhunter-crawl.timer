@@ -1,0 +1,10 @@
+[Unit]
+Description=SeekHunter crawl every 2h 07:00-21:00 Adelaide
+
+[Timer]
+OnCalendar=*-*-* 07,09,11,13,15,17,19,21:00:00 Australia/Adelaide
+RandomizedDelaySec=5min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

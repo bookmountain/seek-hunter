@@ -1,0 +1,8 @@
+[Unit]
+Description=SeekHunter recap 21:15 Adelaide
+
+[Timer]
+OnCalendar=*-*-* 21:15:00 Australia/Adelaide
+
+[Install]
+WantedBy=timers.target
