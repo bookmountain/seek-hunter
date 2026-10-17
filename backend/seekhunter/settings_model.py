@@ -84,6 +84,8 @@ class AppSettings(BaseModel):
     @classmethod
     def _validate_regex_patterns(cls, value: list[str]) -> list[str]:
         for pattern in value:
+            if len(pattern) > 200:
+                raise ValueError(f"regex pattern too long ({len(pattern)} > 200 chars): {pattern!r}")
             try:
                 re.compile(pattern)
             except re.error as exc:

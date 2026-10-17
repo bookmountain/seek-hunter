@@ -130,3 +130,78 @@ def test_brief_and_summary_are_plain_text(client):
     assert s.headers["content-type"].startswith("text/plain")
     assert f"#{job_id}" in s.text
     assert client.get("/api/jobs/99999/brief").status_code == 404
+
+
+def test_create_app_rejects_weak_token_without_dev_mode(monkeypatch):
+    monkeypatch.setenv("SEEKHUNTER_DEV", "0")
+    monkeypatch.setenv("API_WRITE_TOKEN", "dev-token")
+    get_env.cache_clear()
+    try:
+        with pytest.raises(RuntimeError):
+            create_app(init=False)
+    finally:
+        get_env.cache_clear()
+
+
+def test_create_app_accepts_strong_token_without_dev_mode(monkeypatch, tmp_path):
+    monkeypatch.setenv("SEEKHUNTER_DEV", "0")
+    monkeypatch.setenv("API_WRITE_TOKEN", "a" * 32)
+    monkeypatch.setenv("STATIC_DIR", str(tmp_path))
+    get_env.cache_clear()
+    try:
+        create_app(init=False)
+    finally:
+        get_env.cache_clear()
+
+
+def test_spa_null_byte_path_does_not_500(client):
+    r = client.get("/a%00b")
+    assert r.status_code == 200
+    assert "spa" in r.text
+
+
+def test_spa_bare_api_path_is_404(client):
+    assert client.get("/api").status_code == 404
+
+
+def test_spa_sets_security_headers(client):
+    r = client.get("/")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert "default-src 'self'" in r.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
+
+
+def test_jobs_limit_and_offset_are_bounded(client):
+    assert client.get("/api/jobs", params={"limit": -1}).status_code == 422
+    assert client.get("/api/jobs", params={"limit": 501}).status_code == 422
+    assert client.get("/api/jobs", params={"offset": -1}).status_code == 422
+    assert client.get("/api/jobs", params={"limit": 10}).status_code == 200
+
+
+def test_summary_hours_is_bounded(client):
+    assert client.get("/api/summary", params={"hours": 0}).status_code == 422
+    assert client.get("/api/summary", params={"hours": 721}).status_code == 422
+    assert client.get("/api/summary", params={"hours": 24}).status_code == 200
+
+
+def test_notify_test_message_matches_cli(client, monkeypatch):
+    sent = {}
+
+    def fake_send(self, text):
+        sent["text"] = text
+
+    monkeypatch.setattr("seekhunter.notify.Notifier.send", fake_send)
+    r = client.post("/api/notify/test", headers=AUTH)
+    assert r.status_code == 200
+    assert sent["text"] == "🎯 SeekHunter test message ✅"
+
+
+def test_unexclude_allowlist_is_case_insensitive_dedupe(client):
+    job_id = client.get("/api/jobs", params={"view": "excluded"}).json()[0]["id"]
+    client.post(f"/api/jobs/{job_id}/unexclude", json={"allowlist_employer": True}, headers=AUTH)
+    settings = client.get("/api/settings").json()
+    settings["employer_allowlist"] = ["westpac"]
+    client.put("/api/settings", json=settings, headers=AUTH)
+    client.post(f"/api/jobs/{job_id}/unexclude", json={"allowlist_employer": True}, headers=AUTH)
+    final = client.get("/api/settings").json()["employer_allowlist"]
+    assert [e.casefold() for e in final].count("westpac") == 1

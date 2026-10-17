@@ -15,10 +15,12 @@ class Env(BaseSettings):
     api_write_token: str = "dev-token"
     allowed_cidrs: str = "127.0.0.1/32,192.168.4.0/24,100.64.0.0/10"
     allowed_public_ips: str = ""
+    tunnel_proxy_ips: str = "192.168.4.106"
     telegram_target: str = "1635495359"
     openclaw_bin: str = "openclaw"
     openclaw_agent: str = "seekhunter-scorer"
     public_url: str = "http://localhost:8090"
+    seekhunter_dev: bool = False
 
     @property
     def allowed_cidr_list(self) -> list[str]:
@@ -27,6 +29,10 @@ class Env(BaseSettings):
     @property
     def allowed_public_ip_list(self) -> list[str]:
         return [c.strip() for c in self.allowed_public_ips.split(",") if c.strip()]
+
+    @property
+    def tunnel_proxy_ip_list(self) -> list[str]:
+        return [c.strip() for c in self.tunnel_proxy_ips.split(",") if c.strip()]
 
 
 @lru_cache

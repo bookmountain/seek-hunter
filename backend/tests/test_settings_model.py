@@ -49,6 +49,16 @@ def test_invalid_regex_pattern_raises_validation_error():
         AppSettings(clearance_patterns=["("])
 
 
+def test_overlong_regex_pattern_raises_validation_error():
+    with pytest.raises(ValidationError):
+        AppSettings(clearance_patterns=["a" * 201])
+
+
+def test_regex_pattern_at_length_limit_is_accepted():
+    s = AppSettings(clearance_patterns=["a" * 200])
+    assert len(s.clearance_patterns[0]) == 200
+
+
 NEW_CITIZENSHIP_PHRASES = [
     "Only Australian citizens will be considered",
     "Australian PR or citizenship required",

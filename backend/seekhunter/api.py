@@ -2,7 +2,7 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -13,9 +13,17 @@ from seekhunter.db import get_session, init_db
 from seekhunter.models import Job, JobEvaluation, Run, SearchProfile, utcnow
 from seekhunter.notify import Notifier, NotifyError, format_brief
 from seekhunter.profile import load_profile
-from seekhunter.security import ip_allowlist_middleware, require_write
+from seekhunter.security import ensure_safe_write_token, ip_allowlist_middleware, require_write
 from seekhunter.settings_model import AppSettings
 from seekhunter.skills import extract_skills
+
+SPA_SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; "
+        "frame-ancestors 'none'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+}
 
 
 class JobOut(BaseModel):
@@ -90,6 +98,7 @@ def _get_job(session: Session, job_id: int) -> tuple[Job, JobEvaluation]:
 
 def create_app(init: bool = True) -> FastAPI:
     env = get_env()
+    ensure_safe_write_token(env)
     if init:
         init_db()
         from seekhunter.db import get_engine
@@ -97,7 +106,8 @@ def create_app(init: bool = True) -> FastAPI:
         with Session(get_engine()) as s:
             repo.ensure_seed(s)
 
-    app = FastAPI(title="SeekHunter")
+    docs_kwargs = {} if env.seekhunter_dev else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    app = FastAPI(title="SeekHunter", **docs_kwargs)
     app.middleware("http")(ip_allowlist_middleware)
     write = [Depends(require_write)]
 
@@ -107,8 +117,8 @@ def create_app(init: bool = True) -> FastAPI:
 
     @app.get("/api/jobs", response_model=list[JobOut])
     def list_jobs(view: str = "active", status: str | None = None, work_type: str | None = None,
-                  source: str | None = None, q: str | None = None, limit: int = 200, offset: int = 0,
-                  session: Session = Depends(get_session)):
+                  source: str | None = None, q: str | None = None, limit: int = Query(200, ge=1, le=500),
+                  offset: int = Query(0, ge=0), session: Session = Depends(get_session)):
         rows = repo.list_jobs(session, view=view, status=status, work_type=work_type, source=source, q=q,
                               limit=limit, offset=offset)
         return [_job_out(j, e) for j, e in rows]
@@ -138,7 +148,8 @@ def create_app(init: bool = True) -> FastAPI:
         session.commit()
         if body.allowlist_employer and job.company:
             settings = repo.load_settings(session)
-            if job.company not in settings.employer_allowlist:
+            existing = {e.casefold() for e in settings.employer_allowlist}
+            if job.company.casefold() not in existing:
                 settings.employer_allowlist.append(job.company)
                 repo.save_settings(session, settings)
         return _job_out(job, ev)
@@ -196,7 +207,7 @@ def create_app(init: bool = True) -> FastAPI:
     @app.post("/api/notify/test", dependencies=write)
     def notify_test() -> dict:
         try:
-            Notifier(env.openclaw_bin, env.telegram_target).send("SeekHunter test message")
+            Notifier(env.openclaw_bin, env.telegram_target).send("🎯 SeekHunter test message ✅")
         except NotifyError as e:
             raise HTTPException(502, str(e)) from e
         return {"sent": True}
@@ -219,7 +230,7 @@ def create_app(init: bool = True) -> FastAPI:
         )
 
     @app.get("/api/summary", response_class=PlainTextResponse)
-    def summary(hours: int = 24, session: Session = Depends(get_session)):
+    def summary(hours: int = Query(24, ge=1, le=720), session: Session = Depends(get_session)):
         rows = repo.list_jobs(session, view="active", since=utcnow() - timedelta(hours=hours), limit=30)
         if not rows:
             return f"No new jobs in the last {hours}h."
@@ -230,15 +241,21 @@ def create_app(init: bool = True) -> FastAPI:
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
-        if path.startswith("api/"):
+        if path == "api" or path.startswith("api/"):
             raise HTTPException(404)
         static = env.static_dir.resolve()
-        candidate = (static / path).resolve()
-        if path and candidate.is_file() and static in candidate.parents:
-            return FileResponse(candidate)
         index = static / "index.html"
-        if not index.exists():
+        target = index
+        try:
+            candidate = (static / path).resolve()
+            if path and static in candidate.parents and candidate.is_file():
+                target = candidate
+        except (ValueError, OSError):
+            target = index
+        if target is index and not index.exists():
             raise HTTPException(404, "frontend not built")
-        return FileResponse(index)
+        response = FileResponse(target)
+        response.headers.update(SPA_SECURITY_HEADERS)
+        return response
 
     return app
