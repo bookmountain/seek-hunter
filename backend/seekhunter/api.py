@@ -322,6 +322,16 @@ class TailoringOut(BaseModel):
     warnings_count: int
 
 
+class TailoringListItem(TailoringOut):
+    job_title: str
+    company: str
+    city: str | None
+    resume_pdf: str | None
+    cover_letter_pdf: str | None
+    thumbnail: str | None
+    applied_application_id: int | None
+
+
 class CoverLetterOut(BaseModel):
     greeting: str
     paragraphs: list[str]
@@ -1074,6 +1084,31 @@ def create_app(init: bool = True) -> FastAPI:
         if not session.get(Job, job_id):
             raise HTTPException(404, "job not found")
         return [_tailoring_out(t) for t in repo.list_tailorings(session, job_id)]
+
+    @app.get("/api/tailorings", response_model=list[TailoringListItem])
+    def all_tailorings(limit: int = Query(100, ge=1, le=500), q: str | None = None,
+                       session: Session = Depends(get_session)):
+        """Every tailored resume, newest first, for the Resumes page."""
+        rows = repo.list_all_tailorings(session, limit=limit)
+        job_ids = {t.job_id for t in rows}
+        jobs = {j.id: j for j in session.exec(select(Job).where(col(Job.id).in_(job_ids))).all()}
+        applied = {a.tailoring_id: a.id for a in session.exec(
+            select(Application).where(col(Application.tailoring_id).in_([t.id for t in rows]))).all()}
+        out = []
+        for t in rows:
+            job = jobs.get(t.job_id)
+            title, company = (job.title, job.company) if job else ("(deleted job)", "")
+            if q and q.lower() not in f"{title} {company}".lower():
+                continue
+            done = t.status == "done"
+            out.append(TailoringListItem(
+                **_tailoring_out(t).model_dump(), job_title=title, company=company,
+                city=getattr(job, "city", None) if job else None,
+                resume_pdf=f"/api/tailorings/{t.id}/resume.pdf" if done else None,
+                cover_letter_pdf=f"/api/tailorings/{t.id}/cover_letter.pdf" if done else None,
+                thumbnail=f"/api/tailorings/{t.id}/pages/resume/1.png" if done else None,
+                applied_application_id=applied.get(t.id)))
+        return out
 
     @app.get("/api/tailorings/{tid}", response_model=TailoringDetailOut)
     def get_tailoring(tid: int, session: Session = Depends(get_session)):

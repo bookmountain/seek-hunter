@@ -262,3 +262,13 @@ def test_current_resume_missing_latex_dir(ctx, monkeypatch, tmp_path):
     get_env.cache_clear()
     r = ctx.client.get("/api/resume/current").json()
     assert r["ready"] is False and r["hash"] is None and "not found" in r["error"]
+
+
+def test_list_all_tailorings(ctx):
+    tid = _finished(ctx)
+    rows = ctx.client.get("/api/tailorings").json()
+    assert rows[0]["id"] == tid and rows[0]["status"] == "done"
+    assert rows[0]["job_title"] and rows[0]["resume_pdf"] == f"/api/tailorings/{tid}/resume.pdf"
+    assert rows[0]["thumbnail"].endswith("/pages/resume/1.png")
+    assert rows[0]["applied_application_id"] is None
+    assert ctx.client.get("/api/tailorings", params={"q": "zzz-no-match"}).json() == []

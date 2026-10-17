@@ -473,6 +473,12 @@ def list_tailorings(session: Session, job_id: int, limit: int = 20) -> list[Tail
         .order_by(col(Tailoring.created_at).desc(), col(Tailoring.id).desc()).limit(limit)).all())
 
 
+def list_all_tailorings(session: Session, limit: int = 100) -> list[Tailoring]:
+    return list(session.exec(
+        select(Tailoring).order_by(col(Tailoring.created_at).desc(), col(Tailoring.id).desc()).limit(limit)
+    ).all())
+
+
 def active_tailoring(session: Session, job_id: int, now: datetime) -> Tailoring | None:
     """The job's queued/running tailoring, if any. Ones older than TAILORING_STALE_AFTER are assumed
     dead (worker crashed or was killed) and marked failed so a new one can start."""
