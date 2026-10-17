@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from seekhunter.resume_doc import experience_paths, macro_args, parse_projects
+from seekhunter.resume_doc import read_tex as _read
 from seekhunter.skills import extract_skills
 
 
@@ -22,10 +24,6 @@ class Profile:
         )
 
 
-def _strip_comments(tex: str) -> str:
-    return "\n".join(re.sub(r"(?<!\\)%.*", "", line) for line in tex.splitlines())
-
-
 def _clean(tex: str) -> str:
     tex = tex.replace("\\#", "#").replace("\\&", "&").replace("\\%", "%").replace("--", "-")
     tex = re.sub(r"\\href\{[^}]*\}\{([^}]*)\}", r"\1", tex)
@@ -36,53 +34,8 @@ def _clean(tex: str) -> str:
 
 
 def _brace_args(tex: str, macro: str, count: int) -> list[list[str]]:
-    """Return the first `count` brace arguments for every occurrence of \\macro (handles nesting)."""
-    results: list[list[str]] = []
-    for m in re.finditer(r"\\" + macro + r"\b", tex):
-        i, args = m.end(), []
-        while len(args) < count and i < len(tex):
-            while i < len(tex) and tex[i] in " \t\r\n":
-                i += 1
-            if i >= len(tex) or tex[i] != "{":
-                break
-            depth, start = 0, i
-            while i < len(tex):
-                if tex[i] == "{" and tex[i - 1] != "\\":
-                    depth += 1
-                elif tex[i] == "}" and tex[i - 1] != "\\":
-                    depth -= 1
-                    if depth == 0:
-                        args.append(tex[start + 1 : i])
-                        i += 1
-                        break
-                i += 1
-        if len(args) == count:
-            results.append(args)
-    return results
-
-
-def _read(path: Path) -> str:
-    return _strip_comments(path.read_text(encoding="utf-8")) if path.exists() else ""
-
-
-def _experience_paths(resume_dir: Path) -> list[Path]:
-    """Experience files in resume order, following `experience.tex`'s `\\input{...}` lines.
-
-    Falls back to a sorted glob of `experience/*.tex` if `experience.tex` is missing.
-    """
-    exp_dir = resume_dir / "experience"
-    exp_tex = resume_dir / "experience.tex"
-    if exp_tex.exists():
-        paths: list[Path] = []
-        for m in re.finditer(r"\\input\{([^}]*)\}", _read(exp_tex)):
-            name = m.group(1).strip().rsplit("/", 1)[-1]
-            if not name.endswith(".tex"):
-                name += ".tex"
-            path = exp_dir / name
-            if path.exists():
-                paths.append(path)
-        return paths
-    return sorted(exp_dir.glob("*.tex")) if exp_dir.is_dir() else []
+    """The first `count` brace arguments for every occurrence of \\macro that has all of them."""
+    return [args for args in macro_args(tex, macro, count) if len(args) == count]
 
 
 def load_profile(resume_dir: Path) -> Profile:
@@ -97,14 +50,14 @@ def load_profile(resume_dir: Path) -> Profile:
     summary_tex = _read(resume_dir / "summary.tex")
     summary = _clean(re.sub(r"\\resumeSection\{[^}]*\}", "", summary_tex))
 
-    projects_tex = _read(resume_dir / "projects.tex")
-    project_args = _brace_args(projects_tex, "resumeProject", 3)
-    project_stacks = [_clean(args[1]) for args in project_args]
-    project_bullets = [_clean(b) for args in project_args for b in args[2].split("\\item") if _clean(b)]
+    # \resumeProject is {name}{stack}{links}{bullets} (older resumes: {name}{stack}{bullets})
+    projects = parse_projects(_read(resume_dir / "projects.tex"))
+    project_stacks = [p.stack for p in projects]
+    project_bullets = [b.text for p in projects for b in p.bullets]
 
     titles: list[str] = []
     exp_bullets: list[str] = []
-    for path in _experience_paths(resume_dir):
+    for path in experience_paths(resume_dir):
         for args in _brace_args(_read(path), "resumeExperience", 5):
             titles.append(_clean(args[0]))
             exp_bullets.extend(_clean(b) for b in args[4].split("\\item") if _clean(b))
