@@ -24,6 +24,9 @@ class Env(BaseSettings):
     openclaw_agent: str = "seekhunter-scorer"
     public_url: str = "http://localhost:8090"
     seekhunter_dev: bool = False
+    # The IP allowlist already limits who can reach the app; when False, writes from allowed
+    # networks don't need the bearer token (the OpenClaw wrapper still sends it harmlessly).
+    write_requires_token: bool = True
 
     @property
     def allowed_cidr_list(self) -> list[str]:

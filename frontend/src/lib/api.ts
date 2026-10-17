@@ -78,6 +78,7 @@ const qs = (params: Record<string, string | undefined>) => {
 };
 
 export const api = {
+  meta: () => request<{ write_requires_token: boolean }>("GET", "/api/meta"),
   jobs: (p: { view?: string; status?: string; work_type?: string; source?: string; q?: string; city?: string }) =>
     request<Job[]>("GET", `/api/jobs${qs(p)}`),
   jobCities: (view = "active") => request<CityCount[]>("GET", `/api/jobs/cities${qs({ view })}`),

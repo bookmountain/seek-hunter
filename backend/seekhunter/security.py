@@ -68,7 +68,10 @@ async def ip_allowlist_middleware(request: Request, call_next):  # noqa: ANN001,
 
 
 def require_write(authorization: str | None = Header(default=None)) -> None:
-    expected = f"Bearer {get_env().api_write_token}"
+    env = get_env()
+    if not env.write_requires_token:
+        return  # request already passed the IP allowlist middleware
+    expected = f"Bearer {env.api_write_token}"
     if not authorization or not secrets.compare_digest(
         authorization.encode("latin-1", "replace"), expected.encode()
     ):

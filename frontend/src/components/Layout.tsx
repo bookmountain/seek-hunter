@@ -1,5 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
 import { TokenDialog } from "./TokenDialog";
@@ -35,6 +37,7 @@ export function Wordmark() {
 
 export function Layout() {
   const { pathname } = useLocation();
+  const { data: meta } = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
       <a
@@ -51,7 +54,7 @@ export function Layout() {
           <div className="ml-auto flex items-center gap-3 sm:gap-5 lg:order-last">
             <span className="kicker hidden text-ink-muted xl:inline">Adelaide · {dateline}</span>
             <NotificationBell />
-            <TokenDialog />
+            {meta?.write_requires_token !== false && <TokenDialog />}
           </div>
           <nav
             aria-label="Main"

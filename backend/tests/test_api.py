@@ -425,3 +425,17 @@ def test_unexclude_allowlist_is_case_insensitive_dedupe(client):
     client.post(f"/api/jobs/{job_id}/unexclude", json={"allowlist_employer": True}, headers=AUTH)
     final = client.get("/api/settings").json()["employer_allowlist"]
     assert [e.casefold() for e in final].count("westpac") == 1
+
+
+def test_writes_allowed_without_token_when_not_required(client, monkeypatch):
+    from seekhunter.config import get_env
+    monkeypatch.setenv("WRITE_REQUIRES_TOKEN", "false")
+    get_env.cache_clear()
+    job_id = client.get("/api/jobs").json()[0]["id"]
+    assert client.patch(f"/api/jobs/{job_id}", json={"status": "saved"}).status_code == 200
+    assert client.get("/api/meta").json() == {"write_requires_token": False}
+    get_env.cache_clear()
+
+
+def test_meta_reports_token_required_by_default(client):
+    assert client.get("/api/meta").json() == {"write_requires_token": True}

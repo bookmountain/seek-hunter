@@ -662,6 +662,11 @@ def create_app(init: bool = True) -> FastAPI:
     def health() -> dict:
         return {"ok": True}
 
+    @app.get("/api/meta")
+    def meta() -> dict:
+        """Lets the UI know whether it needs to ask for the write token at all."""
+        return {"write_requires_token": get_env().write_requires_token}
+
     @app.get("/api/jobs", response_model=list[JobOut])
     def list_jobs(view: str = "active", status: str | None = None, work_type: str | None = None,
                   source: str | None = None, q: str | None = None, city: str | None = None,
