@@ -161,3 +161,33 @@ def test_brave_retries_429_and_falls_back_to_loose_query():
     url = find_linkedin_profile("Jane Doe", "Agency", "k", http_get=fake_get, sleep=lambda s: None)
     assert url == "https://au.linkedin.com/in/jane-doe-123"
     assert calls[0] == calls[1] and "linkedin" in calls[2] and "site:" not in calls[2]
+
+
+def test_place_and_subject_phrases_rejected():
+    from seekhunter.contacts import extract_contacts
+    assert extract_contacts("Our St Leonards office on 02 9999 1234").name is None
+    assert extract_contacts("A degree in Computer Science at 2 levels").name is None
+    assert extract_contacts("Contact United Kingdom team").name is None
+    assert extract_contacts("call Brayden Mackay on 08 8216 3534").name == "Brayden Mackay"
+
+
+def test_linkedin_match_requires_name_in_title_start_or_slug():
+    from types import SimpleNamespace
+
+    from seekhunter.contacts import find_linkedin_profile
+
+    def results(items):
+        payload = {"web": {"results": items}}
+        return lambda url, params, headers: SimpleNamespace(status_code=200, json=lambda: payload)
+
+    no_sleep = lambda s: None  # noqa: E731
+    wrong = [{"url": "https://www.linkedin.com/in/paul-cox-1",
+              "title": "Rebecca Webber - United Kingdom | LinkedIn"}]
+    assert find_linkedin_profile("United Kingdom", "X", "k", http_get=results(wrong), sleep=no_sleep) is None
+    right = [{"url": "https://www.linkedin.com/in/jb-0627",
+              "title": "Jerry Belialba - Peoplebank | LinkedIn"}]
+    assert find_linkedin_profile("Jerry Belialba", "Peoplebank", "k", http_get=results(right),
+                                 sleep=lambda s: None) == "https://www.linkedin.com/in/jb-0627"
+    slug = [{"url": "https://au.linkedin.com/in/laura-mason-au", "title": "Laura M. | LinkedIn"}]
+    assert find_linkedin_profile("Laura Mason", "CSIRO", "k", http_get=results(slug),
+                                 sleep=lambda s: None) == "https://au.linkedin.com/in/laura-mason-au"

@@ -327,6 +327,7 @@ def run_contacts_backfill(session: Session, seek_source, contact_lookup=None,  #
         extracted = extract_contacts(repo.to_jobdata(job).text)
         if job.contact_name and not is_plausible_name(job.contact_name, job.title, job.company):
             job.contact_name = None  # clear names stored by an older, looser extractor
+            job.contact_linkedin = None
             updated += 1
         if is_plausible_name(job.contact_name, job.title, job.company):
             name = job.contact_name

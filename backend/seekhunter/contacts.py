@@ -14,7 +14,7 @@ _VERB = r"(?:call|contact|speak(?:\s+(?:to|with))?|reach out to|email|chat(?:\s+
 
 _NAME_PATTERNS = (
     re.compile(rf"\b(?i:{_VERB})\s+({_NAME})\b"),
-    re.compile(rf"\b({_NAME})\s+(?:on|at)\s+(?=[+(]|\d)"),
+    re.compile(rf"\b({_NAME})\s+(?:on|at)\s+(?=(?:\+61|\(?0[2-478]\)?|1[38]00)[\s\d()-]{{6,}})"),
     re.compile(rf"\b({_NAME}),\s+(?:Senior\s+|Principal\s+|Lead\s+)?(?:[A-Z][a-z]+\s+)?"
                r"(?:Consultant|Recruiter|Manager|Partner|Director|Specialist|Associate|Advisor|Adviser)\b"),
 )
@@ -32,6 +32,11 @@ _NAME_BLOCKLIST = {
     # places
     "adelaide", "hill", "park", "terrace", "street", "road", "cbd", "north", "south", "east", "west",
     "sa", "nsw", "vic", "qld", "wa", "tas", "act", "nt", "lakes", "beach", "valley", "heights",
+    # places / subjects that look like names
+    "st", "saint", "mount", "mt", "port", "new", "united", "kingdom", "states", "zealand", "wales",
+    "sydney", "melbourne", "brisbane", "perth", "hobart", "darwin", "canberra", "london", "singapore",
+    "india", "leonards", "computer", "science", "sciences", "information", "systems", "business",
+    "bachelor", "master", "masters", "degree", "college", "institute",
     # sentence words
     "the", "our", "a", "an", "apply", "today", "now", "please", "click", "for", "and", "or", "on", "at",
 }
@@ -199,6 +204,10 @@ def find_linkedin_profile(
             return None
         for r in results:
             url, title = r.get("url") or "", (r.get("title") or "").lower()
-            if _LINKEDIN_PROFILE_RE.match(url) and first in title and last in title:
+            if not _LINKEDIN_PROFILE_RE.match(url):
+                continue
+            slug = re.sub(r"[^a-z]", "", url.lower().split("/in/", 1)[1])
+            title_name = title.split(" - ")[0].split(" | ")[0].strip()
+            if title_name == name.lower() or (first in slug and last in slug):
                 return url
     return None
