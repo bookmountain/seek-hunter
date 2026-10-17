@@ -1,0 +1,38 @@
+import json
+
+from pydantic import ValidationError
+
+from seekhunter.llm.base import BatchFit, LLMJobInput, LLMScore, LLMUnavailable
+from seekhunter.profile import Profile
+
+SYSTEM = (
+    "You rate how well job ads fit one candidate. The candidate is a full-stack software engineer in "
+    "Adelaide on an Australian student visa until mid-2027, so part-time, casual, and contract roles are "
+    "most practical; full-time roles are still relevant for after graduation. For each job return an "
+    "integer fit from 0 to 100 (skills/experience overlap and realistic seniority) and a one-sentence "
+    "'why' (max 20 words) naming the strongest overlap or the main gap. Return JSON only: "
+    '{"results": [{"key": "...", "fit": 0, "why": "..."}]} with one entry per job key.'
+)
+
+
+def build_prompt(profile: Profile, jobs: list[LLMJobInput]) -> tuple[str, str]:
+    payload = [
+        {"key": j.key, "title": j.title, "company": j.company, "work_type": j.work_type, "ad": j.text[:3500]}
+        for j in jobs
+    ]
+    user = f"CANDIDATE\n{profile.as_prompt_text()}\n\nJOBS\n{json.dumps(payload, ensure_ascii=False)}"
+    return SYSTEM, user
+
+
+def to_scores(batch: BatchFit) -> dict[str, LLMScore]:
+    return {r.key: LLMScore(fit=max(0, min(100, r.fit)), why=r.why.strip()) for r in batch.results}
+
+
+def parse_batch_text(raw: str) -> dict[str, LLMScore]:
+    start, end = raw.find("{"), raw.rfind("}")
+    if start < 0 or end <= start:
+        raise LLMUnavailable("no JSON object in model output")
+    try:
+        return to_scores(BatchFit.model_validate_json(raw[start : end + 1]))
+    except ValidationError as e:
+        raise LLMUnavailable(f"invalid JSON from model: {e}") from e
