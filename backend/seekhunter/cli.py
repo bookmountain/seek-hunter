@@ -35,6 +35,12 @@ def build_parser() -> argparse.ArgumentParser:
     contacts.add_argument("--days", type=int, default=7)
     insights = sub.add_parser("insights", help="refresh SEEK applicant insights on demand")
     insights.add_argument("--limit", type=int, default=60)
+    market = sub.add_parser("market", help="crawl SEEK for market insights data across cities")
+    market.add_argument("--cities", nargs="*", default=None,
+                        help="override settings.market_cities (e.g. adelaide perth)")
+    market.add_argument("--dry-run", action="store_true", help="search only, no database writes")
+    brief = sub.add_parser("insights-brief", help="send the weekly market insights brief")
+    brief.add_argument("--dry-run", action="store_true")
     tailor = sub.add_parser("tailor", help="tailor the resume + cover letter for one job")
     tailor.add_argument("job_id", type=int)
     tailor.add_argument("--tailoring-id", type=int, default=None,
@@ -103,9 +109,28 @@ def main(argv: list[str] | None = None) -> int:
         return _tailor_commands(args, env, notifier)
 
     try:
+        if args.command == "market":
+            from seekhunter.http import PoliteClient
+            from seekhunter.market import run_market_crawl
+            from seekhunter.sources.seek import SeekSource
+
+            with run_lock(env.data_dir, name="market.lock"), Session(get_engine()) as session:
+                repo.ensure_seed(session)
+                settings = repo.load_settings(session)
+                report = run_market_crawl(session, SeekSource(PoliteClient()), settings,
+                                          cities=args.cities, dry_run=args.dry_run)
+                print(json.dumps(report, indent=1))
+                return 0
+
         blocking = args.command in ("rescore", "contacts", "insights")
         with run_lock(env.data_dir, blocking=blocking), Session(get_engine()) as session:
             repo.ensure_seed(session)
+            if args.command == "insights-brief":
+                from seekhunter.pipeline import run_insights_brief
+
+                run_insights_brief(session, notifier, env.public_url, env.resume_dir, dry_run=args.dry_run)
+                return 0
+
             if args.command == "rescore":
                 from seekhunter.pipeline import run_rescore
                 from seekhunter.profile import load_profile

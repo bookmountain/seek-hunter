@@ -97,3 +97,87 @@ def test_tailor_command_creates_row_and_runs_pipeline(monkeypatch, tmp_path):
         assert t.job_id == job_id and t.send_requested is True
     assert callable(seen["kw"]["llm"]) and callable(seen["kw"]["compiler"])
     assert cli.main(["tailor", "999"]) == 2
+
+
+def test_parser_market_defaults():
+    args = cli.build_parser().parse_args(["market"])
+    assert args.command == "market"
+    assert args.cities is None
+    assert args.dry_run is False
+
+
+def test_parser_market_cities_and_dry_run():
+    args = cli.build_parser().parse_args(["market", "--cities", "adelaide", "perth", "--dry-run"])
+    assert args.cities == ["adelaide", "perth"]
+    assert args.dry_run is True
+
+
+def test_parser_insights_brief():
+    assert cli.build_parser().parse_args(["insights-brief"]).dry_run is False
+    assert cli.build_parser().parse_args(["insights-brief", "--dry-run"]).dry_run is True
+
+
+def test_main_market_runs_crawl_with_its_own_lock(monkeypatch, tmp_path, capsys):
+    from sqlalchemy.pool import StaticPool
+    from sqlmodel import SQLModel, create_engine
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SQLModel.metadata.create_all(engine)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "get_engine", lambda: engine)
+    monkeypatch.setattr(cli, "init_db", lambda: None)
+
+    calls = {}
+
+    class FakeSeek:
+        def __init__(self, client):
+            pass
+
+        def search(self, profile, max_pages, daterange=7):
+            calls["search"] = (profile.location, max_pages, daterange)
+            return []
+
+    monkeypatch.setattr("seekhunter.sources.seek.SeekSource", FakeSeek)
+    assert cli.main(["market", "--cities", "adelaide"]) == 0
+    assert calls["search"] == ("All Adelaide SA", 2, 14)
+    assert (tmp_path / "market.lock").exists()
+
+
+def test_main_market_locked_returns_75(monkeypatch, tmp_path):
+    import fcntl
+
+    from sqlalchemy.pool import StaticPool
+    from sqlmodel import SQLModel, create_engine
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SQLModel.metadata.create_all(engine)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "get_engine", lambda: engine)
+    monkeypatch.setattr(cli, "init_db", lambda: None)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    fh = open(tmp_path / "market.lock", "w")  # noqa: SIM115
+    fcntl.flock(fh, fcntl.LOCK_EX)
+    try:
+        assert cli.main(["market"]) == 75
+    finally:
+        fcntl.flock(fh, fcntl.LOCK_UN)
+        fh.close()
+
+
+def test_main_insights_brief_runs_pipeline(monkeypatch, tmp_path):
+    from sqlalchemy.pool import StaticPool
+    from sqlmodel import SQLModel, create_engine
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SQLModel.metadata.create_all(engine)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "get_engine", lambda: engine)
+    monkeypatch.setattr(cli, "init_db", lambda: None)
+    seen = {}
+
+    def fake_brief(session, notifier, public_url, resume_dir, dry_run=False):
+        seen["args"] = (public_url, resume_dir, dry_run)
+
+    monkeypatch.setattr("seekhunter.pipeline.run_insights_brief", fake_brief)
+    assert cli.main(["insights-brief", "--dry-run"]) == 0
+    assert seen["args"][2] is True
