@@ -23,8 +23,10 @@ class AppSettings(BaseModel):
     ])
     employer_allowlist: list[str] = Field(default_factory=list)
     clearance_patterns: list[str] = Field(default_factory=lambda: [
-        r"\bNV1\b|\bNV 1\b", r"\bNV2\b|\bNV 2\b", r"negative vetting", r"\bbaseline\s+(security\s+)?clearance",
-        r"\bAGSVA\b", r"\bPV\s+clearance", r"\bsecurity\s+clearance", r"\b(obtain|hold|maintain)\w*\s+(an?\s+)?(australian\s+)?"
+        r"\bNV1\b|\bNV 1\b", r"\bNV2\b|\bNV 2\b", r"negative vetting",
+        r"\bbaseline\s+(security\s+)?clearance",
+        r"\bAGSVA\b", r"\bPV\s+clearance", r"\bsecurity\s+clearance",
+        r"\b(obtain|hold|maintain)\w*\s+(an?\s+)?(australian\s+)?"
         r"(government\s+)?(security\s+)?clearance",
     ])
     citizenship_patterns: list[str] = Field(default_factory=lambda: [
