@@ -1,0 +1,472 @@
+{
+ "data": [
+  {
+   "advertiser": {
+    "id": "25203934",
+    "description": "Virginia Nursery"
+   },
+   "bulletPoints": [
+    "Exciting software development projects with Microsoft Access, SQL & C#",
+    "Flexible working arrangements in a growing family-owned business",
+    "Make a real impact with your ideas and technical expertise"
+   ],
+   "branding": {
+    "serpLogoUrl": "https://bx-branding-gateway.cloud.seek.com.au/c493d544-a6b5-e87f-f48c-5fcb7eb170a4.1/jdpLogo"
+   },
+   "classifications": [
+    {
+     "classification": {
+      "id": "6281",
+      "description": "Information & Communication Technology"
+     },
+     "subclassification": {
+      "id": "6287",
+      "description": "Developers/Programmers"
+     }
+    }
+   ],
+   "companyName": "Virginia Nursery",
+   "companyProfileStructuredDataId": 453195,
+   "displayStyle": {
+    "search": "sourcrProfile"
+   },
+   "displayType": "promoted",
+   "employer": {
+    "id": "453195",
+    "name": "Virginia Nursery",
+    "companyId": "160565836255944",
+    "companyUrl": "https://au.seek.com/companies/virginia-nursery-160565836255944"
+   },
+   "id": "95229403",
+   "isFeatured": true,
+   "listingDate": "2026-10-13T03:42:21Z",
+   "listingDateDisplay": "3d ago",
+   "locations": [
+    {
+     "label": "Virginia, Adelaide SA",
+     "countryCode": "AU",
+     "seoHierarchy": [
+      {
+       "contextualName": "Virginia SA 5120"
+      },
+      {
+       "contextualName": "All Adelaide SA"
+      }
+     ]
+    }
+   ],
+   "roleId": "software-developer",
+   "salaryLabel": "$40 – $45 per hour",
+   "solMetadata": {
+    "searchRequestToken": "7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "token": "0~7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "jobId": "95229403",
+    "section": "MAIN",
+    "sectionRank": 1,
+    "jobAdType": "SPONSORED",
+    "tags": {
+     "mordor__flights": "mordor_1134",
+     "mordor__s": "0"
+    }
+   },
+   "teaser": "Join our growing team! Develop and improve Microsoft Access, VBA and SQL Server systems, with exciting future C# projects.",
+   "title": "Software Developer – Microsoft Access (VBA), SQL Server & C#",
+   "tracking": "ewogICJ0b2tlbiI6ICJlN2Y2ODkwZS1jZGIyLTQyNTEtYWU0Mi0yZTkwYmVjNmY0NWJfMSIKfQ==",
+   "workTypes": [
+    "Part time"
+   ],
+   "workArrangements": {
+    "data": [
+     {
+      "id": "1",
+      "label": {
+       "text": "On-site"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "advertiser": {
+    "id": "25203934",
+    "description": "Virginia Nursery"
+   },
+   "bulletPoints": [
+    "Exciting software development projects with Microsoft Access, SQL & C#",
+    "Flexible working arrangements in a growing family-owned business",
+    "Make a real impact with your ideas and technical expertise"
+   ],
+   "branding": {
+    "serpLogoUrl": "https://bx-branding-gateway.cloud.seek.com.au/c493d544-a6b5-e87f-f48c-5fcb7eb170a4.1/jdpLogo"
+   },
+   "classifications": [
+    {
+     "classification": {
+      "id": "6281",
+      "description": "Information & Communication Technology"
+     },
+     "subclassification": {
+      "id": "6287",
+      "description": "Developers/Programmers"
+     }
+    }
+   ],
+   "companyName": "Virginia Nursery",
+   "companyProfileStructuredDataId": 453195,
+   "displayStyle": {
+    "search": "sourcrProfile"
+   },
+   "displayType": "standard",
+   "employer": {
+    "id": "453195",
+    "name": "Virginia Nursery",
+    "companyId": "160565836255944",
+    "companyUrl": "https://au.seek.com/companies/virginia-nursery-160565836255944"
+   },
+   "id": "95229403",
+   "isFeatured": false,
+   "listingDate": "2026-10-13T03:42:21Z",
+   "listingDateDisplay": "3d ago",
+   "locations": [
+    {
+     "label": "Virginia, Adelaide SA",
+     "countryCode": "AU",
+     "seoHierarchy": [
+      {
+       "contextualName": "Virginia SA 5120"
+      },
+      {
+       "contextualName": "All Adelaide SA"
+      }
+     ]
+    }
+   ],
+   "roleId": "software-developer",
+   "salaryLabel": "$40 – $45 per hour",
+   "solMetadata": {
+    "searchRequestToken": "7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "token": "0~7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "jobId": "95229403",
+    "section": "MAIN",
+    "sectionRank": 2,
+    "jobAdType": "ORGANIC",
+    "tags": {
+     "mordor__flights": "mordor_1134",
+     "mordor__s": "0"
+    }
+   },
+   "teaser": "Join our growing team! Develop and improve Microsoft Access, VBA and SQL Server systems, with exciting future C# projects.",
+   "title": "Software Developer – Microsoft Access (VBA), SQL Server & C#",
+   "tracking": "ewogICJ0b2tlbiI6ICJlN2Y2ODkwZS1jZGIyLTQyNTEtYWU0Mi0yZTkwYmVjNmY0NWJfMiIKfQ==",
+   "workTypes": [
+    "Part time"
+   ],
+   "workArrangements": {
+    "data": [
+     {
+      "id": "1",
+      "label": {
+       "text": "On-site"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "advertiser": {
+    "id": "28936525",
+    "description": "Peoplebank Australia SA"
+   },
+   "bulletPoints": [
+    "Java Software Engineer | Full Stack",
+    "Long term Contract",
+    "Adelaide based role (hybrid, but must be SA based)"
+   ],
+   "branding": {
+    "serpLogoUrl": "https://bx-branding-gateway.cloud.seek.com.au/a28d8561-e289-2674-edaa-852fb90df9be.1/jdpLogo"
+   },
+   "classifications": [
+    {
+     "classification": {
+      "id": "6281",
+      "description": "Information & Communication Technology"
+     },
+     "subclassification": {
+      "id": "6287",
+      "description": "Developers/Programmers"
+     }
+    }
+   ],
+   "companyName": "Peoplebank",
+   "companyProfileStructuredDataId": 1958,
+   "displayStyle": {
+    "search": "sourcrProfile"
+   },
+   "displayType": "standard",
+   "employer": {
+    "id": "1958",
+    "name": "Peoplebank"
+   },
+   "id": "95263921",
+   "isFeatured": false,
+   "listingDate": "2026-10-14T07:20:09Z",
+   "listingDateDisplay": "2d ago",
+   "locations": [
+    {
+     "label": "Adelaide SA",
+     "countryCode": "AU",
+     "seoHierarchy": [
+      {
+       "contextualName": "All Adelaide SA"
+      },
+      {
+       "contextualName": "South Australia SA"
+      }
+     ]
+    }
+   ],
+   "roleId": "java-developer",
+   "salaryLabel": "Hourly rate OR salaried option available",
+   "solMetadata": {
+    "searchRequestToken": "7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "token": "0~7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "jobId": "95263921",
+    "section": "MAIN",
+    "sectionRank": 3,
+    "jobAdType": "ORGANIC",
+    "tags": {
+     "mordor__flights": "mordor_1134",
+     "mordor__s": "0"
+    }
+   },
+   "teaser": "Peoplebank are recruiting for a  full stack Java Developer  to work on a long-term program of work based in Adelaide CBD (hybrid work set up,...",
+   "title": "Java Developer",
+   "tracking": "ewogICJ0b2tlbiI6ICJlN2Y2ODkwZS1jZGIyLTQyNTEtYWU0Mi0yZTkwYmVjNmY0NWJfMyIKfQ==",
+   "workTypes": [
+    "Contract/Temp"
+   ],
+   "workArrangements": {
+    "data": [
+     {
+      "id": "2",
+      "label": {
+       "text": "Hybrid"
+      }
+     }
+    ],
+    "displayText": "Hybrid"
+   }
+  },
+  {
+   "advertiser": {
+    "id": "45640348",
+    "description": "Robert Walters"
+   },
+   "bulletPoints": [
+    "Work on enterprise-scale applications within a modern Agile environment.",
+    "Utilise Java, React, Azure and modern development technologies.",
+    "Contract opportunity through to December 2027 on a major program."
+   ],
+   "branding": {},
+   "classifications": [
+    {
+     "classification": {
+      "id": "6281",
+      "description": "Information & Communication Technology"
+     },
+     "subclassification": {
+      "id": "6287",
+      "description": "Developers/Programmers"
+     }
+    }
+   ],
+   "companyName": "Robert Walters",
+   "companyProfileStructuredDataId": 2557,
+   "displayStyle": {
+    "search": "sourcrProfile"
+   },
+   "displayType": "standard",
+   "employer": {
+    "id": "2557",
+    "name": "Robert Walters"
+   },
+   "id": "95262793",
+   "isFeatured": false,
+   "listingDate": "2026-10-14T06:42:56Z",
+   "listingDateDisplay": "2d ago",
+   "locations": [
+    {
+     "label": "Adelaide SA",
+     "countryCode": "AU",
+     "seoHierarchy": [
+      {
+       "contextualName": "All Adelaide SA"
+      },
+      {
+       "contextualName": "South Australia SA"
+      }
+     ]
+    }
+   ],
+   "roleId": "full-stack-java-developer",
+   "salaryLabel": "Attractive hourly rate",
+   "solMetadata": {
+    "searchRequestToken": "7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "token": "0~7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "jobId": "95262793",
+    "section": "MAIN",
+    "sectionRank": 4,
+    "jobAdType": "ORGANIC",
+    "tags": {
+     "mordor__flights": "mordor_1134",
+     "mordor__s": "0"
+    }
+   },
+   "teaser": "We are seeking a Full Stack Developer with Java experience to deliver enterprise applications and digital solutions within an Agile environment.",
+   "title": "Full Stack (Java) Developer",
+   "tracking": "ewogICJ0b2tlbiI6ICJlN2Y2ODkwZS1jZGIyLTQyNTEtYWU0Mi0yZTkwYmVjNmY0NWJfNCIKfQ==",
+   "workTypes": [
+    "Contract/Temp"
+   ],
+   "workArrangements": {
+    "data": [
+     {
+      "id": "1",
+      "label": {
+       "text": "On-site"
+      }
+     }
+    ]
+   },
+   "externalReferences": [
+    {
+     "id": "35098",
+     "sourceSystem": "sourcr",
+     "type": "recruiter",
+     "metadata": {
+      "name": "Brayden Mackay",
+      "assets": {
+       "profilePhotoUrl": "https://media.seekrecruiterprofile.com/uploads/2a/db/c6/a5/5e/f2/99/97/16/33/26/8b/ae/cd/b5/dd/c878dd4e4f01694347112faec7b78436.jpeg"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "advertiser": {
+    "id": "28936525",
+    "description": "Peoplebank Australia SA"
+   },
+   "bulletPoints": [
+    "Azure Cloud Developer",
+    "Long term contract",
+    "Adelaide based role (hybrid, but must be SA based)"
+   ],
+   "branding": {
+    "serpLogoUrl": "https://bx-branding-gateway.cloud.seek.com.au/a28d8561-e289-2674-edaa-852fb90df9be.1/jdpLogo"
+   },
+   "classifications": [
+    {
+     "classification": {
+      "id": "6281",
+      "description": "Information & Communication Technology"
+     },
+     "subclassification": {
+      "id": "6290",
+      "description": "Engineering - Software"
+     }
+    }
+   ],
+   "companyName": "Peoplebank",
+   "companyProfileStructuredDataId": 1958,
+   "displayStyle": {
+    "search": "sourcrProfile"
+   },
+   "displayType": "standard",
+   "employer": {
+    "id": "1958",
+    "name": "Peoplebank"
+   },
+   "id": "95264660",
+   "isFeatured": false,
+   "listingDate": "2026-10-14T07:49:08Z",
+   "listingDateDisplay": "2d ago",
+   "locations": [
+    {
+     "label": "Adelaide SA",
+     "countryCode": "AU",
+     "seoHierarchy": [
+      {
+       "contextualName": "All Adelaide SA"
+      },
+      {
+       "contextualName": "South Australia SA"
+      }
+     ]
+    }
+   ],
+   "roleId": "cloud-developer",
+   "salaryLabel": "Hourly rate contract",
+   "solMetadata": {
+    "searchRequestToken": "7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "token": "0~7d6bf9b4-1100-4e5c-82d1-8f3a86afa1d8",
+    "jobId": "95264660",
+    "section": "MAIN",
+    "sectionRank": 5,
+    "jobAdType": "ORGANIC",
+    "tags": {
+     "mordor__flights": "mordor_1134",
+     "mordor__s": "0"
+    }
+   },
+   "teaser": "Peoplebank are recruiting for an  Azure Cloud Developer  to work on a contract through to end of December 2027, based in the  Adelaide CBD  (hybrid...",
+   "title": "Azure Cloud Developer",
+   "tracking": "ewogICJ0b2tlbiI6ICJlN2Y2ODkwZS1jZGIyLTQyNTEtYWU0Mi0yZTkwYmVjNmY0NWJfNSIKfQ==",
+   "workTypes": [
+    "Contract/Temp"
+   ],
+   "workArrangements": {
+    "data": [
+     {
+      "id": "2",
+      "label": {
+       "text": "Hybrid"
+      }
+     }
+    ],
+    "displayText": "Hybrid"
+   }
+  }
+ ],
+ "totalCount": 18,
+ "info": {
+  "timeTaken": 26,
+  "source": "JobSearch-sm",
+  "experiment": "mordor_1134",
+  "newSince": 1792203390
+ },
+ "userQueryId": "API4555219723538754101",
+ "location": {
+  "description": "All Adelaide SA",
+  "locationDescription": "Adelaide",
+  "type": "Location",
+  "whereId": "1007",
+  "localisedDescriptions": {
+   "en": {
+    "contextualName": "All Adelaide SA"
+   }
+  },
+  "isGranular": false,
+  "defaultDistanceKms": 50
+ },
+ "searchParams": {
+  "sitekey": "AU-Main",
+  "where": "All Adelaide SA",
+  "keywords": "developer",
+  "page": "1",
+  "pagesize": "22",
+  "worktype": "243,244,245",
+  "daterange": "7",
+  "locale": "en-AU"
+ }
+}
