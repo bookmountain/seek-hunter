@@ -62,10 +62,11 @@ class AppSettings(BaseModel):
     role_boost_terms: list[str] = Field(default_factory=lambda: [
         "software", "full stack", "full-stack", "fullstack", "frontend", "front end", "front-end",
         "backend", "back end", "developer", "ai engineer", "machine learning", "graduate", "web",
+        "it support", "support analyst", "support officer", "support engineer", "helpdesk", "help desk",
+        "service desk", "desktop support", "technician",
     ])
     role_penalty_terms: list[str] = Field(default_factory=lambda: [
-        "principal", "head of", "director", "10+ years", "helpdesk", "help desk", "service desk",
-        "desktop support", "network engineer", "technician",
+        "principal", "head of", "director", "10+ years", "network engineer",
     ])
     weights: Weights = Field(default_factory=Weights)
     llm_enabled: bool = True

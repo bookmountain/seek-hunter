@@ -77,3 +77,9 @@ def test_years_experience_penalty_matches_digit_plus_years():
     penalized = score_job(job(text="Minimum 15+ years experience required"), PROFILE, AppSettings())
     clean = score_job(job(text="Great team, flexible hours"), PROFILE, AppSettings())
     assert penalized.rule_score < clean.rule_score
+
+
+def test_it_support_roles_are_boosted_not_penalised():
+    support = score_job(job(title="IT Support Officer"), PROFILE, AppSettings()).rule_score
+    plain = score_job(job(title="Operations Analyst"), PROFILE, AppSettings()).rule_score
+    assert support - plain == 10

@@ -71,6 +71,12 @@ SKILL_ALIASES: dict[str, list[str]] = {
     "Prometheus/Grafana": ["prometheus", "grafana"],
     "Machine Learning": ["machine learning"],
     "PowerShell": ["powershell"],
+    "IT Support": ["it support", "helpdesk", "help desk", "service desk", "desktop support"],
+    "Hardware": ["hardware troubleshooting", "pc repair", "pcs and laptops", "pc builds", "laptop repair"],
+    "Virtualisation": ["proxmox", "vmware", "hyper-v", "virtualisation", "virtualization"],
+    "Windows": ["windows 10", "windows 11", "windows server", "windows desktop"],
+    "Microsoft 365": ["microsoft 365", "office 365", "m365", "intune"],
+    "Active Directory": ["active directory", "entra id", "azure ad"],
 }
 
 

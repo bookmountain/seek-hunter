@@ -45,3 +45,8 @@ def test_resume_2026_10_skills():
                 "LangChain", "LangGraph", "MCP", "AI Agents", "Prometheus/Grafana", "DynamoDB"}
     assert extract_skills(text) >= expected
     assert "Expo" not in extract_skills("Visit our careers expo")
+
+
+def test_it_support_skills():
+    text = "Hands-on with IT support: builds and repairs PCs and laptops, runs a Proxmox homelab"
+    assert {"IT Support", "Hardware", "Virtualisation"} <= extract_skills(text)
