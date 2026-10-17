@@ -1,8 +1,12 @@
+import logging
 from dataclasses import replace
 from datetime import datetime
 
 from seekhunter.domain import JobData, normalize_work_type
+from seekhunter.http import SourceBlocked
 from seekhunter.models import SearchProfile
+
+logger = logging.getLogger(__name__)
 
 SEARCH_URL = "https://www.seek.com.au/api/jobsearch/v5/search"
 GRAPHQL_URL = "https://www.seek.com.au/graphql"
@@ -19,16 +23,23 @@ def _parse_dt(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
 
 
+def _parse_json(resp) -> dict:  # noqa: ANN001
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise SourceBlocked("non-JSON response from SEEK") from exc
+
+
 def parse_search_item(item: dict) -> JobData:
     job_id = str(item["id"])
-    locations = item.get("locations") or []
+    location = ((item.get("locations") or [{}])[0] or {}).get("label", "")
     teaser = " ".join([item.get("teaser") or "", *(item.get("bulletPoints") or [])]).strip()
     return JobData(
         source="seek",
         external_id=job_id,
         title=item.get("title", ""),
         company=(item.get("advertiser") or {}).get("description") or item.get("companyName") or "",
-        location=locations[0]["label"] if locations else "",
+        location=location,
         work_type=normalize_work_type((item.get("workTypes") or [""])[0]),
         url=f"https://www.seek.com.au/job/{job_id}",
         salary_label=item.get("salaryLabel") or None,
@@ -53,20 +64,27 @@ class SeekSource:
             ids = [WORKTYPE_IDS[w] for w in profile.work_types if w in WORKTYPE_IDS]
             if ids:
                 params["worktype"] = ",".join(ids)
-            payload = self.client.get(SEARCH_URL, params=params).json()
-            jobs.extend(parse_search_item(item) for item in payload.get("data") or [])
+            payload = _parse_json(self.client.get(SEARCH_URL, params=params))
+            items = payload.get("data") or []
+            if not items:
+                break
+            jobs.extend(parse_search_item(item) for item in items if item.get("id") is not None)
             if page * PAGE_SIZE >= int(payload.get("totalCount") or 0):
                 break
         return jobs
 
     def details(self, job: JobData) -> JobData:
-        payload = self.client.post(
+        resp = self.client.post(
             GRAPHQL_URL,
             json={
                 "operationName": "jobDetails", "variables": {"jobId": job.external_id},
                 "query": DETAILS_QUERY,
             },
             headers={"seek-request-brand": "seek", "seek-request-country": "AU"},
-        ).json()
+        )
+        payload = _parse_json(resp)
+        if "errors" in payload:
+            logger.warning("SEEK details for job %s returned errors: %s", job.external_id, payload["errors"])
+            return job
         content = ((((payload.get("data") or {}).get("jobDetails") or {}).get("job")) or {}).get("content")
         return replace(job, description_html=content) if content else job

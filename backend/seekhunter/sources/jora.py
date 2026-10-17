@@ -1,6 +1,7 @@
 import re
 from dataclasses import replace
 from datetime import datetime, timedelta
+from urllib.parse import urljoin
 
 from selectolax.lexbor import LexborHTMLParser
 
@@ -8,7 +9,7 @@ from seekhunter.domain import JobData, normalize_work_type
 from seekhunter.models import SearchProfile, utcnow
 
 BASE = "https://au.jora.com"
-_POSTED = re.compile(r"(\d+)\s*([mhdw])", re.IGNORECASE)
+_POSTED = re.compile(r"(\d+)\s*([mhdw])(?!o)", re.IGNORECASE)
 _UNITS = {"m": "minutes", "h": "hours", "d": "days", "w": "weeks"}
 
 
@@ -38,10 +39,12 @@ def parse_search_html(html: str, now: datetime) -> tuple[list[JobData], bool]:
         work_type = next((normalize_work_type(b) for b in badges if normalize_work_type(b) != "unknown"),
                          "unknown")
         href = (link.attributes.get("href") or "").split("?")[0]
+        if not href.startswith("/job/"):
+            continue
         jobs.append(JobData(
             source="jora", external_id=card_id[2:], title=link.text(strip=True),
             company=_text(card.css_first(".job-company")), location=_text(card.css_first(".job-location")),
-            work_type=work_type, url=BASE + href, salary_label=salary,
+            work_type=work_type, url=urljoin(BASE, href), salary_label=salary,
             listed_at=parse_posted(_text(card.css_first(".job-listed-date")), now),
             teaser=card.css_first(".job-abstract").text(separator=" ", strip=True)
             if card.css_first(".job-abstract") else "",
@@ -52,7 +55,8 @@ def parse_search_html(html: str, now: datetime) -> tuple[list[JobData], bool]:
 def parse_detail_html(html: str) -> tuple[str, str]:
     tree = LexborHTMLParser(html)
     container = tree.css_first("#job-description-container")
-    badges = [b.text(strip=True) for b in tree.css(".badge .content")]
+    scope = tree.css_first(".job-view-content") or tree
+    badges = [b.text(strip=True) for b in scope.css(".badge .content")]
     work_type = next(
         (normalize_work_type(b) for b in badges if normalize_work_type(b) != "unknown"), "unknown")
     return (container.html if container else ""), work_type

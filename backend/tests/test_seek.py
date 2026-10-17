@@ -1,5 +1,8 @@
 import json
 
+import pytest
+
+from seekhunter.http import SourceBlocked
 from seekhunter.models import SearchProfile
 from seekhunter.sources.seek import SeekSource, parse_search_item
 
@@ -60,3 +63,72 @@ def test_details_fills_description(fixtures_dir):
     src = SeekSource(FakeClient({}, details))
     job = src.details(parse_search_item(item))
     assert "Virginia Nursery Pty Ltd" in job.description_html
+
+
+def test_parse_search_item_empty_locations():
+    job = parse_search_item({"id": "1", "title": "Dev", "locations": []})
+    assert job.location == ""
+
+
+def test_search_skips_items_without_id(fixtures_dir):
+    payload = json.loads((fixtures_dir / "seek_search.json").read_text())
+    item = payload["data"][0]
+    no_id_item = dict(item)
+    del no_id_item["id"]
+    payload["data"] = [no_id_item, item]
+    payload["totalCount"] = 2
+    client = FakeClient(payload, {})
+    jobs = SeekSource(client).search(
+        SearchProfile(name="t", keywords="developer", location="All Adelaide SA", work_types=[]), max_pages=1)
+    assert len(jobs) == 1
+
+
+def test_search_stops_on_empty_page(fixtures_dir):
+    payload = json.loads((fixtures_dir / "seek_search.json").read_text())
+    payload["totalCount"] = 1000
+    payload["data"] = []
+    client = FakeClient(payload, {})
+    jobs = SeekSource(client).search(
+        SearchProfile(name="t", keywords="developer", location="All Adelaide SA", work_types=[]), max_pages=3)
+    assert jobs == []
+    assert len(client.calls) == 1
+
+
+class BadJsonResp:
+    status_code = 200
+
+    def json(self):
+        raise ValueError("bad json")
+
+
+class BadJsonClient:
+    def __init__(self):
+        self.calls = []
+
+    def get(self, url, **kw):
+        self.calls.append(("GET", url, kw))
+        return BadJsonResp()
+
+    def post(self, url, **kw):
+        self.calls.append(("POST", url, kw))
+        return BadJsonResp()
+
+
+def test_search_raises_source_blocked_on_non_json():
+    profile = SearchProfile(name="t", keywords="developer", location="All Adelaide SA", work_types=[])
+    with pytest.raises(SourceBlocked):
+        SeekSource(BadJsonClient()).search(profile, max_pages=1)
+
+
+def test_details_raises_source_blocked_on_non_json(fixtures_dir):
+    item = json.loads((fixtures_dir / "seek_search.json").read_text())["data"][0]
+    with pytest.raises(SourceBlocked):
+        SeekSource(BadJsonClient()).details(parse_search_item(item))
+
+
+def test_details_returns_job_unchanged_on_errors(fixtures_dir):
+    item = json.loads((fixtures_dir / "seek_search.json").read_text())["data"][0]
+    job = parse_search_item(item)
+    src = SeekSource(FakeClient({}, {"errors": [{"message": "boom"}]}))
+    result = src.details(job)
+    assert result == job

@@ -19,6 +19,7 @@ def get_engine() -> Engine:
     @event.listens_for(engine, "connect")
     def _wal(dbapi_conn, _):  # noqa: ANN001
         dbapi_conn.execute("PRAGMA journal_mode=WAL")
+        dbapi_conn.execute("PRAGMA synchronous=NORMAL")
 
     return engine
 

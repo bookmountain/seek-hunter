@@ -32,6 +32,24 @@ def test_parse_posted():
     assert parse_posted("", NOW) is None
 
 
+def test_parse_posted_months_does_not_parse_as_minutes():
+    assert parse_posted("Posted 2mo ago", NOW) is None
+
+
+def test_parse_search_html_skips_non_job_hrefs():
+    html = """
+    <div class="job-card" id="r_abc123">
+      <h2 class="job-title">
+        <a class="job-link" href="/jobs-in-Adelaide-SA?sp=serp_job_location">Not a job</a>
+      </h2>
+      <div class="job-company">Acme</div>
+      <div class="job-location">Adelaide SA</div>
+    </div>
+    """
+    jobs, _ = parse_search_html(html, NOW)
+    assert jobs == []
+
+
 def test_parse_detail_html(fixtures_dir):
     desc, work_type = parse_detail_html((fixtures_dir / "jora_detail.html").read_text())
     assert "Phillip Riley" in desc

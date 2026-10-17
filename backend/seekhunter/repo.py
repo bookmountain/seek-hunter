@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
 from seekhunter.domain import JobData, dedupe_key
@@ -45,7 +45,7 @@ def to_jobdata(job: Job) -> JobData:
 
 
 def find_duplicate(session: Session, job: Job) -> int | None:
-    if job.dedupe_key.endswith("|"):
+    if job.dedupe_key.startswith("|") or job.dedupe_key.endswith("|"):
         return None
     other = session.exec(
         select(Job).where(Job.dedupe_key == job.dedupe_key, Job.id != job.id, Job.source != job.source,
@@ -110,15 +110,20 @@ def list_jobs(session: Session, view: str = "active", status: str | None = None,
     if since:
         stmt = stmt.where(Job.first_seen_at >= since)
     if q:
-        like = f"%{q}%"
-        stmt = stmt.where(or_(col(Job.title).ilike(like), col(Job.company).ilike(like)))
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{escaped}%"
+        stmt = stmt.where(or_(
+            col(Job.title).ilike(like, escape="\\"), col(Job.company).ilike(like, escape="\\")))
     return list(session.exec(stmt.offset(offset).limit(limit)).all())
 
 
 def count_excluded_since(session: Session, since: datetime) -> int:
-    stmt = select(Job).join(JobEvaluation, JobEvaluation.job_id == Job.id).where(
-        JobEvaluation.excluded == True, Job.first_seen_at >= since)  # noqa: E712
-    return len(session.exec(stmt).all())
+    stmt = (
+        select(func.count()).select_from(Job).join(JobEvaluation, JobEvaluation.job_id == Job.id)
+        .where(JobEvaluation.excluded == True, Job.force_include == False,  # noqa: E712
+               Job.first_seen_at >= since)
+    )
+    return session.exec(stmt).one()
 
 
 def load_settings(session: Session) -> AppSettings:
