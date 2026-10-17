@@ -2,20 +2,21 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session
 
-from seekhunter import repo
+from seekhunter import market, repo
 from seekhunter.contacts import extract_contacts, is_plausible_name, normalize_phone
 from seekhunter.domain import JobData
 from seekhunter.filters import evaluate_exclusions
 from seekhunter.http import SourceBlocked
 from seekhunter.llm.base import LLMJobInput
 from seekhunter.models import Job, JobEvaluation, Outbox, Run, utcnow
-from seekhunter.notify import DigestItem, NotifyError, format_digest, format_recap
-from seekhunter.profile import Profile
+from seekhunter.notify import DigestItem, NotifyError, format_digest, format_market_brief, format_recap
+from seekhunter.profile import Profile, load_profile
 from seekhunter.scoring import blend, score_job
 
 log = logging.getLogger(__name__)
@@ -335,6 +336,33 @@ def run_recap(session: Session, notifier, public_url: str, dry_run: bool = False
         _send(session, notifier, text)
     if not dry_run:
         session.add(Run(kind="recap", finished_at=utcnow(), new_jobs=len(rows)))
+        session.commit()
+
+
+def run_insights_brief(session: Session, notifier, public_url: str, resume_dir: Path,  # noqa: ANN001
+                       dry_run: bool = False) -> None:
+    """Weekly market-insights brief (plain text): per-city totals/flexible share, Adelaide's top
+    skills, biggest gaps, a head-to-head line, and the best city for flexible roles."""
+    overview_rows = market.overview(session, days=14)
+    try:
+        profile_skills = load_profile(resume_dir).skills
+    except FileNotFoundError:
+        profile_skills = set()
+    top_skills = market.skill_demand(session, "adelaide", days=14, profile_skills=profile_skills, top=5)
+    top_gaps = market.gaps(session, "adelaide", days=14, profile_skills=profile_skills, top=3)
+
+    pair_skills = sorted({s for pair in market.HEAD_TO_HEAD_PAIRS for s in pair})
+    shares_by_city = {row["city"]: row["shares"] for row in market.compare(session, pair_skills, days=14)}
+    best = max(overview_rows, key=lambda r: r["flexible_share"], default=None)
+    best_city = best["city"] if best else "adelaide"
+    best_share = best["flexible_share"] if best else 0.0
+    h2h = market.head_to_head_lines(shares_by_city.get("adelaide", {}), best_city,
+                                    shares_by_city.get(best_city, {}))
+
+    text = format_market_brief(overview_rows, top_skills, top_gaps, h2h, best_city, best_share, public_url)
+    _send(session, notifier, text)
+    if not dry_run:
+        session.add(Run(kind="insights_brief", finished_at=utcnow()))
         session.commit()
 
 

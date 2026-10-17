@@ -246,6 +246,37 @@ def format_brief(*, job_id: int, title: str, company: str, location: str, work_t
     return "\n".join(lines)
 
 
+def format_market_brief(overview: list[dict], top_skills: list[dict], top_gaps: list[dict],
+                        head_to_head: list[str], best_flexible_city: str, best_flexible_share: float,
+                        public_url: str) -> str:
+    """Plain-text weekly market-insights brief: per-city totals/flexible share, Adelaide's top
+    skills (with "you have" markers), the biggest gaps, head-to-head lines, and the best city
+    for flexible work. No emoji, short lines, matching the rest of this module's style."""
+    lines = ["SeekHunter weekly market brief"]
+    for row in overview:
+        pct = row["flexible_share"] * 100
+        lines.append(f"{row['city'].capitalize()}: {row['total']} jobs, {pct:.0f}% flexible")
+    if top_skills:
+        lines.append("")
+        lines.append("Top skills in Adelaide:")
+        for s in top_skills[:5]:
+            mark = "have" if s["you_have"] else "gap"
+            lines.append(f"- {s['skill']} {s['share'] * 100:.0f}% ({mark})")
+    if top_gaps:
+        lines.append("")
+        lines.append("Biggest gaps:")
+        for g in top_gaps[:3]:
+            lines.append(f"- {g['skill']} {g['share'] * 100:.0f}%")
+    if head_to_head:
+        lines.append("")
+        lines.extend(head_to_head)
+    lines.append("")
+    lines.append(f"Best city for flexible roles: {best_flexible_city.capitalize()} "
+                 f"({best_flexible_share * 100:.0f}%)")
+    lines.append(f"{_host(public_url)}/insights")
+    return "\n".join(lines)
+
+
 DEFAULT_OPENCLAW_MEDIA_DIR = Path.home() / ".openclaw" / "media" / "outbound" / "seekhunter"
 
 

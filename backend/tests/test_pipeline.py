@@ -13,6 +13,7 @@ from seekhunter.pipeline import (
     _lookup_linkedin,
     run_contacts_backfill,
     run_crawl,
+    run_insights_brief,
     run_insights_refresh,
     run_recap,
     run_rescore,
@@ -158,6 +159,35 @@ def test_recap(session):
     n = FakeNotifier()
     run_recap(session, n, "https://sh")
     assert "1 new jobs, 1 excluded" in n.sent[0]
+
+
+def test_run_insights_brief(session, fixtures_dir):
+    from seekhunter.models import utcnow
+
+    now = utcnow()
+    for i in range(3):
+        data = JobData(source="seek", external_id=f"a{i}", title="Backend Developer", company="Acme",
+                       location="adelaide", work_type="contract", url="u", salary_label="$40 - $45 per hour",
+                       teaser="Java")
+        job, _ = repo.upsert_market_job(session, data, "adelaide", "developer", now, role_family="backend",
+                                        skills=["Java"], salary_min_hourly=40.0, salary_max_hourly=45.0)
+        repo.apply_market_details(session, job, ["Java"])
+
+    n = FakeNotifier()
+    run_insights_brief(session, n, "https://sh", fixtures_dir / "resume")
+    assert len(n.sent) == 1
+    text = n.sent[0]
+    assert text.startswith("SeekHunter weekly market brief")
+    assert "Adelaide: 3 jobs" in text
+    assert "Java" in text
+    assert text.rstrip().endswith("sh/insights")
+    assert session.exec(select(Run).where(Run.kind == "insights_brief")).first() is not None
+
+
+def test_run_insights_brief_dry_run_skips_run_row(session, fixtures_dir):
+    n = FakeNotifier()
+    run_insights_brief(session, n, "https://sh", fixtures_dir / "resume", dry_run=True)
+    assert session.exec(select(Run).where(Run.kind == "insights_brief")).first() is None
 
 
 def test_run_lock(tmp_path):

@@ -4,7 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from seekhunter.notify import DigestItem, Notifier, NotifyError, format_brief, format_digest, format_recap
+from seekhunter.notify import (
+    DigestItem,
+    Notifier,
+    NotifyError,
+    format_brief,
+    format_digest,
+    format_market_brief,
+    format_recap,
+)
 
 
 def item(i, score=80, flags=("flexible",), location="Adelaide SA", why="Strong React match",
@@ -336,6 +344,48 @@ def test_notifier_send_file_stages_into_openclaw_media_dir(monkeypatch, tmp_path
     assert "--force-document" in cmd and cmd[-2:] == ["--message", "#7 resume"]
     assert seen == {"exists_during_send": True, "content": b"%PDF-1.4 test"}
     assert not staged.exists()  # cleaned up after sending
+
+
+OVERVIEW = [
+    {"city": "adelaide", "total": 50, "flexible": 20, "flexible_share": 0.4},
+    {"city": "melbourne", "total": 120, "flexible": 70, "flexible_share": 0.583},
+    {"city": "sydney", "total": 90, "flexible": 30, "flexible_share": 0.333},
+    {"city": "perth", "total": 40, "flexible": 10, "flexible_share": 0.25},
+]
+TOP_SKILLS = [
+    {"skill": "Java", "count": 10, "share": 0.4, "you_have": True},
+    {"skill": "C#", "count": 8, "share": 0.32, "you_have": False},
+]
+TOP_GAPS = [
+    {"skill": "Kubernetes", "count": 6, "share": 0.24, "example_titles": ["DevOps Engineer"],
+     "role_families": ["devops_cloud"]},
+]
+H2H = ["Java vs C#: Adelaide 40%/32% - Melbourne 55%/20%"]
+
+
+def test_format_market_brief_has_no_emoji_and_is_plain_text():
+    text = format_market_brief(OVERVIEW, TOP_SKILLS, TOP_GAPS, H2H, "melbourne", 0.583, "https://sh")
+    assert all(ord(ch) < 0x2100 or ch in "—·…-" for ch in text)
+
+
+def test_format_market_brief_includes_city_totals_and_flexible_share():
+    text = format_market_brief(OVERVIEW, TOP_SKILLS, TOP_GAPS, H2H, "melbourne", 0.583, "https://sh")
+    assert "Adelaide: 50 jobs, 40% flexible" in text
+    assert "Melbourne: 120 jobs, 58% flexible" in text
+
+
+def test_format_market_brief_includes_top_skills_with_have_markers():
+    text = format_market_brief(OVERVIEW, TOP_SKILLS, TOP_GAPS, H2H, "melbourne", 0.583, "https://sh")
+    assert "Java 40% (have)" in text
+    assert "C# 32% (gap)" in text
+
+
+def test_format_market_brief_includes_gaps_and_head_to_head_and_best_city():
+    text = format_market_brief(OVERVIEW, TOP_SKILLS, TOP_GAPS, H2H, "melbourne", 0.583, "https://sh")
+    assert "Kubernetes 24%" in text
+    assert "Java vs C#: Adelaide 40%/32% - Melbourne 55%/20%" in text
+    assert "Best city for flexible roles: Melbourne (58%)" in text
+    assert text.rstrip().endswith("sh/insights")
 
 
 def test_notifier_send_file_failure_raises(monkeypatch, tmp_path):
