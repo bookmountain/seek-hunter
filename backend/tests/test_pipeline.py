@@ -292,11 +292,11 @@ def test_rollback_on_source_failure_keeps_other_source_working(session):
     calls = {"n": 0}
     original_upsert = repo.upsert_job
 
-    def flaky_upsert(session, data):  # noqa: ANN001
+    def flaky_upsert(session, data, **kwargs):  # noqa: ANN001
         calls["n"] += 1
         if calls["n"] == 1:
             raise OperationalError("SELECT 1", {}, Exception("boom"))
-        return original_upsert(session, data)
+        return original_upsert(session, data, **kwargs)
 
     import seekhunter.pipeline as pipeline_module
 

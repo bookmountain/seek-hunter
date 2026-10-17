@@ -14,6 +14,34 @@ INTERACTION_KINDS = ("call", "email", "linkedin_invite", "linkedin_accepted", "l
                      "note")
 APPLICATION_EVENT_KINDS = ("created", "stage_changed", "note")
 
+CITY_BY_PROFILE_LOCATION = {
+    "All Adelaide SA": "adelaide",
+    "All Melbourne VIC": "melbourne",
+    "All Sydney NSW": "sydney",
+    "All Perth WA": "perth",
+    "All Brisbane QLD": "brisbane",
+}
+_CITY_NAMES = ("adelaide", "melbourne", "sydney", "perth", "brisbane")
+
+
+def derive_city_from_location(location: str | None, default: str = "other") -> str:
+    """Best-effort city from a free-text job location (e.g. "Adelaide SA"): the first known city
+    name found in it, case-insensitively, else `default`."""
+    loc = (location or "").lower()
+    for city in _CITY_NAMES:
+        if city in loc:
+            return city
+    return default
+
+
+def derive_city(profile_location: str | None, job_location: str, default: str = "other") -> str:
+    """City for a newly-seen job: the search profile's location wins when it's one of the known
+    profile locations (e.g. "All Melbourne VIC"); otherwise falls back to parsing the job's own
+    `location` text, and finally to `default`."""
+    if profile_location and profile_location in CITY_BY_PROFILE_LOCATION:
+        return CITY_BY_PROFILE_LOCATION[profile_location]
+    return derive_city_from_location(job_location, default=default)
+
 
 def normalize_work_type(label: str | None) -> str:
     text = (label or "").lower()

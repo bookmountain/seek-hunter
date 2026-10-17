@@ -23,6 +23,9 @@ def test_defaults_contain_core_rules():
     assert s.weights.flexible_work == 35
     assert s.weights.full_time == 10
     assert s.llm_providers == ["anthropic", "openclaw"]
+    assert s.notify_cities == ["adelaide"]
+    assert s.other_city_max_pages == 2
+    assert s.notifications_read_at is None
 
 
 def test_roundtrip_json():
@@ -30,6 +33,14 @@ def test_roundtrip_json():
     s.employer_allowlist.append("Acme")
     again = AppSettings.model_validate_json(s.model_dump_json())
     assert again.employer_allowlist == ["Acme"]
+
+
+def test_notifications_read_at_roundtrips_through_json_mode_dump():
+    from datetime import datetime
+
+    s = AppSettings(notifications_read_at=datetime(2026, 1, 1, 12, 0, 0))
+    again = AppSettings.model_validate(s.model_dump(mode="json"))
+    assert again.notifications_read_at == datetime(2026, 1, 1, 12, 0, 0)
 
 
 def test_citizenship_patterns_match_common_phrasings():

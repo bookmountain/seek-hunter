@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
-from seekhunter.domain import JobData, company_key, dedupe_key
+from seekhunter.domain import JobData, company_key, dedupe_key, derive_city
 from seekhunter.models import (
     Application,
     ApplicationEvent,
@@ -28,7 +28,10 @@ DEFAULT_KEYWORDS = [
 ]
 
 
-def upsert_job(session: Session, data: JobData) -> tuple[Job, bool]:
+def upsert_job(session: Session, data: JobData, profile_location: str | None = None) -> tuple[Job, bool]:
+    """Inserts a new job, or returns the existing one unchanged (first finder wins — including the
+    `city`, derived from `profile_location` when it's a recognised search-profile location, else
+    parsed from the job's own `location` text; see `domain.derive_city`)."""
     existing = session.exec(
         select(Job).where(Job.source == data.source, Job.external_id == data.external_id)
     ).first()
@@ -36,7 +39,8 @@ def upsert_job(session: Session, data: JobData) -> tuple[Job, bool]:
         return existing, False
     job = Job(
         source=data.source, external_id=data.external_id, title=data.title, company=data.company,
-        location=data.location, work_type=data.work_type, salary_label=data.salary_label,
+        location=data.location, city=derive_city(profile_location, data.location),
+        work_type=data.work_type, salary_label=data.salary_label,
         listed_at=data.listed_at, url=data.url, teaser=data.teaser, description_html=data.description_html,
         dedupe_key=dedupe_key(data.title, data.company),
     )
@@ -225,7 +229,9 @@ def load_settings(session: Session) -> AppSettings:
 
 def save_settings(session: Session, settings: AppSettings) -> None:
     row = session.get(SettingsRow, 1) or SettingsRow(id=1)
-    row.data = settings.model_dump()
+    # mode="json" so NaiveDatetime fields (notifications_read_at) serialize to ISO strings rather
+    # than raw datetime objects, which the sqlite JSON column can't store.
+    row.data = settings.model_dump(mode="json")
     session.add(row)
     session.commit()
 

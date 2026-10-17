@@ -5,6 +5,7 @@ from sqlalchemy import Engine, event, inspect, text
 from sqlmodel import Session, SQLModel, create_engine
 
 from seekhunter.config import get_env
+from seekhunter.domain import derive_city_from_location
 
 CONTACT_COLUMNS = ("contact_name", "contact_phone", "contact_email", "contact_linkedin")
 INSIGHT_COLUMNS = ("applicant_count", "applicant_volume", "resume_pct", "cover_letter_pct",
@@ -13,6 +14,7 @@ _INSIGHT_COLUMN_TYPES = {
     "applicant_count": "INTEGER", "applicant_volume": "VARCHAR", "resume_pct": "INTEGER",
     "cover_letter_pct": "INTEGER", "insights_checked_at": "DATETIME",
 }
+CITY_COLUMNS = ("city",)
 
 
 @lru_cache
@@ -39,6 +41,7 @@ def init_db(engine: Engine | None = None) -> None:
     SQLModel.metadata.create_all(eng)
     _ensure_contact_columns(eng)
     _ensure_insight_columns(eng)
+    _ensure_city_column(eng)
 
 
 def _ensure_columns(engine: Engine, columns: tuple[str, ...], sql_type: str | dict[str, str]) -> None:
@@ -63,6 +66,26 @@ def _ensure_contact_columns(engine: Engine) -> None:
 
 def _ensure_insight_columns(engine: Engine) -> None:
     _ensure_columns(engine, INSIGHT_COLUMNS, _INSIGHT_COLUMN_TYPES)
+
+
+def _ensure_city_column(engine: Engine) -> None:
+    """Adds `jobs.city` (idempotent ALTER, like the contact/insight columns above), then backfills
+    any row left with a NULL city — pre-existing rows from before this column existed, and rows
+    inserted by a stale app instance mid-deploy — from their stored `location` text. Rows that
+    already have a city (including ones backfilled by an earlier call) are left untouched, so this
+    is cheap and safe to run on every startup."""
+    inspector = inspect(engine)
+    if "jobs" not in inspector.get_table_names():
+        return
+    existing = {c["name"] for c in inspector.get_columns("jobs")}
+    if "city" not in existing:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN city VARCHAR"))
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, location FROM jobs WHERE city IS NULL")).fetchall()
+        for row_id, location in rows:
+            city = derive_city_from_location(location, default="adelaide")
+            conn.execute(text("UPDATE jobs SET city = :city WHERE id = :id"), {"city": city, "id": row_id})
 
 
 def get_session() -> Iterator[Session]:

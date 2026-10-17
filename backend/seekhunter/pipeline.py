@@ -10,11 +10,11 @@ from sqlmodel import Session
 
 from seekhunter import market, repo
 from seekhunter.contacts import extract_contacts, is_plausible_name, normalize_phone
-from seekhunter.domain import JobData, company_key
+from seekhunter.domain import CITY_BY_PROFILE_LOCATION, JobData, company_key
 from seekhunter.filters import evaluate_exclusions
 from seekhunter.http import SourceBlocked
 from seekhunter.llm.base import LLMJobInput
-from seekhunter.models import Application, Job, JobEvaluation, Outbox, Run, utcnow
+from seekhunter.models import Application, Job, JobEvaluation, Outbox, Run, SearchProfile, utcnow
 from seekhunter.notify import DigestItem, NotifyError, format_digest, format_market_brief, format_recap
 from seekhunter.profile import Profile, load_profile
 from seekhunter.scoring import blend, score_job
@@ -146,6 +146,16 @@ def _apply_details(session: Session, name: str, source, job: Job, data: JobData)
         repo.set_insights(session, job, _jobdata_insights(details), utcnow())
 
 
+def _max_pages_for(profile: SearchProfile, settings) -> int:  # noqa: ANN001
+    """Politeness cap: profiles outside the notify_cities get at most `other_city_max_pages` pages
+    per search (they're still fully evaluated/scored/contacted, just crawled more lightly since
+    they're not going to Telegram unless/until their city is enabled)."""
+    city = CITY_BY_PROFILE_LOCATION.get(profile.location, "other")
+    if city not in settings.notify_cities:
+        return min(settings.max_pages_per_search, settings.other_city_max_pages)
+    return settings.max_pages_per_search
+
+
 def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict]:  # noqa: ANN001
     status: dict = {}
     new_jobs: list[Job] = []
@@ -156,9 +166,9 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
             for profile in profiles:
                 if name not in profile.sources:
                     continue
-                for data in source.search(profile, settings.max_pages_per_search):
+                for data in source.search(profile, _max_pages_for(profile, settings)):
                     st["found"] += 1
-                    job, is_new = repo.upsert_job(session, data)
+                    job, is_new = repo.upsert_job(session, data, profile_location=profile.location)
                     if not is_new:
                         continue
                     st["new"] += 1

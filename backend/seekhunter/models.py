@@ -20,6 +20,7 @@ class Job(SQLModel, table=True):
     title: str
     company: str = ""
     location: str = ""
+    city: str | None = Field(default=None, index=True)
     work_type: str = "unknown"
     salary_label: str | None = None
     listed_at: NaiveDatetime | None = None

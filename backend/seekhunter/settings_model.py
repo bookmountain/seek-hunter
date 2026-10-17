@@ -1,6 +1,6 @@
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, NaiveDatetime, field_validator
 
 
 class Weights(BaseModel):
@@ -76,6 +76,11 @@ class AppSettings(BaseModel):
     max_pages_per_search: int = 3
     max_notify_per_run: int = 20
     max_insights_per_run: int = 30
+    notify_cities: list[str] = Field(default_factory=lambda: ["adelaide"])
+    other_city_max_pages: int = 2
+    # Server-side "last read" marker for the in-app notification bell (GET/POST /api/notifications).
+    # Deliberately excluded from PUT /api/settings overwrites — see api.put_settings.
+    notifications_read_at: NaiveDatetime | None = None
     market_enabled: bool = True
     market_cities: list[str] = Field(
         default_factory=lambda: ["adelaide", "melbourne", "sydney", "perth"])

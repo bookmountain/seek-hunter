@@ -2,6 +2,8 @@ from seekhunter.domain import (
     JobData,
     company_key,
     dedupe_key,
+    derive_city,
+    derive_city_from_location,
     html_to_lines,
     html_to_text,
     normalize_work_type,
@@ -68,3 +70,30 @@ def test_company_key_normalizes_suffixes_and_punctuation():
 
 def test_dedupe_key_reuses_company_key():
     assert dedupe_key("Dev", "Acme Pty Ltd") == f"dev|{company_key('Acme Pty Ltd')}"
+
+
+def test_derive_city_from_profile_location():
+    assert derive_city("All Adelaide SA", "whatever") == "adelaide"
+    assert derive_city("All Melbourne VIC", "whatever") == "melbourne"
+    assert derive_city("All Sydney NSW", "whatever") == "sydney"
+    assert derive_city("All Perth WA", "whatever") == "perth"
+    assert derive_city("All Brisbane QLD", "whatever") == "brisbane"
+
+
+def test_derive_city_falls_back_to_job_location_when_profile_unknown():
+    assert derive_city(None, "Adelaide SA") == "adelaide"
+    assert derive_city("Some other search", "Sydney NSW") == "sydney"
+
+
+def test_derive_city_defaults_to_other_when_nothing_matches():
+    assert derive_city(None, "Remote") == "other"
+    assert derive_city(None, "") == "other"
+
+
+def test_derive_city_from_location_matches_known_cities_case_insensitively():
+    assert derive_city_from_location("ADELAIDE SA") == "adelaide"
+    assert derive_city_from_location("Melbourne VIC") == "melbourne"
+    assert derive_city_from_location("somewhere else") == "other"
+    assert derive_city_from_location(None) == "other"
+    assert derive_city_from_location(None, default="adelaide") == "adelaide"
+    assert derive_city_from_location("Remote", default="adelaide") == "adelaide"
