@@ -96,6 +96,8 @@ def test_changes_list(fixtures_dir):
     reply = _reply(summary="Software Engineer with 5 years of experience in React and AI, full-stack.")
     result = tailor(JOB, doc, lambda p: json.dumps(reply))
     changes = compute_changes(doc, result.doc)
+    assert changes[0] == {"type": "headline", "after": result.doc.headline}  # fallback headline
+    changes = changes[1:]
     kinds = [c["type"] for c in changes]
     assert kinds == ["summary", "bullet", "skills", "skills", "projects"]
     assert changes[0]["before"] != changes[0]["after"]
@@ -147,3 +149,45 @@ def test_openclaw_llm_failure_raises_tailor_error(monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "boom"))
     with pytest.raises(TailorError):
         openclaw_llm(Env(openclaw_bin="oc"))("p")
+
+
+JAVA_JOB = JobContext(title="Full Stack (Java) Developer", company="Robert Walters", location="Adelaide SA",
+                      work_type="full_time", contact_name=None,
+                      ad_text="Java, Spring Boot, React, Hibernate, relational databases, Agile team.")
+
+
+def test_prompt_lists_supported_and_unsupported_target_phrases(fixtures_dir):
+    doc = load_resume_doc(fixtures_dir / "resume")
+    prompt = build_prompt(JAVA_JOB, doc, supported=["Java", "full stack"], unsupported=["Hibernate", "agile"])
+    assert "TARGET PHRASES" in prompt
+    sup = prompt[prompt.index("\nSUPPORTED:"):prompt.index("\nUNSUPPORTED")]
+    assert "Java" in sup and "full stack" in sup and "Hibernate" not in sup
+    unsup = prompt[prompt.index("\nUNSUPPORTED"):prompt.index("OUTPUT FORMAT")]
+    assert "Hibernate" in unsup and "agile" in unsup
+    assert '"headline"' in prompt and "headline" in prompt[:prompt.index("OUTPUT FORMAT")]
+
+
+def test_tailor_uses_job_phrases_and_validates_headline(fixtures_dir):
+    doc = load_resume_doc(fixtures_dir / "resume")
+    prompts = []
+
+    def fake(prompt):
+        prompts.append(prompt)
+        return json.dumps(_reply(headline="Full Stack Software Engineer · Java, React",
+                                 summary="Full-stack Software Engineer with 5 years of experience in React, "
+                                         "Java and AI."))
+
+    result = tailor(JAVA_JOB, doc, fake)
+    assert result.doc.headline == "Full Stack Software Engineer · Java, React"
+    assert "Java" in result.supported_phrases and "agile" in result.unsupported_phrases
+    assert "Spring Boot" in result.unsupported_phrases  # ad wording kept; not in the fixture resume
+    assert "relational databases" in result.unsupported_phrases  # fixture resume has no SQL
+    unsup = prompts[0][prompts[0].index("\nUNSUPPORTED"):prompts[0].index("OUTPUT FORMAT")]
+    assert "agile" in unsup and "Java" not in unsup
+
+
+def test_tailor_prefers_given_target_phrases(fixtures_dir):
+    doc = load_resume_doc(fixtures_dir / "resume")
+    job = JobContext(**{**JAVA_JOB.__dict__, "target_phrases": ["Python", "JIRA"]})
+    result = tailor(job, doc, lambda p: json.dumps(_reply()))
+    assert result.supported_phrases == ["Python"] and result.unsupported_phrases == ["JIRA"]

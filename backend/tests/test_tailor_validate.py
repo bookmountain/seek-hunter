@@ -188,3 +188,43 @@ def test_summary_trivial_change_keeps_original():
     res = _run(summary="Full stack engineer with 6 years of experience in React and TypeScript")
     assert res.doc.summary == BASE.summary
     assert res.warnings == _run().warnings
+
+
+def _run_job(**fields):
+    data = {"summary": BASE.summary, "cover_letter": LETTER, **fields}
+    return validate(BASE, TailorOutput.model_validate(data), job_title="Full Stack Java Developer",
+                    ad_text="Java, React, SQL, Hibernate, relational databases.",
+                    supported=["SQL", "relational databases"], unsupported=["Hibernate", "Agile development"])
+
+
+def test_supported_phrase_accepted_in_summary():
+    summary = "Full-stack engineer with 6 years of React, TypeScript, SQL and relational databases."
+    assert _run(summary=summary).doc.summary == BASE.summary  # SQL is not in the resume vocabulary
+    res = _run_job(summary=summary)
+    assert res.doc.summary == summary
+    assert not any("Summary" in w for w in res.warnings)
+
+
+def test_unsupported_phrase_rejected_in_summary_and_bullets():
+    res = _run_job(summary="Full-stack engineer with 6 years of React, Hibernate and TypeScript.")
+    assert res.doc.summary == BASE.summary
+    assert any("Hibernate" in w for w in res.warnings)
+    res = _run_job(summary="Full-stack engineer with 6 years of Agile development in React and TypeScript.")
+    assert res.doc.summary == BASE.summary
+    res = _run_job(experiences=[{"id": "sampras", "bullets": [
+        {"id": "sampras-b1", "text": "Delivered 9 projects with NestJS, React and Hibernate."}]}])
+    assert res.doc.experiences[0].bullets[0].text == "Delivered 9 projects with NestJS and React."
+
+
+def test_supported_phrase_still_rejects_new_numbers():
+    res = _run_job(summary="Full-stack engineer with 8 years of React and relational databases.")
+    assert res.doc.summary == BASE.summary
+
+
+def test_headline_validated_and_fallback():
+    res = _run_job(headline="Full Stack Engineer · Java, React, TypeScript")
+    assert res.doc.headline == "Full Stack Engineer · Java, React, TypeScript"
+    res = _run_job(headline="Lead Full Stack Engineer · Java, Hibernate")
+    assert res.doc.headline and "Lead" not in res.doc.headline and "Hibernate" not in res.doc.headline
+    assert any("Headline" in w for w in res.warnings)
+    assert _run_job().doc.headline  # missing -> deterministic fallback

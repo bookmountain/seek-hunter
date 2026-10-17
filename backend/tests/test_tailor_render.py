@@ -155,3 +155,107 @@ def test_real_tailored_resume_compiles(tmp_path):
     assert info["pages"]["cover_letter"] == 1
     assert 1 <= info["pages"]["resume"] <= 3
     assert (tmp_path / "o" / "resume.pdf").stat().st_size > 10_000
+
+
+REAL_HEADER = r"""\documentclass{article}
+\newcommand{\resumeHeader}{%
+  \begin{center}
+    {\fontsize{30}{34}\selectfont Book Sam}
+  \end{center}
+  \hrule
+  contact table
+}
+\begin{document}
+\resumeHeader
+\end{document}
+"""
+
+
+def test_with_headline_inserts_line_under_name_inside_header():
+    tex = render.with_headline(REAL_HEADER, "Full Stack Engineer · Java & React")
+    pre, body = tex.split("\\begin{document}")
+    assert "\\newcommand{\\resumeHeadline}{Full Stack Engineer · Java \\& React}" in pre
+    header = pre[pre.index("\\newcommand{\\resumeHeader}"):]
+    assert header.index("Book Sam") < header.index("\\resumeHeadline") < header.index("\\end{center}")
+    assert header.index("\\end{center}") < header.index("\\hrule")
+    assert body == REAL_HEADER.split("\\begin{document}")[1]  # body untouched
+
+
+def test_with_headline_without_center_appends_to_header():
+    tex = render.with_headline(RESUME_TEX, "Software Engineer")
+    pre = tex.split("\\begin{document}")[0]
+    assert "\\resumeHeadline" in pre[pre.index("\\newcommand{\\resumeHeader}"):]
+    assert "\\newcommand{\\resumeHeadline}{Software Engineer}" in pre
+
+
+def _capturing_compiler(seen):
+    fake = FakeCompiler()
+
+    def compile_tex(work_dir, tex_name):
+        seen[tex_name] = (work_dir / tex_name).read_text()
+        return fake(work_dir, tex_name)
+
+    return compile_tex
+
+
+def test_build_tailored_renders_headline_only_when_set(latex_dir, tmp_path, fixtures_dir):
+    doc = load_resume_doc(fixtures_dir / "resume")
+    seen: dict[str, str] = {}
+    kw = dict(job_title="Dev", company="Acme", contact_name=None, location="", today=date(2026, 10, 17))
+    render.build_tailored(latex_dir, latex_dir / "sections" / "resume", doc, LETTER, tmp_path / "a",
+                          _capturing_compiler(seen), **kw)
+    assert seen["resume.tex"] == RESUME_TEX
+    doc.headline = "Software Engineer · Java"
+    render.build_tailored(latex_dir, latex_dir / "sections" / "resume", doc, LETTER, tmp_path / "b",
+                          _capturing_compiler(seen), **kw)
+    assert "Software Engineer · Java" in seen["resume.tex"]
+    assert "resumeHeadline" not in seen["cover_letter.tex"]  # the letter header stays as it was
+    assert (latex_dir / "resume.tex").read_text() == RESUME_TEX  # user's file untouched
+
+
+@pytest.mark.skipif(shutil.which("tectonic") is None or not REAL_LATEX.is_dir(),
+                    reason="needs tectonic and book-cv checked out")
+def test_real_headline_compiles_under_name(tmp_path):
+    import pypdfium2 as pdfium
+
+    doc = load_resume_doc(REAL_LATEX / "sections" / "resume")
+    doc.headline = "Full Stack Software Engineer · Java, Spring Boot, React"
+    letter = CoverLetter(greeting="Dear Hiring Manager,", paragraphs=["I build React apps. " * 20] * 3)
+    info = render.build_tailored(REAL_LATEX, REAL_LATEX / "sections" / "resume", doc, letter, tmp_path / "o",
+                                 render.tectonic_compiler(shutil.which("tectonic")), job_title="Developer",
+                                 company="Acme", contact_name=None, location="Adelaide SA",
+                                 today=date(2026, 10, 17))
+    pdf = pdfium.PdfDocument(str(tmp_path / "o" / "resume.pdf"))
+    try:
+        text = pdf[0].get_textpage().get_text_range()
+    finally:
+        pdf.close()
+    assert "Full Stack Software Engineer" in text
+    assert text.index("Book Sam") < text.index("Full Stack Software Engineer") < text.index("github.com")
+    assert info["pages"]["resume"] <= 3
+
+
+def test_with_headline_without_header_macro_goes_after_begin_document():
+    plain = "\\documentclass{article}\n\\begin{document}\nHi\n\\end{document}\n"
+    tex = render.with_headline(plain, "QA Engineer")
+    assert tex.index("\\newcommand{\\resumeHeadline}{QA Engineer}") < tex.index("\\begin{document}")
+    assert tex.index("\\begin{document}") < tex.index("\\resumeHeadline\\par") < tex.index("Hi")
+
+
+def test_headline_dropped_when_it_adds_a_page(latex_dir, tmp_path, fixtures_dir):
+    doc = load_resume_doc(fixtures_dir / "resume")
+    doc.headline = "Software Engineer · Java"
+
+    def compiler(work_dir, tex_name):
+        pdf = work_dir / tex_name.replace(".tex", ".pdf")
+        write_pdf(pdf, 3 if "resumeHeadline" in (work_dir / tex_name).read_text() else 2)
+        return pdf
+
+    kw = dict(job_title="Dev", company="Acme", contact_name=None, location="", today=date(2026, 10, 17))
+    info = render.build_tailored(latex_dir, latex_dir / "sections" / "resume", doc, LETTER, tmp_path / "a",
+                                 compiler, max_resume_pages=2, **kw)
+    assert info["pages"]["resume"] == 2 and info["headline"] is None
+    assert any("headline" in w.lower() for w in info["warnings"])
+    info = render.build_tailored(latex_dir, latex_dir / "sections" / "resume", doc, LETTER, tmp_path / "b",
+                                 compiler, max_resume_pages=3, **kw)
+    assert info["pages"]["resume"] == 3 and info["headline"] == "Software Engineer · Java"

@@ -56,7 +56,8 @@ def test_moved_with_positions_and_counts():
         {"op": "delete", "text": "Built"}, {"op": "insert", "text": "Shipped"},
         {"op": "equal", "text": "things."}]
     assert change_counts(changes) == {"reworded": 1, "removed": 0, "moved": 2, "skills_reordered": 1,
-                                      "projects_changed": True, "summary_changed": True}
+                                      "projects_changed": True, "summary_changed": True,
+                                      "headline_added": False}
 
 
 def test_removed_does_not_mark_followers_moved():
@@ -83,3 +84,14 @@ def test_old_run_with_spelling_only_change_shows_kept():
     counts = change_counts(changes)
     assert counts["reworded"] == 0 and counts["summary_changed"] is False and counts["moved"] == 2
     assert counts["projects_changed"] is False and counts["skills_reordered"] == 0
+
+
+def test_headline_change_first_and_counted():
+    base = _doc()
+    tailored = base.model_copy(update={"headline": "Software Engineer · Java"})
+    changes = compute_changes(base, tailored)
+    assert changes[0] == {"type": "headline", "after": "Software Engineer · Java"}
+    assert change_counts(changes)["headline_added"] is True
+    plain = compute_changes(base, base)
+    assert all(c["type"] != "headline" for c in plain)
+    assert change_counts(plain)["headline_added"] is False

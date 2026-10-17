@@ -312,6 +312,23 @@ describe("ChangesPanel", () => {
     );
   });
 
+  it("shows an added headline at the top", () => {
+    const { container } = render(
+      <ChangesPanel
+        counts={{ reworded: 0, removed: 0, moved: 0, skills_reordered: 0, projects_changed: false, summary_changed: false, headline_added: true }}
+        changes={[
+          { type: "headline", after: "Full Stack Software Engineer · Java, React" },
+          { type: "summary", before: "s", after: "s", changed: false },
+        ]}
+      />,
+    );
+    const region = screen.getByRole("region", { name: "Changes" });
+    const sections = region.querySelectorAll("section");
+    expect(sections[0]?.textContent).toContain("Headline");
+    expect(container.querySelector("ins")?.textContent).toBe("Full Stack Software Engineer · Java, React");
+    expect(screen.getByTestId("change-summary").textContent).toBe("Headline added");
+  });
+
   it("falls back to a client-side word diff and counts when the API sends neither", () => {
     const { container } = render(
       <ChangesPanel

@@ -18,6 +18,7 @@ from seekhunter.resume_doc import ResumeDoc, load_resume_doc
 from seekhunter.resume_matcher import ResumeMatcher
 from seekhunter.tailor import current, rm
 from seekhunter.tailor.engine import LLM, JobContext, tailor
+from seekhunter.tailor.phrases import rm_phrases
 from seekhunter.tailor.render import Compiler, build_tailored
 
 log = logging.getLogger(__name__)
@@ -76,13 +77,23 @@ def own_ats(env: Env, title: str, base: ResumeDoc, tailored: ResumeDoc, matched:
             "tailored": ats_score.score_doc(tailored, keywords, contact)}
 
 
+def previous_rm_phrases(session: Session, t: Tailoring) -> list[str]:
+    """Resume-Matcher's keywords for this job from the newest earlier tailoring that has them."""
+    for prev in repo.list_tailorings(session, t.job_id):
+        if prev.id != t.id and (found := rm_phrases(prev.result)):
+            return found
+    return []
+
+
 def run_tailoring(session: Session, tailoring_id: int, *, env: Env, llm: LLM, compiler: Compiler,
                   notifier: FileNotifier | None = None, provider: str = "openclaw",
                   today: date | None = None, resume_matcher: ResumeMatcher | None = None,
-                  defer_resume_matcher: bool = False) -> Tailoring:
+                  defer_resume_matcher: bool = False, reuse_rm_keywords: bool = True) -> Tailoring:
     """`resume_matcher`: when given, a best-effort "Analysing with Resume-Matcher" step runs after the
     tailoring is done (never failing it). With `defer_resume_matcher` it is only marked queued and the
-    caller runs `rm.run_resume_matcher` itself (the CLI does, outside the tailoring lock)."""
+    caller runs `rm.run_resume_matcher` itself (the CLI does, outside the tailoring lock).
+    `reuse_rm_keywords`: target the job phrases Resume-Matcher found in an earlier tailoring of the same
+    job (re-tailors); otherwise, and on first tailorings, phrases are extracted from the ad."""
     t = session.get(Tailoring, tailoring_id)
     if t is None:
         raise ValueError(f"tailoring {tailoring_id} not found")
@@ -99,8 +110,10 @@ def run_tailoring(session: Session, tailoring_id: int, *, env: Env, llm: LLM, co
         t.resume_hash = base_info["hash"]
 
         _progress(session, t, "Tailoring with AI")
+        targets = previous_rm_phrases(session, t) if reuse_rm_keywords else []
         ctx = JobContext(title=job.title, company=job.company, location=job.location, work_type=job.work_type,
-                         contact_name=job.contact_name, ad_text=repo.to_jobdata(job).text)
+                         contact_name=job.contact_name, ad_text=repo.to_jobdata(job).text,
+                         target_phrases=targets or None)
         validated = tailor(ctx, doc, llm)
 
         _progress(session, t, "Compiling PDFs")
@@ -108,7 +121,9 @@ def run_tailoring(session: Session, tailoring_id: int, *, env: Env, llm: LLM, co
         rendered = build_tailored(
             env.latex_dir, env.resume_dir, validated.doc, validated.cover_letter, out, compiler,
             job_title=job.title, company=job.company, contact_name=job.contact_name, location=job.location,
-            today=today or datetime.now(ADELAIDE).date())
+            today=today or datetime.now(ADELAIDE).date(), max_resume_pages=base_info.get("pages"))
+        if rendered["headline"] != validated.doc.headline:
+            validated.doc = validated.doc.model_copy(update={"headline": rendered["headline"]})
         t.out_dir = str(out)
         t.warnings = validated.warnings + rendered["warnings"]
         t.result = {
@@ -116,6 +131,9 @@ def run_tailoring(session: Session, tailoring_id: int, *, env: Env, llm: LLM, co
             "keywords_matched": validated.keywords_matched, "gaps": validated.gaps,
             "cover_letter": validated.cover_letter.model_dump(), "pages": rendered["pages"],
             "ats": own_ats(env, job.title, doc, validated.doc, validated.keywords_matched, validated.gaps),
+            "target_phrases": {"source": "resume_matcher" if targets else "seekhunter",
+                               "supported": validated.supported_phrases,
+                               "unsupported": validated.unsupported_phrases},
         }
         t.status, t.progress, t.finished_at = "done", "Done", utcnow()
         repo.save_tailoring(session, t)

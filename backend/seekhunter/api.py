@@ -428,6 +428,7 @@ class ChangeCountsOut(BaseModel):
     skills_reordered: int = 0
     projects_changed: bool = False
     summary_changed: bool = False
+    headline_added: bool = False
 
 
 class TailoringDetailOut(TailoringOut):

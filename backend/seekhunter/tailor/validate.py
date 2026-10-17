@@ -10,7 +10,9 @@ from dataclasses import dataclass, field
 
 from seekhunter.resume_doc import Bullet, ResumeDoc
 from seekhunter.skills import extract_skills
+from seekhunter.tailor.headline import validate_headline
 from seekhunter.tailor.models import CoverLetter, TailorOutput
+from seekhunter.tailor.phrases import mentions
 from seekhunter.tailor.textdiff import is_trivial_change
 
 SUMMARY_MAX = 480
@@ -28,6 +30,8 @@ class Validated:
     keywords_matched: list[str] = field(default_factory=list)
     gaps: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    supported_phrases: list[str] = field(default_factory=list)
+    unsupported_phrases: list[str] = field(default_factory=list)
 
 
 def numbers(text: str) -> set[str]:
@@ -49,22 +53,26 @@ def _clean_list(values: list[str]) -> list[str]:
     return out[:LIST_CAP]
 
 
-def _new_facts(text: str, allowed_numbers: set[str], known_skills: set[str]) -> list[str]:
-    """Numbers / skill-vocabulary terms in `text` that the allowed sets don't cover."""
+def _new_facts(text: str, allowed_numbers: set[str], known_skills: set[str], original: str = "",
+               unsupported: tuple[str, ...] = ()) -> list[str]:
+    """Numbers / skill-vocabulary terms in `text` that the allowed sets don't cover, plus UNSUPPORTED
+    target phrases that `text` mentions but `original` didn't."""
     issues = sorted(numbers(text) - allowed_numbers)
     issues += sorted(extract_skills(text) - known_skills)
+    issues += [p for p in unsupported if mentions(p, text) and not mentions(p, original)
+               and p not in issues]
     return issues
 
 
 def _validate_summary(base: ResumeDoc, summary: str, corpus_numbers: set[str], known: set[str],
-                      warnings: list[str]) -> str:
+                      warnings: list[str], unsupported: tuple[str, ...] = ()) -> str:
     summary = " ".join(summary.split())
     if not summary:
         return base.summary
     if len(summary) > max(SUMMARY_MAX, len(base.summary)):
         warnings.append(f"Summary was too long ({len(summary)} chars); kept the original summary.")
         return base.summary
-    issues = _new_facts(summary, corpus_numbers, known)
+    issues = _new_facts(summary, corpus_numbers, known, base.corpus(), unsupported)
     if issues:
         warnings.append(f"Summary added {', '.join(issues)} (not in your resume); kept the original summary.")
         return base.summary
@@ -100,7 +108,7 @@ def _validate_skills(base: ResumeDoc, out: TailorOutput, warnings: list[str]) ->
 
 
 def _validate_experiences(base: ResumeDoc, out: TailorOutput, known: set[str],
-                          warnings: list[str]) -> list:
+                          warnings: list[str], unsupported: tuple[str, ...] = ()) -> list:
     base_ids = {e.id for e in base.experiences}
     edits: dict[str, list] = {}
     for edit in out.experiences:
@@ -128,7 +136,7 @@ def _validate_experiences(base: ResumeDoc, out: TailorOutput, known: set[str],
             if not text:
                 kept.append(orig.model_copy())
                 continue
-            issues = _new_facts(text, numbers(orig.text), known)
+            issues = _new_facts(text, numbers(orig.text), known, orig.text, unsupported)
             if issues:
                 warnings.append(f"{exp.company}: kept original wording of '{_clip(orig.text)}' "
                                 f"(rewrite added {', '.join(issues)}).")
@@ -204,17 +212,28 @@ def _validate_letter(letter: CoverLetter, contact_name: str | None, corpus_numbe
     return result
 
 
-def validate(base: ResumeDoc, out: TailorOutput, *, contact_name: str | None = None) -> Validated:
+def validate(base: ResumeDoc, out: TailorOutput, *, contact_name: str | None = None, job_title: str = "",
+             ad_text: str = "", supported: list[str] | tuple[str, ...] = (),
+             unsupported: list[str] | tuple[str, ...] = ()) -> Validated:
+    """`supported` target phrases (backed by the resume, see `phrases.annotate`) may appear in rewritten
+    text even when their skills aren't spelled out in the resume; `unsupported` ones are rejected."""
     warnings: list[str] = []
     corpus = base.corpus() + "\n" + base.education_tex
-    known = extract_skills(corpus)
+    known = extract_skills(corpus) | extract_skills("\n".join(supported))
     corpus_numbers = numbers(corpus)
+    banned = tuple(unsupported)
+    headline, headline_warning = validate_headline(out.headline, base, job_title=job_title, ad_text=ad_text,
+                                                   supported=list(supported))
+    if headline_warning:
+        warnings.append(headline_warning)
     doc = base.model_copy(update={
-        "summary": _validate_summary(base, out.summary, corpus_numbers, known, warnings),
+        "headline": headline,
+        "summary": _validate_summary(base, out.summary, corpus_numbers, known, warnings, banned),
         "skills": _validate_skills(base, out, warnings),
-        "experiences": _validate_experiences(base, out, known, warnings),
+        "experiences": _validate_experiences(base, out, known, warnings, banned),
         "projects": _validate_projects(base, out, warnings),
     })
     letter = _validate_letter(out.cover_letter, contact_name, corpus_numbers, known, warnings)
     return Validated(doc=doc, cover_letter=letter, keywords_matched=_clean_list(out.keywords_matched),
-                     gaps=_clean_list(out.gaps), warnings=warnings)
+                     gaps=_clean_list(out.gaps), warnings=warnings, supported_phrases=list(supported),
+                     unsupported_phrases=list(unsupported))

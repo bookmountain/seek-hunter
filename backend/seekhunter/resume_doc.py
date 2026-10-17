@@ -207,6 +207,7 @@ class ResumeDoc(BaseModel):
     education_tex: str = ""
     referees_tex: str = ""
     headings: dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_HEADINGS))
+    headline: str | None = None  # role line under the name; tailored resumes only
 
     def corpus(self) -> str:
         """All visible resume text (for "is this term already in the resume?" checks)."""

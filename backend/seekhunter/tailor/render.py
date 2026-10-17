@@ -3,13 +3,14 @@
 import hashlib
 import os
 import pwd
+import re
 import shutil
 import subprocess
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
-from seekhunter.resume_doc import ResumeDoc, escape_tex, text_to_tex, write_sections
+from seekhunter.resume_doc import ResumeDoc, escape_tex, read_group, text_to_tex, write_sections
 from seekhunter.tailor.models import CoverLetter
 
 COMPILE_TIMEOUT = 240
@@ -110,6 +111,34 @@ def _preamble(resume_tex: str) -> str:
     return resume_tex[:idx]
 
 
+HEADLINE_LINE = "\\par\\vspace{-0.1em}{\\fontsize{12}{14}\\selectfont\\resumeHeadline\\par}\\vspace{-0.55em}"
+HEADLINE_BLOCK = "\\par{\\centering\\fontsize{12}{15}\\selectfont\\resumeHeadline\\par}"
+
+
+def with_headline(resume_tex: str, headline: str) -> str:
+    """`resume_tex` with a centred role line under the name: defines `\\resumeHeadline` and splices it
+    into the `\\resumeHeader` definition just before its `\\end{center}` (so the rule and contact table
+    below stay as they are). Without a centred block the line goes at the end of the header; without a
+    header macro, right after `\\begin{document}`."""
+    define = f"\\newcommand{{\\resumeHeadline}}{{{escape_tex(headline)}}}\n"
+    m = re.search(r"\\(?:re)?newcommand\*?\s*\{\\resumeHeader\}", resume_tex)
+    body, end = read_group(resume_tex, m.end()) if m else (None, 0)
+    if m is None or body is None:
+        idx = resume_tex.find("\\begin{document}")
+        if idx < 0:
+            raise CompileError("resume.tex has no \\begin{document}")
+        cut = idx + len("\\begin{document}")
+        return resume_tex[:idx] + define + resume_tex[idx:cut] + "\n" + HEADLINE_BLOCK + resume_tex[cut:]
+    idx = body.find("\\end{center}")
+    if idx >= 0:
+        new_body = body[:idx].rstrip() + "\n    " + HEADLINE_LINE + "\n  " + body[idx:]
+    else:
+        new_body = body.rstrip() + HEADLINE_BLOCK
+    start = resume_tex.index("{", m.end())
+    tex = resume_tex[:start] + "{" + new_body + "}" + resume_tex[end:]
+    return tex[:m.start()] + define + tex[m.start():]
+
+
 def format_date(d: date) -> str:
     return f"{d.day} {d:%B %Y}"
 
@@ -151,9 +180,11 @@ def _resume_rel(latex_dir: Path, resume_dir: Path) -> Path:
 
 def build_tailored(latex_dir: Path, resume_dir: Path, doc: ResumeDoc, letter: CoverLetter, out_dir: Path,
                    compiler: Compiler, *, job_title: str, company: str, contact_name: str | None,
-                   location: str, today: date) -> dict:
+                   location: str, today: date, max_resume_pages: int | None = None) -> dict:
     """Compile the tailored resume and cover letter into `out_dir` (`resume.pdf`, `cover_letter.pdf`,
-    `resume-<n>.png`, `cover_letter-<n>.png`). Returns `{"pages": {...}, "warnings": [...]}`."""
+    `resume-<n>.png`, `cover_letter-<n>.png`). Returns `{"pages": {...}, "warnings": [...], "headline":
+    str | None}`; `headline` is what was rendered: a headline that would push the resume past
+    `max_resume_pages` is left out (with a warning)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     work = out_dir / "work"
     shutil.rmtree(work, ignore_errors=True)
@@ -165,10 +196,18 @@ def build_tailored(latex_dir: Path, resume_dir: Path, doc: ResumeDoc, letter: Co
         if not sections.is_dir():
             shutil.copytree(resume_dir, sections)
         write_sections(doc, sections)
+        resume_tex = (work / "resume.tex").read_text(encoding="utf-8")
+        headline = doc.headline or None
+        if headline:
+            (work / "resume.tex").write_text(with_headline(resume_tex, headline), encoding="utf-8")
         resume_pdf = compiler(work, "resume.tex")
+        if headline and max_resume_pages and (n := page_count(resume_pdf)) > max_resume_pages:
+            warnings.append(f"The headline pushed the resume to {n} pages; rendered it without the headline.")
+            headline = None
+            (work / "resume.tex").write_text(resume_tex, encoding="utf-8")
+            resume_pdf = compiler(work, "resume.tex")
         shutil.move(resume_pdf, out_dir / "resume.pdf")
 
-        resume_tex = (work / "resume.tex").read_text(encoding="utf-8")
         kwargs = dict(job_title=job_title, company=company, contact_name=contact_name, location=location,
                       today=today)
         letter_tex = cover_letter_tex(resume_tex, letter, **kwargs)
@@ -185,4 +224,4 @@ def build_tailored(latex_dir: Path, resume_dir: Path, doc: ResumeDoc, letter: Co
         shutil.rmtree(work, ignore_errors=True)
     pages = {"resume": render_pages(out_dir / "resume.pdf", out_dir, "resume"),
              "cover_letter": render_pages(out_dir / "cover_letter.pdf", out_dir, "cover_letter")}
-    return {"pages": pages, "warnings": warnings}
+    return {"pages": pages, "warnings": warnings, "headline": headline}

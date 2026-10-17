@@ -84,3 +84,17 @@ def test_contact_from_latex(tmp_path):
     c = ats_score.contact_from_latex(tmp_path)
     assert c["email"] == "book@x.com" and c["phone"] == "0467364679"
     assert ats_score.contact_from_latex(tmp_path / "missing") == {}
+
+
+def test_headline_counts_for_title_alignment():
+    keywords = {"role": "Full Stack (Java) Developer", "required_skills": ["Java"], "keywords": []}
+    base = _doc(summary="Engineer building apps.")
+    assert ats_score.resume_to_rm(base, CONTACT)["personalInfo"]["title"] == ""
+    assert ats_score.score_doc(base, keywords, CONTACT)["breakdown"]["title_alignment"] == 0.0
+    tailored = base.model_copy(update={"headline": "Full Stack Java Developer · Spring Boot, React"})
+    assert ats_score.resume_to_rm(tailored, CONTACT)["personalInfo"]["title"] == tailored.headline
+    out = ats_score.score_doc(tailored, keywords, CONTACT)
+    assert out["breakdown"]["title_alignment"] == 50.0  # every role token is in the headline
+    exact = base.model_copy(update={"headline": "React Developer · TypeScript"})
+    assert ats_score.score_doc(exact, {**keywords, "role": "React Developer"}, CONTACT)["breakdown"][
+        "title_alignment"] == 100.0

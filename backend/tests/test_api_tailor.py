@@ -161,7 +161,8 @@ def test_tailoring_detail_with_changes_and_urls(ctx):
     assert {o["op"] for o in bullet["diff"]} >= {"delete", "insert"}
     assert " ".join(o["text"] for o in bullet["diff"] if o["op"] != "delete") == "Reworded bullet with Jest."
     assert d["change_counts"] == {"reworded": 1, "removed": 0, "moved": 0, "skills_reordered": 1,
-                                  "projects_changed": False, "summary_changed": True}
+                                  "projects_changed": False, "summary_changed": True,
+                                  "headline_added": False}
     skills = next(c for c in changes if c["type"] == "skills")
     assert skills["before"] == ["TypeScript", "Python", "C#", "Java"]
     assert skills["after"] == ["Python", "TypeScript"]
@@ -187,7 +188,8 @@ def test_tailoring_detail_running_has_no_files(ctx):
     d = ctx.client.get(f"/api/tailorings/{tid}").json()
     assert d["progress"] == "Tailoring with AI"
     assert d["change_counts"] == {"reworded": 0, "removed": 0, "moved": 0, "skills_reordered": 0,
-                                  "projects_changed": False, "summary_changed": False}
+                                  "projects_changed": False, "summary_changed": False,
+                                  "headline_added": False}
     assert d["files"] is None and d["changes"] == [] and d["cover_letter"] is None and d["current"] is None
     assert ctx.client.get(f"/api/tailorings/{tid}/resume.pdf").status_code == 404
     assert ctx.client.get("/api/tailorings/999").status_code == 404

@@ -1,4 +1,4 @@
-import type { BulletChange, ChangeCounts, DiffOp, ProjectsChange, SkillsChange, SummaryChange, TailoringChange } from "@/lib/types";
+import type { BulletChange, ChangeCounts, DiffOp, HeadlineChange, ProjectsChange, SkillsChange, SummaryChange, TailoringChange } from "@/lib/types";
 import { wordDiff } from "@/lib/wordDiff";
 import { cn } from "@/lib/utils";
 import { RichText } from "./RichText";
@@ -58,6 +58,7 @@ function movedLabel(b: BulletChange): string {
 export function changeSummary(changes: TailoringChange[], counts?: ChangeCounts): string {
   const bullets = changes.filter((c): c is BulletChange => c.type === "bullet");
   const c: ChangeCounts = counts ?? {
+    headline_added: changes.some((x) => x.type === "headline"),
     summary_changed: changes.some((x) => x.type === "summary" && x.changed),
     reworded: bullets.filter((b) => b.status === "reworded").length,
     removed: bullets.filter((b) => b.status === "removed").length,
@@ -66,6 +67,7 @@ export function changeSummary(changes: TailoringChange[], counts?: ChangeCounts)
     projects_changed: changes.some((x) => x.type === "projects" && x.excluded.length > 0),
   };
   const parts: string[] = [];
+  if (c.headline_added) parts.push("Headline added");
   if (c.summary_changed) parts.push("Summary rewritten");
   if (c.reworded) parts.push(`${c.reworded} reworded`);
   if (c.removed) parts.push(`${c.removed} removed`);
@@ -73,6 +75,17 @@ export function changeSummary(changes: TailoringChange[], counts?: ChangeCounts)
   if (c.skills_reordered) parts.push(`skills reordered in ${c.skills_reordered} ${c.skills_reordered === 1 ? "line" : "lines"}`);
   if (c.projects_changed) parts.push("projects changed");
   return parts.length ? parts.join(" · ") : "No changes";
+}
+
+function HeadlineBlock({ c }: { c: HeadlineChange }) {
+  return (
+    <section className="border-t border-rule pt-4">
+      <Kicker>Headline</Kicker>
+      <div className="mt-2">
+        <DiffText ops={[{ op: "insert", text: c.after }]} />
+      </div>
+    </section>
+  );
 }
 
 function SummaryBlock({ c }: { c: SummaryChange }) {
@@ -195,6 +208,7 @@ function ProjectsBlock({ c }: { c: ProjectsChange }) {
 
 /** Human-readable diff of what the tailoring changed. */
 export function ChangesPanel({ changes, counts }: { changes: TailoringChange[]; counts?: ChangeCounts }) {
+  const headline = changes.find((c): c is HeadlineChange => c.type === "headline");
   const summary = changes.find((c): c is SummaryChange => c.type === "summary");
   const bullets = changes.filter((c): c is BulletChange => c.type === "bullet");
   const skills = changes.filter((c): c is SkillsChange => c.type === "skills");
@@ -215,6 +229,7 @@ export function ChangesPanel({ changes, counts }: { changes: TailoringChange[]; 
           {changeSummary(changes, counts)}
         </p>
       </div>
+      {headline && <HeadlineBlock c={headline} />}
       {summary && <SummaryBlock c={summary} />}
       {groups.length > 0 && (
         <section>

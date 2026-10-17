@@ -35,6 +35,7 @@ class CoverLetter(_Lenient):
 
 
 class TailorOutput(_Lenient):
+    headline: str | None = None
     summary: str = ""
     skills: list[SkillEdit] = []
     experiences: list[ExperienceEdit] = []

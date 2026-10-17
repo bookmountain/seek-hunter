@@ -45,7 +45,10 @@ def compute_changes(base: ResumeDoc, tailored: ResumeDoc) -> list[dict]:
                "changed": summary_changed}
     if summary_changed:
         summary["diff"] = word_diff(base.summary, tailored.summary)
-    changes: list[dict] = [summary, *_bullet_changes(base, tailored)]
+    changes: list[dict] = []
+    if tailored.headline and tailored.headline != base.headline:
+        changes.append({"type": "headline", "after": tailored.headline})
+    changes += [summary, *_bullet_changes(base, tailored)]
 
     after_skills = {s.id: s for s in tailored.skills}
     for s in base.skills:
@@ -74,4 +77,5 @@ def change_counts(changes: list[dict]) -> dict:
         "skills_reordered": sum(1 for c in changes if c["type"] == "skills" and c["changed"]),
         "projects_changed": bool(projects and projects.get("changed")),
         "summary_changed": bool(summary and summary["changed"]),
+        "headline_added": any(c["type"] == "headline" for c in changes),
     }

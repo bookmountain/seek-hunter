@@ -188,6 +188,11 @@ export interface SummaryChange {
   diff?: DiffOp[];
 }
 
+export interface HeadlineChange {
+  type: "headline";
+  after: string;
+}
+
 export interface BulletChange {
   type: "bullet";
   experience: string;
@@ -208,6 +213,7 @@ export interface ChangeCounts {
   skills_reordered: number;
   projects_changed: number | boolean;
   summary_changed: boolean;
+  headline_added?: boolean;
 }
 
 export interface SkillsChange {
@@ -225,7 +231,7 @@ export interface ProjectsChange {
   excluded: string[];
 }
 
-export type TailoringChange = SummaryChange | BulletChange | SkillsChange | ProjectsChange;
+export type TailoringChange = HeadlineChange | SummaryChange | BulletChange | SkillsChange | ProjectsChange;
 
 export interface TailoringDetail extends TailoringSummary {
   job: { id: number; title: string; company: string; location: string; work_type: WorkType; contact_name: string | null };

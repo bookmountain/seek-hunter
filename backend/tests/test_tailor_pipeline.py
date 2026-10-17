@@ -136,3 +136,51 @@ def test_active_tailoring_expires_stale(setup):
     fresh = repo.create_tailoring(session, job.id)
     assert repo.active_tailoring(session, job.id, utcnow()).id == fresh.id
     assert [t.id for t in repo.list_tailorings(session, job.id)] == [fresh.id, old.id]
+
+
+def test_tailoring_records_headline_and_target_phrases(setup):
+    t = _run(setup)
+    # deterministic fallback (the reply has none): no fixture title is a "Developer", no ad skill is listed
+    assert t.result["tailored"]["headline"] == "Software Engineer"
+    assert t.result["base"]["headline"] is None
+    assert t.result["target_phrases"]["source"] == "seekhunter"
+    assert "React" in t.result["target_phrases"]["supported"]
+    assert "Go" in t.result["target_phrases"]["unsupported"]
+
+
+def test_retailor_reuses_resume_matcher_keywords(setup):
+    env, session, job = setup
+    old = repo.create_tailoring(session, job.id)
+    old.status, old.result = "done", {"resume_matcher": {"status": "done", "job_keywords": {
+        "required_skills": ["React", "Hibernate"], "preferred_skills": [], "keywords": ["Agile development"]},
+        "missing_keywords": ["JIRA"], "matched_keywords": []}}
+    repo.save_tailoring(session, old)
+    prompts = []
+
+    def llm(prompt):
+        prompts.append(prompt)
+        return REPLY
+
+    t = _run(setup, llm=llm)
+    assert t.result["target_phrases"]["source"] == "resume_matcher"
+    assert t.result["target_phrases"]["unsupported"] == ["Hibernate", "Agile development", "JIRA"]
+    assert "Hibernate" in prompts[0]
+
+    t2 = repo.create_tailoring(session, job.id)
+    t2 = run_tailoring(session, t2.id, env=env, llm=llm, compiler=FakeCompiler({"resume.tex": 2}),
+                       today=date(2026, 10, 17), reuse_rm_keywords=False)
+    assert t2.result["target_phrases"]["source"] == "seekhunter"
+
+
+def test_headline_dropped_from_result_when_it_adds_a_page(setup):
+    def compiler(work_dir, tex_name):
+        from tests.pdf_helpers import write_pdf
+
+        pdf = work_dir / tex_name.replace(".tex", ".pdf")
+        write_pdf(pdf, 3 if "resumeHeadline" in (work_dir / tex_name).read_text() else 2)
+        return pdf
+
+    t = _run(setup, compiler=compiler)
+    assert t.status == "done"
+    assert t.result["tailored"]["headline"] is None
+    assert any("headline" in w.lower() for w in t.warnings)

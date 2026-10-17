@@ -5,7 +5,8 @@ Vendored and adapted from Resume-Matcher (https://github.com/srbhr/Resume-Matche
 Copyright Saurabh Rai and Resume-Matcher contributors. Licensed under the Apache License,
 Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0). Changes from the original: only the
 scoring pieces are kept (no recommendations / injectable-keyword analysis), the input is built from
-SeekHunter's `ResumeDoc` via `resume_to_rm`, and `title_match` is reported as `title_alignment`.
+SeekHunter's `ResumeDoc` via `resume_to_rm` (a tailored resume's headline is RM's
+`personalInfo.title`), and `title_match` is reported as `title_alignment`.
 
 Weights: keyword match 40%, skills coverage 20%, title alignment 15%, section completeness 15%,
 date consistency 10%. A component that cannot be scored (no job title, fewer than two dates) is
@@ -78,7 +79,8 @@ def resume_to_rm(doc: ResumeDoc, contact: dict[str, str] | None = None) -> dict[
     """Resume-Matcher's `ResumeData` dict shape for a SeekHunter resume."""
     contact = contact or {}
     return {
-        "personalInfo": {"name": contact.get("name", ""), "title": "", "email": contact.get("email", ""),
+        "personalInfo": {"name": contact.get("name", ""), "title": doc.headline or "",
+                         "email": contact.get("email", ""),
                          "phone": contact.get("phone", "")},
         "summary": _plain(doc.summary),
         "workExperience": [{"title": e.title, "company": e.company, "location": e.location, "years": e.dates,
