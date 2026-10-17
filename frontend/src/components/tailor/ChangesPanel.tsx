@@ -46,13 +46,12 @@ export function DiffText({ ops }: { ops: DiffOp[] }) {
 
 const opsFor = (c: { diff?: DiffOp[]; before: string; after: string | null }) => c.diff ?? wordDiff(c.before, c.after ?? "");
 
-/** Positions may arrive 0- or 1-based; show them 1-based. */
+/** The API sends 0-based positions within the role; show them 1-based. */
 function movedLabel(b: BulletChange): string {
   const from = b.position_before;
   const to = b.position_after;
-  if (from === undefined || to === undefined) return "Moved";
-  const shift = from === 0 || to === 0 ? 1 : 0;
-  return `Moved ${to < from ? "up" : "down"} ${from + shift} → ${to + shift}`;
+  if (from == null || to == null) return "Moved";
+  return `Moved ${to < from ? "up" : "down"} ${from + 1} → ${to + 1}`;
 }
 
 /** One-line summary from `change_counts`, or counted from `changes` on older payloads. */

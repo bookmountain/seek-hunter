@@ -183,7 +183,7 @@ describe("ChangesPanel", () => {
               { op: "equal", text: " team" },
             ],
           },
-          { type: "bullet", experience: "a", company: "Acme", id: "a-b3", status: "moved", before: "Shipped features", after: "Shipped features", position_before: 3, position_after: 1 },
+          { type: "bullet", experience: "a", company: "Acme", id: "a-b3", status: "moved", before: "Shipped features", after: "Shipped features", position_before: 2, position_after: 0 },
         ]}
       />,
     );
