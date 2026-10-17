@@ -10,6 +10,8 @@ dependencies = [
   "curl_cffi>=0.7",
   "selectolax>=0.3.27",
   "anthropic>=0.70",
+  "pypdfium2>=5.14.0",
+  "pillow>=13.0.0",
 ]
 
 [project.scripts]
