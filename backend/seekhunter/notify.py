@@ -1,3 +1,4 @@
+import re
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -6,7 +7,10 @@ WORK_TYPE_LABELS = {"full_time": "Full time", "part_time": "Part time", "contrac
                     "casual": "Casual", "unknown": "Type n/a"}
 PER_MESSAGE = 10
 MAX_CHARS = 3800
-REPLY_HINT = "💬 Reply to OpenClaw: \"save #id\", \"hide #id\", \"why #id?\""
+RECAP_MAX_ITEMS = 15
+NOTE_LIMIT = 80
+_GENERIC_LOCATION = "Adelaide SA"
+_JORA_HEX_ID = re.compile(r"([0-9a-fA-F]{32})$")
 
 
 class NotifyError(Exception):
@@ -27,19 +31,72 @@ class DigestItem:
     flags: list[str] = field(default_factory=list)
 
 
-def _format_item(it: DigestItem) -> str:
-    badges = (" 💼" if "flexible" in it.flags else "") + (" ⚠️ hours" if "hours" in it.flags else "")
-    work_type = WORK_TYPE_LABELS.get(it.work_type, "Type n/a")
-    line1 = f"#{it.job_id} [{it.score}] {it.title} — {it.company} · {it.location} · {work_type}{badges}"
-    details = []
-    if it.matched:
-        details.append(f"{', '.join(it.matched[:5])} ✓")
+def _strip_scheme(url: str) -> str:
+    for prefix in ("https://", "http://"):
+        if url.startswith(prefix):
+            url = url[len(prefix):]
+            break
+    if url.startswith("www."):
+        url = url[4:]
+    return url
+
+
+def _short_url(url: str) -> str:
+    """Drop the scheme/www so Telegram still auto-links the bare domain, and collapse Jora's
+    long slug-plus-id path down to its id (Jora resolves any slug prefix before the id)."""
+    short = _strip_scheme(url)
+    if short.startswith("au.jora.com/job/"):
+        m = _JORA_HEX_ID.search(short)
+        if m:
+            short = f"au.jora.com/job/j-{m.group(1)}"
+    return short
+
+
+def _short_location(location: str) -> str | None:
+    if not location or location == _GENERIC_LOCATION:
+        return None
+    if "," in location:
+        return location.split(",", 1)[0].strip()
+    return location
+
+
+def _truncate_note(note: str, limit: int = NOTE_LIMIT) -> str:
+    note = note.strip()
+    if len(note) <= limit:
+        return note
+    cut = note[: limit - 1]
+    sp = cut.rfind(" ")
+    if sp > 0:
+        cut = cut[:sp]
+    return cut.rstrip(" ,.;:") + "…"
+
+
+def _note_line(it: DigestItem) -> str | None:
     if it.why:
-        details.append(f'"{it.why}"')
-    lines = [line1]
-    if details:
-        lines.append("   " + " · ".join(details))
-    lines.append(f"   {it.url}")
+        return _truncate_note(it.why)
+    if it.matched:
+        return ", ".join(it.matched[:4])
+    return None
+
+
+def _meta_line(it: DigestItem) -> str:
+    work_type = WORK_TYPE_LABELS.get(it.work_type, "Type n/a")
+    parts = [it.company, work_type]
+    loc = _short_location(it.location)
+    if loc:
+        parts.append(loc)
+    line = " · ".join(parts)
+    if "hours" in it.flags:
+        line += " · hours?"
+    return line
+
+
+def _format_item(it: DigestItem) -> str:
+    lines = [f"#{it.job_id} · {it.score} · {it.title}", _meta_line(it)]
+    note_line = _note_line(it)
+    if note_line:
+        lines.append(note_line)
+    lines.append(_short_url(it.url))
     return "\n".join(lines)
 
 
@@ -48,13 +105,15 @@ def _pack_items(items: list[DigestItem]) -> list[list[DigestItem]]:
 
     A chunk never exceeds PER_MESSAGE items, and starting a new item never pushes the chunk's
     formatted body past MAX_CHARS (leaving room for the header/footer added around the body).
+    Items within a chunk are later joined with a blank line, so the separator overhead is 2
+    chars rather than 1.
     """
     chunks: list[list[DigestItem]] = []
     current: list[DigestItem] = []
     current_len = 0
     for it in items:
         text = _format_item(it)
-        added_len = len(text) + (1 if current else 0)
+        added_len = len(text) + (2 if current else 0)
         if current and (len(current) >= PER_MESSAGE or current_len + added_len > MAX_CHARS):
             chunks.append(current)
             current, current_len, added_len = [], 0, len(text)
@@ -65,39 +124,67 @@ def _pack_items(items: list[DigestItem]) -> list[list[DigestItem]]:
     return chunks or [[]]
 
 
+def _host(public_url: str) -> str:
+    return _strip_scheme(public_url).rstrip("/")
+
+
+def _assemble(header: str, job_texts: list[str], footer: str | None) -> str:
+    sections = [header, *job_texts]
+    if footer:
+        sections.append(footer)
+    return "\n\n".join(sections)
+
+
 def format_digest(items: list[DigestItem], when: datetime, public_url: str, degraded: list[str],
                   extra: int = 0) -> list[str]:
-    header = f"🎯 SeekHunter · {len(items) + extra} new ({when:%H:%M})"
+    total = len(items) + extra
+    # `extra` jobs beyond this page aren't DigestItems here, so the flexible count can only
+    # reflect the items actually shown in this digest.
+    flexible = sum(1 for it in items if "flexible" in it.flags)
+    header_lines = [f"SeekHunter — {total} new, {flexible} flexible ({when:%H:%M})"]
     if degraded:
-        header += "\n" + " ".join(f"⚠️ {s} unavailable this run" for s in degraded)
+        names = ", ".join(s.capitalize() for s in degraded)
+        header_lines.append(f"{names} unavailable this run")
+    header = "\n".join(header_lines)
+
     chunks = _pack_items(items)
+    n_chunks = len(chunks)
+    host = _host(public_url)
+    first_id = items[0].job_id if items else ""
     messages = []
     for idx, chunk in enumerate(chunks):
-        body = "\n".join(_format_item(it) for it in chunk)
-        parts = [header if idx == 0 else f"🎯 SeekHunter · cont. ({idx + 1}/{len(chunks)})", body]
-        if idx == len(chunks) - 1:
-            if extra:
-                parts.append(f"+{extra} more in the web UI")
-            parts.append(REPLY_HINT)
-            parts.append(f"→ {public_url}")
-        messages.append("\n".join(p for p in parts if p))
+        job_texts = [_format_item(it) for it in chunk]
+        head = header if idx == 0 else f"SeekHunter — continued ({idx + 1}/{n_chunks})"
+        footer = None
+        if idx == n_chunks - 1:
+            more_line = f"+{extra} more: {host}" if extra else host
+            reply_line = f"Reply to OpenClaw: save {first_id} · hide {first_id} · why {first_id}"
+            footer = f"{more_line}\n{reply_line}"
+        messages.append(_assemble(head, job_texts, footer))
     return messages
 
 
 def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: str) -> list[str]:
-    header = f"🎯 SeekHunter daily recap · {day}"
-    summary = f"{len(items)} new jobs · {excluded} excluded"
-    chunks = _pack_items(items)
+    shown = items[:RECAP_MAX_ITEMS]
+    extra = max(0, len(items) - RECAP_MAX_ITEMS)
+    header = f"SeekHunter daily recap — {day}"
+    summary = f"{len(items)} new jobs, {excluded} excluded"
+    chunks = _pack_items(shown)
+    n_chunks = len(chunks)
+    host = _host(public_url)
+    first_id = shown[0].job_id if shown else ""
     messages = []
     for idx, chunk in enumerate(chunks):
-        body = "\n".join(_format_item(it) for it in chunk)
-        parts = [header if idx == 0 else f"🎯 SeekHunter daily recap · cont. ({idx + 1}/{len(chunks)})"]
+        job_texts = [_format_item(it) for it in chunk]
+        head = header if idx == 0 else f"SeekHunter daily recap — continued ({idx + 1}/{n_chunks})"
         if idx == 0:
-            parts.append(summary)
-        parts.append(body)
-        if idx == len(chunks) - 1:
-            parts.append(f"→ {public_url}")
-        messages.append("\n".join(p for p in parts if p))
+            head = f"{head}\n{summary}"
+        footer = None
+        if idx == n_chunks - 1:
+            more_line = f"+{extra} more: {host}" if extra else host
+            reply_line = f"Reply to OpenClaw: save {first_id} · hide {first_id} · why {first_id}"
+            footer = f"{more_line}\n{reply_line}"
+        messages.append(_assemble(head, job_texts, footer))
     return messages
 
 

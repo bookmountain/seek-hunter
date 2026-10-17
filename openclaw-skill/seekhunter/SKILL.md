@@ -5,7 +5,6 @@ metadata:
   {
     "openclaw":
       {
-        "emoji": "🎯",
         "requires": { "bins": ["seekhunter-api"] },
       },
   }
@@ -13,7 +12,7 @@ metadata:
 
 # SeekHunter
 
-SeekHunter crawls SEEK and Jora every 2 hours (07:00–21:00 Adelaide). It drops jobs needing security clearance, citizenship/PR, defence, or banks, scores the rest against Book's resume (part-time/contract/casual first because of his student visa), and posts digests to this Telegram chat. Each digest line starts with a job id like `#142`.
+SeekHunter crawls SEEK and Jora every 2 hours (07:00–21:00 Adelaide). It drops jobs needing security clearance, citizenship/PR, defence, or banks, scores the rest against Book's resume (part-time/contract/casual first because of his student visa), and posts digests to this Telegram chat. Each digest line looks like `#7 · 88 · Title` (job id · score · title), e.g. `#142 · 82 · Full Stack (Java) Developer`.
 
 All access goes through the `seekhunter-api METHOD PATH [JSON]` command (localhost API; auth is handled). Never invent job data; read it from the API. Keep replies short.
 

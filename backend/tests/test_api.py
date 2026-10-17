@@ -193,7 +193,7 @@ def test_notify_test_message_matches_cli(client, monkeypatch):
     monkeypatch.setattr("seekhunter.notify.Notifier.send", fake_send)
     r = client.post("/api/notify/test", headers=AUTH)
     assert r.status_code == 200
-    assert sent["text"] == "🎯 SeekHunter test message ✅"
+    assert sent["text"] == "SeekHunter test message"
 
 
 def test_unexclude_allowlist_is_case_insensitive_dedupe(client):

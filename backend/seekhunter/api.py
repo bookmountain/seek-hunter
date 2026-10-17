@@ -207,7 +207,7 @@ def create_app(init: bool = True) -> FastAPI:
     @app.post("/api/notify/test", dependencies=write)
     def notify_test() -> dict:
         try:
-            Notifier(env.openclaw_bin, env.telegram_target).send("🎯 SeekHunter test message ✅")
+            Notifier(env.openclaw_bin, env.telegram_target).send("SeekHunter test message")
         except NotifyError as e:
             raise HTTPException(502, str(e)) from e
         return {"sent": True}

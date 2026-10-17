@@ -161,7 +161,7 @@ def _maybe_health_alert(session: Session, notifier, run: Run) -> None:  # noqa: 
     if last_alert and last_alert[0].started_at > utcnow() - timedelta(hours=24):
         return
     errors = "; ".join(f"{k}: {v.get('error')}" for k, v in run.source_status.items())
-    _send(session, notifier, f"⚠️ SeekHunter: all sources failing for 3 runs. {errors}")
+    _send(session, notifier, f"SeekHunter: all sources failing for 3 runs. {errors}")
     session.add(Run(kind="alert", finished_at=utcnow()))
     session.commit()
 

@@ -90,7 +90,7 @@ def test_full_run_excludes_dedupes_scores_and_notifies(session):
     good = evals[jobs[("seek", "1")].id]
     assert good.llm_score == 50 and good.llm_provider == "fake"
     assert good.final_score == round(0.6 * good.rule_score + 0.4 * 50)
-    assert len(notifier.sent) == 1 and "2 new" in notifier.sent[0]
+    assert len(notifier.sent) == 1 and "SeekHunter — 2 new" in notifier.sent[0]
 
     again = FakeNotifier()
     report2 = run_crawl(session, {"seek": seek, "jora": jora}, FakeChain(), again, PROFILE, "https://sh")
@@ -105,7 +105,7 @@ def test_blocked_source_is_degraded_and_others_continue(session):
     report = run_crawl(session, {"seek": seek, "jora": jora}, FakeChain(), notifier, PROFILE, "https://sh")
     assert report.source_status["jora"]["status"] == "degraded"
     assert report.source_status["seek"]["status"] == "ok"
-    assert "jora unavailable" in notifier.sent[0]
+    assert "Jora unavailable this run" in notifier.sent[0]
 
 
 def test_notify_failure_goes_to_outbox_and_flushes_next_run(session):
@@ -123,9 +123,9 @@ def test_health_alert_after_three_all_failed_runs(session):
     n = FakeNotifier()
     for _ in range(3):
         run_crawl(session, blocked, FakeChain(), n, PROFILE, "https://sh")
-    assert sum("⚠️ SeekHunter" in m for m in n.sent) == 1
+    assert sum("SeekHunter: all sources failing" in m for m in n.sent) == 1
     run_crawl(session, blocked, FakeChain(), n, PROFILE, "https://sh")
-    assert sum("⚠️ SeekHunter" in m for m in n.sent) == 1
+    assert sum("SeekHunter: all sources failing" in m for m in n.sent) == 1
 
 
 def test_recap(session):
@@ -133,7 +133,7 @@ def test_recap(session):
     run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
     n = FakeNotifier()
     run_recap(session, n, "https://sh")
-    assert "1 new jobs · 1 excluded" in n.sent[0]
+    assert "1 new jobs, 1 excluded" in n.sent[0]
 
 
 def test_run_lock(tmp_path):

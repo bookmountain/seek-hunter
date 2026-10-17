@@ -32,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     notifier = Notifier(env.openclaw_bin, env.telegram_target, dry_run=getattr(args, "dry_run", False))
 
     if args.command == "notify-test":
-        notifier.send("🎯 SeekHunter test message ✅")
+        notifier.send("SeekHunter test message")
         return 0
 
     try:
