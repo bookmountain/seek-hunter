@@ -151,13 +151,22 @@ def test_tailoring_detail_with_changes_and_urls(ctx):
     assert changes[0] == {
         "type": "summary",
         "before": "Full-stack Software Engineer with 5 years of experience in **React** and AI.",
-        "after": "Tailored summary.", "changed": True}
+        "after": "Tailored summary.", "changed": True, "diff": [
+            {"op": "delete",
+             "text": "Full-stack Software Engineer with 5 years of experience in **React** and AI."},
+            {"op": "insert", "text": "Tailored summary."}]}
     bullet = next(c for c in changes if c["type"] == "bullet")
     assert bullet["status"] == "reworded" and bullet["experience"] == "microsoft"
+    assert bullet["position_before"] == 0 and bullet["position_after"] == 0
+    assert {o["op"] for o in bullet["diff"]} >= {"delete", "insert"}
+    assert " ".join(o["text"] for o in bullet["diff"] if o["op"] != "delete") == "Reworded bullet with Jest."
+    assert d["change_counts"] == {"reworded": 1, "removed": 0, "moved": 0, "skills_reordered": 1,
+                                  "projects_changed": False, "summary_changed": True}
     skills = next(c for c in changes if c["type"] == "skills")
     assert skills["before"] == ["TypeScript", "Python", "C#", "Java"]
     assert skills["after"] == ["Python", "TypeScript"]
-    assert changes[-1] == {"type": "projects", "included": ["Microservice Demo"], "excluded": []}
+    assert changes[-1] == {"type": "projects", "included": ["Microservice Demo"], "excluded": [],
+                           "changed": False}
     assert d["files"] == {
         "resume_pdf": f"/api/tailorings/{tid}/resume.pdf",
         "cover_letter_pdf": f"/api/tailorings/{tid}/cover_letter.pdf",
@@ -177,6 +186,8 @@ def test_tailoring_detail_running_has_no_files(ctx):
         tid = t.id
     d = ctx.client.get(f"/api/tailorings/{tid}").json()
     assert d["progress"] == "Tailoring with AI"
+    assert d["change_counts"] == {"reworded": 0, "removed": 0, "moved": 0, "skills_reordered": 0,
+                                  "projects_changed": False, "summary_changed": False}
     assert d["files"] is None and d["changes"] == [] and d["cover_letter"] is None and d["current"] is None
     assert ctx.client.get(f"/api/tailorings/{tid}/resume.pdf").status_code == 404
     assert ctx.client.get("/api/tailorings/999").status_code == 404

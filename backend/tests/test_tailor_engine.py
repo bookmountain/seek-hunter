@@ -41,6 +41,14 @@ def test_prompt_contains_rules_resume_and_delimited_untrusted_ad(fixtures_dir):
     assert prompt.count("JOB_AD>>>") == 1  # the ad can't close the delimiter early
 
 
+def test_prompt_keeps_original_spelling_and_reorders_bullets(fixtures_dir):
+    prompt = build_prompt(JOB, load_resume_doc(fixtures_dir / "resume"))
+    assert "Write in Australian English (e.g." not in prompt
+    assert "do not change US/Australian spelling" in prompt
+    assert "most job-relevant bullets first" in prompt
+    assert "at most 4" in prompt
+
+
 def test_prompt_full_time_omits_visa_line(fixtures_dir):
     doc = load_resume_doc(fixtures_dir / "resume")
     prompt = build_prompt(JobContext(title="Dev", company="A", location="", work_type="full_time",
@@ -85,7 +93,8 @@ def test_tailor_retries_once_on_bad_json_then_fails(fixtures_dir):
 
 def test_changes_list(fixtures_dir):
     doc = load_resume_doc(fixtures_dir / "resume")
-    result = tailor(JOB, doc, lambda p: json.dumps(_reply()))
+    reply = _reply(summary="Software Engineer with 5 years of experience in React and AI, full-stack.")
+    result = tailor(JOB, doc, lambda p: json.dumps(reply))
     changes = compute_changes(doc, result.doc)
     kinds = [c["type"] for c in changes]
     assert kinds == ["summary", "bullet", "skills", "skills", "projects"]
@@ -97,7 +106,8 @@ def test_changes_list(fixtures_dir):
     assert skills["category"] == "Cloud & Tools"
     assert skills["before"] == ["Azure AI Studio", "Linux"]
     assert skills["after"] == ["Linux", "Azure AI Studio"]
-    assert changes[4] == {"type": "projects", "included": ["Microservice Demo"], "excluded": []}
+    assert changes[4] == {"type": "projects", "included": ["Microservice Demo"], "excluded": [],
+                           "changed": False}
 
 
 def test_changes_removed_and_kept():

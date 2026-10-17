@@ -145,3 +145,46 @@ def test_cover_letter_length_warning_and_missing_letter_rejected():
     assert any("words" in w for w in res.warnings)
     with pytest.raises(ValueError):
         _run(cover_letter={"greeting": "Dear X,", "paragraphs": ["  "]})
+
+
+@pytest.mark.parametrize("text", [
+    "Built labelling UI with React and Redux.",          # labeling -> labelling
+    "Built labelling UI with React and Redux",           # + punctuation
+    "Built labeling UI, with React and Redux.",          # punctuation only
+    "Built  labeling  UI with React & Redux.".replace("&", "and"),  # whitespace only
+])
+def test_trivial_bullet_rewrite_reverts_silently(text):
+    res = _run(experiences=[{"id": "microsoft", "bullets": [
+        {"id": "microsoft-b2", "text": "Kept coverage above 90% with Jest."},
+        {"id": "microsoft-b1", "text": text}]}])
+    bullets = res.doc.experience("microsoft").bullets
+    assert [b.id for b in bullets] == ["microsoft-b2", "microsoft-b1"]  # reorder still applied
+    assert bullets[1].text == "Built labeling UI with React and Redux."
+    assert res.warnings == _run().warnings  # silent: only the baseline cover-letter length note
+
+
+def test_spelling_variants_revert():
+    base = ResumeDoc(summary="s", skills=[], projects=[], experiences=[_exp(
+        "acme", "Optimizing color and center layouts for the organization.", "Built real-time dashboards.")])
+    out = TailorOutput.model_validate({"summary": "s", "cover_letter": LETTER, "experiences": [
+        {"id": "acme", "bullets": [
+            {"id": "acme-b1", "text": "Optimising colour and centre layouts for the organisation."},
+            {"id": "acme-b2", "text": "Built real time dashboards."}]}]})
+    res = validate(base, out)
+    assert res.doc.experience("acme").bullets == base.experiences[0].bullets
+    assert not any("Acme" in w for w in res.warnings)
+
+
+def test_real_bullet_rewrite_kept():
+    res = _run(experiences=[{"id": "microsoft", "bullets": [
+        {"id": "microsoft-b1", "text": "Built React and Redux labelling UI."},
+        {"id": "microsoft-b2", "text": "Kept coverage above 90% with Jest."}]}])
+    assert res.doc.experience("microsoft").bullets[0].text == "Built React and Redux labelling UI."
+
+
+def test_summary_trivial_change_keeps_original():
+    res = _run(summary="Full-stack engineer with 6 years' experience in React and TypeScript.")
+    assert res.doc.summary != BASE.summary  # real (if small) wording change: "of" dropped
+    res = _run(summary="Full stack engineer with 6 years of experience in React and TypeScript")
+    assert res.doc.summary == BASE.summary
+    assert res.warnings == _run().warnings

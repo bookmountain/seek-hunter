@@ -2,6 +2,7 @@
 
 Anything that could add a fact (a skill, a number, a technology, an unknown id) is reverted to the
 original text with a human-readable warning; the result can only reorder, trim, or reword.
+Rewrites that only change spelling variants or punctuation are silently reverted (no tailoring value).
 """
 
 import re
@@ -10,6 +11,7 @@ from dataclasses import dataclass, field
 from seekhunter.resume_doc import Bullet, ResumeDoc
 from seekhunter.skills import extract_skills
 from seekhunter.tailor.models import CoverLetter, TailorOutput
+from seekhunter.tailor.textdiff import is_trivial_change
 
 SUMMARY_MAX = 480
 MIN_BULLETS_RECENT = 2
@@ -65,6 +67,8 @@ def _validate_summary(base: ResumeDoc, summary: str, corpus_numbers: set[str], k
     issues = _new_facts(summary, corpus_numbers, known)
     if issues:
         warnings.append(f"Summary added {', '.join(issues)} (not in your resume); kept the original summary.")
+        return base.summary
+    if is_trivial_change(base.summary, summary):
         return base.summary
     return summary
 
@@ -129,6 +133,8 @@ def _validate_experiences(base: ResumeDoc, out: TailorOutput, known: set[str],
                 warnings.append(f"{exp.company}: kept original wording of '{_clip(orig.text)}' "
                                 f"(rewrite added {', '.join(issues)}).")
                 kept.append(orig.model_copy())
+            elif is_trivial_change(orig.text, text):
+                kept.append(orig.model_copy())  # spelling/punctuation only: keep the candidate's wording
             else:
                 kept.append(Bullet(id=be.id, text=text))
         if not kept:

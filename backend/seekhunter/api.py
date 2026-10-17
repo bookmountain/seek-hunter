@@ -31,7 +31,7 @@ from seekhunter.resume_doc import ResumeDoc
 from seekhunter.security import ensure_safe_write_token, ip_allowlist_middleware, require_write
 from seekhunter.settings_model import AppSettings
 from seekhunter.skills import extract_skills
-from seekhunter.tailor.changes import compute_changes
+from seekhunter.tailor.changes import change_counts, compute_changes
 from seekhunter.tailor.current import current_dir, read_current
 from seekhunter.tailor.models import CoverLetter
 from seekhunter.tailor.pipeline import download_name, send_tailoring
@@ -365,6 +365,15 @@ class TailoringJobOut(BaseModel):
     contact_name: str | None
 
 
+class ChangeCountsOut(BaseModel):
+    reworded: int = 0
+    removed: int = 0
+    moved: int = 0
+    skills_reordered: int = 0
+    projects_changed: bool = False
+    summary_changed: bool = False
+
+
 class TailoringDetailOut(TailoringOut):
     job: TailoringJobOut
     warnings: list[str]
@@ -372,6 +381,7 @@ class TailoringDetailOut(TailoringOut):
     gaps: list[str]
     cover_letter: CoverLetterOut | None
     changes: list[dict]
+    change_counts: ChangeCountsOut
     files: TailoringFilesOut | None
     current: ResumeCurrentOut | None
 
@@ -588,8 +598,8 @@ def _tailoring_detail(t: Tailoring, job: Job, data_dir: Path) -> TailoringDetail
         job=TailoringJobOut(id=job.id, title=job.title, company=job.company, location=job.location,
                             work_type=job.work_type, contact_name=job.contact_name),
         warnings=list(t.warnings or []), keywords_matched=list(result.get("keywords_matched", [])),
-        gaps=list(result.get("gaps", [])), cover_letter=letter, changes=changes or [], files=files,
-        current=current_info)
+        gaps=list(result.get("gaps", [])), cover_letter=letter, changes=changes or [],
+        change_counts=ChangeCountsOut(**change_counts(changes or [])), files=files, current=current_info)
 
 
 def _get_tailoring(session: Session, tid: int) -> tuple[Tailoring, Job]:
