@@ -36,3 +36,12 @@ def test_ms_sql_matches_sql_server():
 def test_spring_matches_springboot_and_spring_ai():
     assert "Spring" in extract_skills("We use SpringBoot in production")
     assert "Spring" in extract_skills("Experience with Spring AI is a plus")
+
+
+def test_resume_2026_10_skills():
+    text = ("React Native, Expo Router, ASP.NET Core, SignalR, Cloudflare Workers, PostGIS, "
+            "LangChain4j, LangGraph4j, MCP, Tool Calling, Prometheus/Grafana, DynamoDB")
+    expected = {"React Native", "React", "Expo", ".NET", "SignalR", "Cloudflare", "PostGIS",
+                "LangChain", "LangGraph", "MCP", "AI Agents", "Prometheus/Grafana", "DynamoDB"}
+    assert extract_skills(text) >= expected
+    assert "Expo" not in extract_skills("Visit our careers expo")
