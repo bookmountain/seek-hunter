@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Usage: seekhunter-api METHOD PATH [JSON_BODY]
+#   seekhunter-api GET /api/summary?hours=24
+#   seekhunter-api PATCH /api/jobs/142 '{"status":"saved"}'
+set -euo pipefail
+METHOD="${1:?method}"; PATH_="${2:?path}"; BODY="${3:-}"
+TOKEN="$(grep -E '^API_WRITE_TOKEN=' /opt/seek-hunter/.env | cut -d= -f2-)"
+ARGS=(-sS -X "$METHOD" "http://127.0.0.1:8090${PATH_}" -w '\n[HTTP %{http_code}]\n')
+if [ "$METHOD" != "GET" ]; then ARGS+=(-H "Authorization: Bearer ${TOKEN}"); fi
+if [ -n "$BODY" ]; then ARGS+=(-H "Content-Type: application/json" -d "$BODY"); fi
+exec curl "${ARGS[@]}"
