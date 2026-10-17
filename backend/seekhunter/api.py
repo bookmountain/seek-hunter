@@ -28,13 +28,15 @@ from seekhunter.models import (
 from seekhunter.notify import Notifier, NotifyError, format_brief
 from seekhunter.profile import load_profile
 from seekhunter.resume_doc import ResumeDoc
+from seekhunter.resume_matcher import RMError, client_from_env
 from seekhunter.security import ensure_safe_write_token, ip_allowlist_middleware, require_write
 from seekhunter.settings_model import AppSettings
 from seekhunter.skills import extract_skills
+from seekhunter.tailor import rm as rm_step
 from seekhunter.tailor.changes import change_counts, compute_changes
 from seekhunter.tailor.current import current_dir, read_current
 from seekhunter.tailor.models import CoverLetter
-from seekhunter.tailor.pipeline import download_name, send_tailoring
+from seekhunter.tailor.pipeline import download_name, own_ats, send_tailoring
 from seekhunter.tailor.render import latex_hash
 
 SPA_SECURITY_HEADERS = {
@@ -330,6 +332,60 @@ class TailoringListItem(TailoringOut):
     cover_letter_pdf: str | None
     thumbnail: str | None
     applied_application_id: int | None
+    ats_current: float | None = None
+    ats_tailored: float | None = None
+
+
+class AtsScoreOut(BaseModel):
+    """Resume-Matcher's ATS formula (0-100) with its five weighted parts."""
+
+    score: float
+    breakdown: dict[str, float | None]
+    missing_keywords: list[str] = []
+    matched_keywords: list[str] = []
+
+
+class AtsOut(BaseModel):
+    current: AtsScoreOut | None = None
+    tailored: AtsScoreOut | None = None
+    keywords_source: str | None = None  # seekhunter | resume_matcher
+
+
+class ResumeMatcherOut(BaseModel):
+    status: str  # queued | running | done | failed | unavailable
+    error: str | None = None
+    warnings: list[str] = []
+    started_at: str | None = None
+    finished_at: str | None = None
+    ats_score: float | None = None
+    sub_scores: dict[str, float | None] = {}
+    matched_keywords: list[str] = []
+    missing_keywords: list[str] = []
+    injectable_keywords: list[str] = []
+    recommendations: list[str] = []
+    interview_prep: dict | None = None
+    outreach_message: str | None = None
+    rm_master_id: str | None = None
+    rm_job_id: str | None = None
+    rm_resume_id: str | None = None
+    rm_url: str | None = None
+
+
+class ResumeMatcherRunOut(BaseModel):
+    status: str
+    started: bool
+
+
+class ResumeMatcherStatusOut(BaseModel):
+    enabled: bool
+    reachable: bool
+    ready: bool
+    llm_configured: bool = False
+    llm_healthy: bool = False
+    status: str | None = None
+    base_url: str | None = None
+    settings_url: str | None = None
+    error: str | None = None
 
 
 class CoverLetterOut(BaseModel):
@@ -384,6 +440,8 @@ class TailoringDetailOut(TailoringOut):
     change_counts: ChangeCountsOut
     files: TailoringFilesOut | None
     current: ResumeCurrentOut | None
+    ats: AtsOut
+    resume_matcher: ResumeMatcherOut | None
 
 
 class SendOut(BaseModel):
@@ -575,6 +633,41 @@ def _current_out(data_dir: Path, resume_hash: str | None, error: str | None = No
         page_urls=[f"/api/resume/current/pages/{i}.png?hash={h}" for i in range(1, n + 1)], error=None)
 
 
+RM_STALE_AFTER = timedelta(minutes=45)
+
+
+def _ats(t: Tailoring, job: Job | None) -> AtsOut:
+    """Stored `result["ats"]`; tailorings from before it existed are scored on the fly (deterministic)."""
+    result = t.result or {}
+    if t.status != "done" or not result.get("base") or not result.get("tailored"):
+        return AtsOut()
+    ats = result.get("ats")
+    if not ats:
+        ats = own_ats(get_env(), job.title if job else "", ResumeDoc.model_validate(result["base"]),
+                      ResumeDoc.model_validate(result["tailored"]), list(result.get("keywords_matched", [])),
+                      list(result.get("gaps", [])))
+    return AtsOut.model_validate(ats)
+
+
+def _resume_matcher_out(t: Tailoring) -> ResumeMatcherOut | None:
+    r = (t.result or {}).get("resume_matcher")
+    if not r:
+        return None
+    out = ResumeMatcherOut.model_validate({k: v for k, v in r.items() if k in ResumeMatcherOut.model_fields})
+    if out.status in ("queued", "running"):
+        started = out.started_at or (t.finished_at.isoformat() if t.finished_at else None)
+        try:
+            stale = started is not None and datetime.fromisoformat(started) < utcnow() - RM_STALE_AFTER
+        except ValueError:
+            stale = True
+        if stale:
+            out.status, out.error = "failed", "timed out (the Resume-Matcher step did not finish)"
+    base = (get_env().rm_base_url or "").rstrip("/")
+    if base and out.rm_resume_id:
+        out.rm_url = f"{base}/resumes/{out.rm_resume_id}"
+    return out
+
+
 def _tailoring_detail(t: Tailoring, job: Job, data_dir: Path) -> TailoringDetailOut:
     result = t.result or {}
     done = t.status == "done" and bool(result)
@@ -599,7 +692,8 @@ def _tailoring_detail(t: Tailoring, job: Job, data_dir: Path) -> TailoringDetail
                             work_type=job.work_type, contact_name=job.contact_name),
         warnings=list(t.warnings or []), keywords_matched=list(result.get("keywords_matched", [])),
         gaps=list(result.get("gaps", [])), cover_letter=letter, changes=changes or [],
-        change_counts=ChangeCountsOut(**change_counts(changes or [])), files=files, current=current_info)
+        change_counts=ChangeCountsOut(**change_counts(changes or [])), files=files, current=current_info,
+        ats=_ats(t, job), resume_matcher=_resume_matcher_out(t))
 
 
 def _get_tailoring(session: Session, tid: int) -> tuple[Tailoring, Job]:
@@ -1127,13 +1221,16 @@ def create_app(init: bool = True) -> FastAPI:
             if q and q.lower() not in f"{title} {company}".lower():
                 continue
             done = t.status == "done"
+            ats = _ats(t, job)
             out.append(TailoringListItem(
                 **_tailoring_out(t).model_dump(), job_title=title, company=company,
                 city=getattr(job, "city", None) if job else None,
                 resume_pdf=f"/api/tailorings/{t.id}/resume.pdf" if done else None,
                 cover_letter_pdf=f"/api/tailorings/{t.id}/cover_letter.pdf" if done else None,
                 thumbnail=f"/api/tailorings/{t.id}/pages/resume/1.png" if done else None,
-                applied_application_id=applied.get(t.id)))
+                applied_application_id=applied.get(t.id),
+                ats_current=ats.current.score if ats.current else None,
+                ats_tailored=ats.tailored.score if ats.tailored else None))
         return out
 
     @app.get("/api/tailorings/{tid}", response_model=TailoringDetailOut)
@@ -1169,6 +1266,44 @@ def create_app(init: bool = True) -> FastAPI:
         except (ValueError, OSError) as e:
             raise HTTPException(409, str(e)) from e
         return SendOut(sent=True, sent_at=t.sent_at)
+
+    @app.post("/api/tailorings/{tid}/resume-matcher", response_model=ResumeMatcherRunOut, status_code=202,
+              dependencies=write)
+    def rerun_resume_matcher(tid: int, session: Session = Depends(get_session)):
+        """(Re)run the best-effort Resume-Matcher analysis for a finished tailoring."""
+        t, _ = _get_tailoring(session, tid)
+        if t.status != "done":
+            raise HTTPException(409, "tailoring is not finished")
+        if not (get_env().rm_base_url or "").strip():
+            raise HTTPException(409, "Resume-Matcher is not configured (set RM_BASE_URL)")
+        existing = _resume_matcher_out(t)
+        if existing and existing.status in ("queued", "running"):
+            return ResumeMatcherRunOut(status=existing.status, started=False)
+        rm_step.mark_queued(session, t)
+        t.result = {**t.result, "resume_matcher": {**t.result["resume_matcher"],
+                                                   "started_at": utcnow().isoformat()}}
+        repo.save_tailoring(session, t)
+        _spawn_cli("resume-matcher", str(tid))
+        return ResumeMatcherRunOut(status="queued", started=True)
+
+    @app.get("/api/resume-matcher/status", response_model=ResumeMatcherStatusOut)
+    def resume_matcher_status():
+        """Proxy of Resume-Matcher's `/status`, so the UI can say when it needs a ChatGPT sign-in."""
+        client = client_from_env(get_env())
+        if client is None:
+            return ResumeMatcherStatusOut(enabled=False, reachable=False, ready=False,
+                                          error="Resume-Matcher is not configured (set RM_BASE_URL)")
+        base = client.base_url
+        try:
+            st = client.status() or {}
+        except RMError as e:
+            return ResumeMatcherStatusOut(enabled=True, reachable=False, ready=False, base_url=base,
+                                          settings_url=f"{base}/settings", error=str(e))
+        llm = bool(st.get("llm_configured"))
+        return ResumeMatcherStatusOut(
+            enabled=True, reachable=True, ready=llm, llm_configured=llm,
+            llm_healthy=bool(st.get("llm_healthy")), status=st.get("status"), base_url=base,
+            settings_url=f"{base}/settings", error=None if llm else rm_step.NOT_SIGNED_IN)
 
     def _current_hash(requested: str | None) -> tuple[str | None, str | None]:
         if requested:
