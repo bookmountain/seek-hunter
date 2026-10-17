@@ -36,6 +36,8 @@ class DigestItem:
     contact_phone: str | None = None
     contact_email: str | None = None
     applicant_count: int | None = None
+    already_applied_title: str | None = None
+    already_applied_days_ago: int | None = None
 
 
 def _strip_scheme(url: str) -> str:
@@ -117,8 +119,17 @@ def _app_base(public_url: str) -> str:
     return url if url.startswith(("http://", "https://")) else f"https://{url}"
 
 
+def _already_applied_line(it: DigestItem) -> str | None:
+    if it.already_applied_title is None or it.already_applied_days_ago is None:
+        return None
+    return f"Already applied: {it.already_applied_title} ({it.already_applied_days_ago}d ago)"
+
+
 def _format_item(it: DigestItem, app_base: str | None = None) -> str:
     lines = [f"#{it.job_id} · {it.score} · {it.title}", _meta_line(it)]
+    already_line = _already_applied_line(it)
+    if already_line:
+        lines.append(already_line)
     contact_line = _contact_line(it)
     if contact_line:
         lines.append(contact_line)
@@ -195,7 +206,13 @@ def format_digest(items: list[DigestItem], when: datetime, public_url: str, degr
     return messages
 
 
-def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: str) -> list[str]:
+def _follow_up_line(follow_ups: list[dict]) -> str:
+    bits = ", ".join(f"{f['company']} · {f['title']} · {f['days']}d" for f in follow_ups[:3])
+    return f"Follow up: {bits}"
+
+
+def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: str,
+                 follow_ups: list[dict] | None = None) -> list[str]:
     shown = items[:RECAP_MAX_ITEMS]
     extra = max(0, len(items) - RECAP_MAX_ITEMS)
     header = f"SeekHunter daily recap — {day}"
@@ -216,6 +233,8 @@ def format_recap(items: list[DigestItem], excluded: int, day: str, public_url: s
             more_line = f"+{extra} more: {host}" if extra else host
             reply_line = f"Reply to OpenClaw: save {first_id} · hide {first_id} · why {first_id}"
             footer = f"{more_line}\n{reply_line}"
+            if follow_ups:
+                footer = f"{footer}\n{_follow_up_line(follow_ups)}"
         messages.append(_assemble(head, job_texts, footer))
     return messages
 

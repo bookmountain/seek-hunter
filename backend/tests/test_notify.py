@@ -75,6 +75,39 @@ def test_unknown_work_type_falls_back_to_type_na():
     assert "Type n/a" in msgs[0]
 
 
+def test_already_applied_line_appears_under_meta_line_when_present():
+    it = item(1)
+    it.already_applied_title = "Full Stack (Java) Developer"
+    it.already_applied_days_ago = 3
+    msgs = format_digest([it], datetime(2026, 10, 17, 9, 0), "https://sh", [])
+    lines = msgs[0].splitlines()
+    meta_idx = next(i for i, line in enumerate(lines) if "Acme" in line)
+    assert lines[meta_idx + 1] == "Already applied: Full Stack (Java) Developer (3d ago)"
+
+
+def test_already_applied_line_omitted_when_not_set():
+    msgs = format_digest([item(1)], datetime(2026, 10, 17, 9, 0), "https://sh", [])
+    assert "Already applied:" not in msgs[0]
+
+
+def test_recap_follow_up_line_lists_up_to_three():
+    follow_ups = [
+        {"company": "Acme", "title": "Dev", "days": 9},
+        {"company": "Beta", "title": "QA", "days": 10},
+        {"company": "Gamma", "title": "Lead", "days": 11},
+        {"company": "Delta", "title": "Extra", "days": 12},
+    ]
+    msgs = format_recap([item(1)], excluded=0, day="Sat 17 Oct", public_url="https://sh",
+                        follow_ups=follow_ups)
+    assert "Follow up: Acme · Dev · 9d, Beta · QA · 10d, Gamma · Lead · 11d" in msgs[-1]
+    assert "Delta" not in msgs[-1]
+
+
+def test_recap_omits_follow_up_line_when_none_due():
+    msgs = format_recap([item(1)], excluded=0, day="Sat 17 Oct", public_url="https://sh")
+    assert "Follow up:" not in msgs[-1]
+
+
 def test_blank_line_separates_job_blocks():
     msgs = format_digest([item(1), item(2)], datetime(2026, 10, 17, 9, 0), "https://sh", [])
     assert "#101" in msgs[0] and "#102" in msgs[0]

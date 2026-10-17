@@ -10,11 +10,11 @@ from sqlmodel import Session
 
 from seekhunter import market, repo
 from seekhunter.contacts import extract_contacts, is_plausible_name, normalize_phone
-from seekhunter.domain import JobData
+from seekhunter.domain import JobData, company_key
 from seekhunter.filters import evaluate_exclusions
 from seekhunter.http import SourceBlocked
 from seekhunter.llm.base import LLMJobInput
-from seekhunter.models import Job, JobEvaluation, Outbox, Run, utcnow
+from seekhunter.models import Application, Job, JobEvaluation, Outbox, Run, utcnow
 from seekhunter.notify import DigestItem, NotifyError, format_digest, format_market_brief, format_recap
 from seekhunter.profile import Profile, load_profile
 from seekhunter.scoring import blend, score_job
@@ -38,12 +38,45 @@ def _local(dt: datetime) -> datetime:
     return dt.replace(tzinfo=ZoneInfo("UTC")).astimezone(TZ)
 
 
-def digest_item(job: Job, ev: JobEvaluation) -> DigestItem:
+def digest_item(job: Job, ev: JobEvaluation, prior_application: Application | None = None,
+                now: datetime | None = None) -> DigestItem:
+    already_title = already_days = None
+    if prior_application is not None:
+        already_title = prior_application.title
+        already_days = ((now or utcnow()) - prior_application.applied_at).days
     return DigestItem(job_id=job.id, score=ev.final_score, title=job.title, company=job.company,
                       location=job.location, work_type=job.work_type, matched=ev.matched_skills,
                       why=ev.llm_note, url=job.url, flags=ev.flags, contact_name=job.contact_name,
                       contact_phone=job.contact_phone, contact_email=job.contact_email,
-                      applicant_count=job.applicant_count)
+                      applicant_count=job.applicant_count, already_applied_title=already_title,
+                      already_applied_days_ago=already_days)
+
+
+def _prior_application_for(apps_by_key: dict[str, list[Application]], job: Job) -> Application | None:
+    """The most recent application for this job's company, excluding the job's own application
+    (if any) — "this company already has my resume" for the digest/recap."""
+    for a in apps_by_key.get(company_key(job.company), []):
+        if a.job_id != job.id:
+            return a
+    return None
+
+
+def _digest_items(session: Session, rows: list[tuple[Job, JobEvaluation]],
+                  now: datetime) -> list[DigestItem]:
+    keys = {company_key(j.company) for j, _ in rows}
+    apps_by_key = repo.applications_by_company_keys(session, keys)
+    return [digest_item(j, e, _prior_application_for(apps_by_key, j), now) for j, e in rows]
+
+
+def _upsert_recruiter_contact(session: Session, job: Job) -> None:
+    """Upserts the job's recruiter (when a name is known; phone-only contacts stay on the job) into
+    `contacts`, linked to this job via `contact_jobs`."""
+    if not job.contact_name:
+        return
+    contact = repo.upsert_contact(session, name=job.contact_name, company=job.company, role="Recruiter",
+                                  phone=job.contact_phone, email=job.contact_email,
+                                  linkedin=job.contact_linkedin)
+    repo.link_contact_job(session, contact.id, job.id)
 
 
 def _apply_contacts(session: Session, job: Job) -> None:
@@ -53,6 +86,7 @@ def _apply_contacts(session: Session, job: Job) -> None:
     name = extracted.name if is_plausible_name(extracted.name, job.title, job.company) else None
     repo.set_contacts(session, job, name=name, phone=normalize_phone(job.contact_phone or extracted.phone),
                       email=job.contact_email or extracted.email)
+    _upsert_recruiter_contact(session, job)
 
 
 def _lookup_linkedin(session: Session, jobs: list[Job],
@@ -71,6 +105,7 @@ def _lookup_linkedin(session: Session, jobs: list[Job],
             continue
         if url:
             repo.set_contacts(session, job, linkedin=url)
+            _upsert_recruiter_contact(session, job)
 
 
 def _send(session: Session, notifier, text: str) -> bool:  # noqa: ANN001
@@ -201,6 +236,7 @@ def _evaluate(session: Session, jobs: list[Job], profile: Profile, settings, llm
                 # avoid storing a hallucinated name.
                 if not job.contact_name and s.contact_name and s.contact_name in d.text:
                     repo.set_contacts(session, job, name=s.contact_name)
+                    _upsert_recruiter_contact(session, job)
     return used
 
 
@@ -299,7 +335,7 @@ def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, 
         if candidates and settings.notify_enabled:
             top = candidates[: settings.max_notify_per_run]
             degraded = [k for k, v in status.items() if v["status"] != "ok"]
-            for text in format_digest([digest_item(j, e) for j, e in top], _local(now), public_url, degraded,
+            for text in format_digest(_digest_items(session, top, now), _local(now), public_url, degraded,
                                       extra=len(candidates) - len(top)):
                 _send(session, notifier, text)
             run.notified = len(top)
@@ -331,8 +367,11 @@ def run_recap(session: Session, notifier, public_url: str, dry_run: bool = False
     since = start_local.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
     rows = repo.list_jobs(session, view="active", since=since, limit=500)
     excluded = repo.count_excluded_since(session, since)
-    for text in format_recap([digest_item(j, e) for j, e in rows], excluded, f"{local_now:%a %d %b}",
-                             public_url):
+    now = utcnow()
+    due = repo.follow_ups_due(session, now)[:3]
+    follow_ups = [{"company": a.company, "title": a.title, "days": (now - a.applied_at).days} for a in due]
+    for text in format_recap(_digest_items(session, rows, now), excluded, f"{local_now:%a %d %b}",
+                             public_url, follow_ups=follow_ups or None):
         _send(session, notifier, text)
     if not dry_run:
         session.add(Run(kind="recap", finished_at=utcnow(), new_jobs=len(rows)))
@@ -421,6 +460,7 @@ def run_contacts_backfill(session: Session, seek_source, contact_lookup=None,  #
             job.contact_name = name  # may clear a name stored by an older, looser extractor
             job.contact_linkedin = None
         repo.set_contacts(session, job, name=name, phone=phone, email=email)
+        _upsert_recruiter_contact(session, job)
 
     linkedin_lookups = linkedin_found = 0
     if contact_lookup:
@@ -438,6 +478,7 @@ def run_contacts_backfill(session: Session, seek_source, contact_lookup=None,  #
             if url:
                 linkedin_found += 1
                 repo.set_contacts(session, job, linkedin=url)
+                _upsert_recruiter_contact(session, job)
 
     return {"jobs_checked": len(jobs), "updated": updated, "linkedin_lookups": linkedin_lookups,
            "linkedin_found": linkedin_found}

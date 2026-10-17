@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -7,10 +9,12 @@ from seekhunter.domain import JobData
 from seekhunter.http import SourceBlocked
 from seekhunter.llm.base import LLMScore
 from seekhunter.lock import RunLocked, run_lock
-from seekhunter.models import Job, JobEvaluation, Outbox, Run
+from seekhunter.models import Contact, ContactJob, Job, JobEvaluation, Outbox, Run
+from seekhunter.models import utcnow as _utcnow
 from seekhunter.notify import NotifyError
 from seekhunter.pipeline import (
     _lookup_linkedin,
+    digest_item,
     run_contacts_backfill,
     run_crawl,
     run_insights_brief,
@@ -641,3 +645,87 @@ def test_run_insights_refresh_generic_exception_is_skipped_and_continues():
         seek = FlakyInsightsSource("seek", [jd("seek", "1"), jd("seek", "2")])
         report = run_insights_refresh(s, seek, limit=10)
         assert report == {"checked": 2, "refreshed": 1, "error": None}
+
+
+def test_run_crawl_upserts_named_recruiter_into_contacts(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="Call Brayden Mackay on 08 8216 3534.")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    contact = session.exec(select(Contact).where(Contact.name == "Brayden Mackay")).one()
+    assert contact.company == "Acme" and contact.phone == "08 8216 3534"
+    link = session.exec(select(ContactJob).where(ContactJob.contact_id == contact.id)).one()
+    assert link.job_id == job.id
+
+
+def test_run_crawl_skips_contact_upsert_without_a_name(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="No contact mentioned here at all.")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    assert session.exec(select(Contact)).first() is None
+
+
+def test_run_contacts_backfill_upserts_named_recruiter_into_contacts():
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        job, _ = repo.upsert_job(s, jd("seek", "1", desc="Call Brayden Mackay on 08 8216 3534."))
+
+        class BackfillSeekSource:
+            def details(self, data):
+                from dataclasses import replace
+                return replace(data, contact_email="jobs@acme.com")
+
+        run_contacts_backfill(s, BackfillSeekSource(), days=7)
+        contact = s.exec(select(Contact).where(Contact.name == "Brayden Mackay")).one()
+        assert contact.email == "jobs@acme.com"
+        link = s.exec(select(ContactJob).where(ContactJob.contact_id == contact.id)).one()
+        assert link.job_id == job.id
+
+
+def test_digest_item_includes_already_applied_when_prior_application_exists(session):
+    job, _ = repo.upsert_job(session, jd("seek", "1"))
+    ev = repo.save_evaluation(session, job.id, excluded=False, reasons=[], snippets={}, rule_score=70,
+                              llm_score=None, llm_note=None, llm_provider=None, final_score=70,
+                              matched_skills=[], flags=[])
+    now = _utcnow()
+    prior = repo.create_application(session, job_id=None, company="Acme", title="Old Role",
+                                    applied_at=now - timedelta(days=3))
+    item = digest_item(job, ev, prior, now)
+    assert item.already_applied_title == "Old Role"
+    assert item.already_applied_days_ago == 3
+
+
+def test_digest_item_omits_already_applied_without_prior_application(session):
+    job, _ = repo.upsert_job(session, jd("seek", "1"))
+    ev = repo.save_evaluation(session, job.id, excluded=False, reasons=[], snippets={}, rule_score=70,
+                              llm_score=None, llm_note=None, llm_provider=None, final_score=70,
+                              matched_skills=[], flags=[])
+    item = digest_item(job, ev)
+    assert item.already_applied_title is None
+    assert item.already_applied_days_ago is None
+
+
+def test_run_crawl_digest_mentions_already_applied_company(session):
+    repo.create_application(session, job_id=None, company="Acme", title="Old Role",
+                            applied_at=_utcnow() - timedelta(days=3))
+    seek = FakeSource("seek", [jd("seek", "1", company="Acme")])
+    notifier = FakeNotifier()
+    run_crawl(session, {"seek": seek}, FakeChain(), notifier, PROFILE, "https://sh")
+    assert any("Already applied: Old Role (3d ago)" in m for m in notifier.sent)
+
+
+def test_run_recap_includes_follow_up_line_for_stale_applications(session):
+    repo.create_application(session, job_id=None, company="Acme", title="Stale Role",
+                            applied_at=_utcnow() - timedelta(days=9))
+    seek = FakeSource("seek", [jd("seek", "1")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    n = FakeNotifier()
+    run_recap(session, n, "https://sh")
+    assert any("Follow up: Acme · Stale Role · 9d" in m for m in n.sent)
+
+
+def test_run_recap_omits_follow_up_line_when_nothing_due(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    n = FakeNotifier()
+    run_recap(session, n, "https://sh")
+    assert not any("Follow up:" in m for m in n.sent)
