@@ -36,13 +36,13 @@ def test_contact_talent_acquisition_has_no_name():
 
 def test_mobile_plus61_is_normalised():
     c = extract_contacts("Please call Jane Smith on +61 412 345 678 today.")
-    assert c.phone == "+61 412 345 678"
+    assert c.phone == "0412 345 678"
     assert c.name == "Jane Smith"
 
 
 def test_landline_plus61_is_normalised():
     c = extract_contacts("Phone +61 8 8216 3534 for details.")
-    assert c.phone == "+61 8 8216 3534"
+    assert c.phone == "08 8216 3534"
 
 
 def test_no_contacts_in_plain_text():
@@ -123,3 +123,20 @@ def test_find_linkedin_profile_no_api_key_returns_none():
 
 def test_find_linkedin_profile_no_name_returns_none():
     assert find_linkedin_profile(None, "Acme", "k3y") is None
+
+
+def test_rejects_role_tech_and_place_phrases():
+    from seekhunter.contacts import extract_contacts, is_plausible_name
+    assert extract_contacts("Contact Azure API Management on 08 8112 7418").name is None
+    assert extract_contacts("please contact Automation Delivery Lead on 0412 345 678").name is None
+    assert extract_contacts("Holden Hill, Adelaide SA. Call 08 8216 3534").name is None
+    assert not is_plausible_name("Full Stack", "Full Stack Developer", "Acme")
+    text = "please contact Sarah O'Neil, Senior Consultant, on 0412 345 678"
+    assert extract_contacts(text).name == "Sarah O'Neil"
+
+
+def test_plus61_numbers_normalised_to_local():
+    from seekhunter.contacts import extract_contacts, normalize_phone
+    assert extract_contacts("call +61 8 8306 8208").phone == "08 8306 8208"
+    assert extract_contacts("call +61 412 345 678").phone == "0412 345 678"
+    assert normalize_phone("+61 8 8306 8208") == "08 8306 8208"

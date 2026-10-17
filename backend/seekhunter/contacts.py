@@ -14,11 +14,25 @@ _VERB = r"(?:call|contact|speak(?:\s+(?:to|with))?|reach out to|email|chat(?:\s+
 _NAME_PATTERNS = (
     re.compile(rf"\b(?i:{_VERB})\s+({_NAME})\b"),
     re.compile(rf"\b({_NAME})\s+(?:on|at)\s+(?=[+(]|\d)"),
-    re.compile(rf"\b({_NAME}),\s+[A-Z][a-z]+"),
+    re.compile(rf"\b({_NAME}),\s+(?:Senior\s+|Principal\s+|Lead\s+)?(?:[A-Z][a-z]+\s+)?"
+               r"(?:Consultant|Recruiter|Manager|Partner|Director|Specialist|Associate|Advisor|Adviser)\b"),
 )
 
 _NAME_BLOCKLIST = {
     "pty", "ltd", "group", "team", "recruitment", "talent", "australia", "seek", "us", "hr",
+    # roles / org words
+    "lead", "leader", "manager", "management", "delivery", "automation", "developer", "engineer",
+    "engineering", "consultant", "officer", "director", "head", "senior", "principal", "services",
+    "service", "solutions", "department", "government", "university", "council", "office", "support",
+    "desk", "operations", "digital", "technology", "technologies", "it", "ict", "people", "careers",
+    "acquisition", "resourcing", "partner", "partners", "client", "clients", "company", "agency",
+    # tech words that look capitalised in ads
+    "azure", "api", "apis", "aws", "cloud", "data", "java", "python", "react", "net", "sql",
+    # places
+    "adelaide", "hill", "park", "terrace", "street", "road", "cbd", "north", "south", "east", "west",
+    "sa", "nsw", "vic", "qld", "wa", "tas", "act", "nt", "lakes", "beach", "valley", "heights",
+    # sentence words
+    "the", "our", "a", "an", "apply", "today", "now", "please", "click", "for", "and", "or", "on", "at",
 }
 
 _LANDLINE_RE = re.compile(r"(\+61[\s-]?|0)([2378])[\s-]?(\d{4})[\s-]?(\d{4})\b")
@@ -44,7 +58,17 @@ def _valid_name(name: str) -> bool:
     words = name.split()
     if len(words) < 2:
         return False
+    if any(w.isupper() and len(w) > 1 for w in words):  # acronyms like "IT", "ICT", "API"
+        return False
     return not any(w.strip("'’").lower() in _NAME_BLOCKLIST for w in words)
+
+
+def is_plausible_name(name: str | None, title: str = "", company: str = "") -> bool:
+    """Public check used when reconciling stored names (e.g. backfill)."""
+    if not name or not _valid_name(name):
+        return False
+    lowered = name.lower()
+    return lowered not in title.lower() and lowered not in company.lower()
 
 
 def _extract_name(text: str) -> str | None:
@@ -57,13 +81,13 @@ def _extract_name(text: str) -> str | None:
 
 
 def _format_landline(m: re.Match) -> str:
-    prefix, area, rest = m.group(1), m.group(2), f"{m.group(3)} {m.group(4)}"
-    return f"+61 {area} {rest}" if prefix.strip().startswith("+61") else f"0{area} {rest}"
+    area, rest = m.group(2), f"{m.group(3)} {m.group(4)}"
+    return f"0{area} {rest}"
 
 
 def _format_mobile(m: re.Match) -> str:
-    prefix, rest = m.group(1), f"4{m.group(2)} {m.group(3)} {m.group(4)}"
-    return f"+61 {rest}" if prefix.strip().startswith("+61") else f"0{rest}"
+    rest = f"4{m.group(2)} {m.group(3)} {m.group(4)}"
+    return f"0{rest}"
 
 
 def _format_freecall(m: re.Match) -> str:
@@ -84,6 +108,13 @@ def _extract_phone(text: str) -> str | None:
         return None
     candidates.sort(key=lambda c: c[0])
     return candidates[0][1]
+
+
+def normalize_phone(value: str | None) -> str | None:
+    """Normalise a structured phone value (e.g. '+61 8 8306 8208') to local AU format."""
+    if not value:
+        return value
+    return _extract_phone(value) or value.strip()
 
 
 def _extract_email(text: str) -> str | None:

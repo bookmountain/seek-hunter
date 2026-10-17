@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from sqlmodel import Session
 
 from seekhunter import repo
-from seekhunter.contacts import extract_contacts
+from seekhunter.contacts import extract_contacts, is_plausible_name, normalize_phone
 from seekhunter.filters import evaluate_exclusions
 from seekhunter.http import SourceBlocked
 from seekhunter.llm.base import LLMJobInput
@@ -46,7 +46,8 @@ def _apply_contacts(session: Session, job: Job) -> None:
     """Fill contact_name/phone/email from the job's own ad text, preferring structured source data
     (already on `job` via `update_job_details`) over regex extraction for phone/email."""
     extracted = extract_contacts(repo.to_jobdata(job).text)
-    repo.set_contacts(session, job, name=extracted.name, phone=job.contact_phone or extracted.phone,
+    name = extracted.name if is_plausible_name(extracted.name, job.title, job.company) else None
+    repo.set_contacts(session, job, name=name, phone=normalize_phone(job.contact_phone or extracted.phone),
                       email=job.contact_email or extracted.email)
 
 
@@ -324,8 +325,16 @@ def run_contacts_backfill(session: Session, seek_source, contact_lookup=None,  #
                 session.commit()
 
         extracted = extract_contacts(repo.to_jobdata(job).text)
-        name = job.contact_name or extracted.name
-        phone = job.contact_phone or extracted.phone
+        if job.contact_name and not is_plausible_name(job.contact_name, job.title, job.company):
+            job.contact_name = None  # clear names stored by an older, looser extractor
+            updated += 1
+        if is_plausible_name(job.contact_name, job.title, job.company):
+            name = job.contact_name
+        elif is_plausible_name(extracted.name, job.title, job.company):
+            name = extracted.name
+        else:
+            name = None
+        phone = normalize_phone(job.contact_phone or extracted.phone)
         email = job.contact_email or extracted.email
         if (name, phone, email) != (job.contact_name, job.contact_phone, job.contact_email):
             updated += 1
