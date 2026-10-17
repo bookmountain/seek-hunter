@@ -7,6 +7,7 @@ const links = [
   { to: "/", label: "Jobs" },
   { to: "/excluded", label: "Excluded" },
   { to: "/searches", label: "Searches" },
+  { to: "/insights", label: "Insights" },
   { to: "/settings", label: "Settings" },
   { to: "/runs", label: "Runs" },
 ];

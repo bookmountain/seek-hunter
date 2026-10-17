@@ -208,3 +208,57 @@ export interface TailoringDetail extends TailoringSummary {
   files: { resume_pdf: string; cover_letter_pdf: string; resume_pages: string[]; cover_letter_pages: string[] } | null;
   current: ResumeCurrent | null;
 }
+
+// ---------------------------------------------------------------- market insights
+
+export type City = "adelaide" | "melbourne" | "sydney" | "perth";
+
+export interface CityOverview {
+  city: City;
+  total: number;
+  flexible: number;
+  /** 0–1 */
+  flexible_share: number;
+  work_type_mix: Record<string, number>;
+  role_family_mix: Record<string, number>;
+  /** AUD per hour */
+  salary_p25: number | null;
+  salary_p50: number | null;
+  salary_p75: number | null;
+  salary_sample_size: number;
+  detailed_sample_size: number;
+}
+
+export interface SkillShare {
+  skill: string;
+  count: number;
+  /** 0–1 */
+  share: number;
+  you_have: boolean;
+}
+
+export interface CompareResult {
+  skills: string[];
+  cities: { city: City; shares: Record<string, number>; detailed_sample_size: number }[];
+}
+
+export interface SkillGap {
+  skill: string;
+  count: number;
+  share: number;
+  example_titles: string[];
+  role_families: string[];
+}
+
+export interface TrendsResult {
+  city: City;
+  skills: string[];
+  points: { date: string; shares: Record<string, number> }[];
+}
+
+export interface RoleFamilyRow {
+  role_family: string;
+  count: number;
+  flexible_share: number;
+  top_skills: string[];
+}

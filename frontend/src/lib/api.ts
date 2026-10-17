@@ -1,5 +1,11 @@
 import type {
   AppSettings,
+  CityOverview,
+  CompareResult,
+  RoleFamilyRow,
+  SkillGap,
+  SkillShare,
+  TrendsResult,
   Job,
   JobDetail,
   JobStatus,
@@ -81,6 +87,17 @@ export const api = {
   tailorings: (jobId: number) => request<TailoringSummary[]>("GET", `/api/jobs/${jobId}/tailorings`),
   tailoring: (tid: number) => request<TailoringDetail>("GET", `/api/tailorings/${tid}`),
   resumeCurrent: () => request<ResumeCurrent>("GET", "/api/resume/current"),
+  insightsOverview: (days = 14) => request<CityOverview[]>("GET", `/api/insights/overview${qs({ days: String(days) })}`),
+  insightsSkills: (city: string, roleFamily?: string, days = 14) =>
+    request<SkillShare[]>("GET", `/api/insights/skills${qs({ city, days: String(days), role_family: roleFamily })}`),
+  insightsCompare: (skills: string[], days = 14) =>
+    request<CompareResult>("GET", `/api/insights/compare${qs({ skills: skills.join(","), days: String(days) })}`),
+  insightsGaps: (city: string, days = 14) =>
+    request<SkillGap[]>("GET", `/api/insights/gaps${qs({ city, days: String(days) })}`),
+  insightsTrends: (city: string, skills: string[], weeks = 8) =>
+    request<TrendsResult>("GET", `/api/insights/trends${qs({ city, skills: skills.join(","), weeks: String(weeks) })}`),
+  insightsRoles: (city: string, days = 14) =>
+    request<RoleFamilyRow[]>("GET", `/api/insights/roles${qs({ city, days: String(days) })}`),
   sendTailoring: (tid: number) =>
     request<{ sent: boolean; sent_at: string | null }>("POST", `/api/tailorings/${tid}/send`),
 };
