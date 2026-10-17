@@ -1,15 +1,16 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { CITIES, CITY_LABEL, money, pct, ROLE_FAMILIES, roleLabel, SERIES } from "@/components/insights/format";
 import { HeadToHeadPanel } from "@/components/insights/HeadToHead";
 import { SkillBars } from "@/components/insights/SkillBars";
 import { TrendChart } from "@/components/insights/TrendChart";
+import { usePersistedFilters } from "@/hooks/usePersistedFilters";
 import { api, errMsg } from "@/lib/api";
 import type { City, CityOverview } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const DAYS = 14;
+
+const FILTER_DEFAULTS = { city: "adelaide", role_family: "", skills: "" };
 
 export const HEAD_TO_HEAD: { title: string; skills: string[] }[] = [
   { title: "Java vs C#", skills: ["Java", "C#"] },
@@ -82,11 +83,17 @@ function Overview({ rows, city }: { rows: CityOverview[]; city: City }) {
 }
 
 export function InsightsPage() {
-  const [params, setParams] = useSearchParams();
-  const raw = params.get("city");
+  const filters = usePersistedFilters("insights", FILTER_DEFAULTS);
+  const raw = filters.values.city;
   const city: City = CITIES.includes(raw as City) ? (raw as City) : "adelaide";
-  const [role, setRole] = useState("");
-  const [slots, setSlots] = useState<(string | null)[] | null>(null);
+  const role = filters.values.role_family;
+  const setFilter = filters.set;
+  const setRole = (r: string) => setFilter({ role_family: r });
+  // Trend skills as three fixed slots, "a,,c" in the URL ("" = use the top three).
+  const slots: (string | null)[] | null = filters.values.skills
+    ? [0, 1, 2].map((i) => filters.values.skills.split(",")[i] || null)
+    : null;
+  const setSlots = (next: (string | null)[]) => setFilter({ skills: next.map((s) => s ?? "").join(",") });
 
   const overview = useQuery({ queryKey: ["insights", "overview", DAYS], queryFn: () => api.insightsOverview(DAYS) });
   const skillsAll = useQuery({ queryKey: ["insights", "skills", city, ""], queryFn: () => api.insightsSkills(city, undefined, DAYS) });
@@ -121,17 +128,7 @@ export function InsightsPage() {
   const cityRow = overview.data?.find((r) => r.city === city);
   const empty = !!overview.data && overview.data.every((r) => r.total === 0);
 
-  const setCity = (c: City) => {
-    setSlots(null);
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("city", c);
-        return next;
-      },
-      { replace: true },
-    );
-  };
+  const setCity = (c: City) => setFilter({ city: c, skills: "" });
 
   const toggleTrend = (skill: string) => {
     const cur = [...activeSlots];

@@ -125,8 +125,7 @@ function AddApplication({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function ApplicationsTab() {
-  const [stage, setStage] = useState<ApplicationStage | "">("");
+export function ApplicationsTab({ stage, setStage }: { stage: ApplicationStage | ""; setStage: (s: ApplicationStage | "") => void }) {
   const [adding, setAdding] = useState(false);
   const invalidate = useInvalidateHistory();
   const { data: apps = [], isLoading } = useQuery({ queryKey: ["applications"], queryFn: () => api.applications() });

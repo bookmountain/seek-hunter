@@ -134,6 +134,9 @@ export const api = {
   jobContactLog: (jobId: number, kind: InteractionKind, note = "") =>
     request<Interaction>("POST", `/api/jobs/${jobId}/contact-log`, { kind, note }),
   companies: (q?: string) => request<CompanyHistory[]>("GET", `/api/companies${qs({ q })}`),
+  uiPrefs: () => request<Record<string, Record<string, unknown>>>("GET", "/api/ui-prefs"),
+  putUiPrefs: (page: string, prefs: Record<string, string>) =>
+    request<Record<string, Record<string, unknown>>>("PUT", `/api/ui-prefs/${encodeURIComponent(page)}`, prefs),
   history: (limit = 100) => request<HistoryEvent[]>("GET", `/api/history${qs({ limit: String(limit) })}`),
   sendTailoring: (tid: number) =>
     request<{ sent: boolean; sent_at: string | null }>("POST", `/api/tailorings/${tid}/send`),

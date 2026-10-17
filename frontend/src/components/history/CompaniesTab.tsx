@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useDebouncedInput } from "@/hooks/useDebouncedInput";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { StageTag } from "./shared";
 
-export function CompaniesTab() {
-  const [q, setQ] = useState("");
-  const { data = [], isLoading } = useQuery({ queryKey: ["companies", q], queryFn: () => api.companies(q || undefined), placeholderData: (p) => p });
+export function CompaniesTab({ q: urlQ, setQ: commitQ }: { q: string; setQ: (q: string) => void }) {
+  const [q, setQ] = useDebouncedInput(urlQ, commitQ);
+  const { data = [], isLoading } = useQuery({ queryKey: ["companies", urlQ], queryFn: () => api.companies(urlQ || undefined), placeholderData: (p) => p });
   return (
     <div>
       <Input className="w-full sm:w-72" placeholder="Search companies" aria-label="Search companies" value={q} onChange={(e) => setQ(e.target.value)} />

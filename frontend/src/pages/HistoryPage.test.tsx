@@ -121,8 +121,9 @@ describe("job-side history bits", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("recruiter quick log POSTs to the job contact-log endpoint", async () => {
+    vi.spyOn(api, "contacts").mockResolvedValue([]);
     const log = vi.spyOn(api, "jobContactLog").mockResolvedValue({ id: 1, contact_id: 9, application_id: null, kind: "email", at: now, note: "", created_at: now });
-    wrap(<RecruiterQuickLog jobId={12} />);
+    wrap(<RecruiterQuickLog jobId={12} name="Brayden Mackay" company="Robert Walters" />);
     fireEvent.click(screen.getByRole("button", { name: "Emailed" }));
     await waitFor(() => expect(log).toHaveBeenCalledWith(12, "email"));
   });
@@ -149,5 +150,40 @@ describe("job-side history bits", () => {
     wrap(<JobList jobs={jobs} view="active" selectedId={null} onSelect={() => {}} onArrowSelect={() => {}} />);
     expect(within(screen.getByRole("button", { name: /Dev A/ })).getByText("HAS RESUME")).toBeTruthy();
     expect(within(screen.getByRole("button", { name: /Dev B/ })).getByText("APPLIED")).toBeTruthy();
+  });
+
+  it("UNDO after a recruiter quick log DELETEs the interaction, and the log lists past entries", async () => {
+    vi.spyOn(api, "contacts").mockResolvedValue([CONTACT]);
+    vi.spyOn(api, "contact").mockResolvedValue({
+      ...CONTACT,
+      interactions: [{ id: 2, contact_id: 9, application_id: null, kind: "call", at: now, note: "", created_at: now }],
+      jobs: [],
+      applications: [],
+    } as ContactDetail);
+    vi.spyOn(api, "jobContactLog").mockResolvedValue({ id: 31, contact_id: 9, application_id: null, kind: "email", at: now, note: "", created_at: now });
+    const del = vi.spyOn(api, "deleteInteraction").mockResolvedValue(undefined);
+    wrap(<RecruiterQuickLog jobId={12} name="brayden mackay" company="ROBERT WALTERS" />);
+    expect(await screen.findByRole("button", { name: /Remove Called/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Emailed" }));
+    expect(await screen.findByText(/Logged · Emailed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(del).toHaveBeenCalledWith(31));
+    expect(await screen.findByText(/Removed · Emailed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Remove Called/ }));
+    await waitFor(() => expect(del).toHaveBeenCalledWith(2));
+  });
+});
+
+describe("contacts tab copy", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("explains what a contact is and links to Jobs when empty", async () => {
+    vi.spyOn(api, "contacts").mockResolvedValue([]);
+    vi.spyOn(api, "uiPrefs").mockResolvedValue({});
+    wrap(<HistoryPage />, "/history?tab=contacts");
+    const help = "People you've contacted or applied through. Log a call, email or LinkedIn invite from a job's Recruiter block to add someone.";
+    await waitFor(() => expect(screen.getAllByText(help).length).toBe(2));
+    expect(screen.getByRole("link", { name: "Go to Jobs" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("columnheader", { name: "Contacts · jobs · apps" })).toBeTruthy();
   });
 });

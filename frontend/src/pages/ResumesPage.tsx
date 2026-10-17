@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { ResetFilters } from "@/components/ResetFilters";
 import { Input } from "@/components/ui/input";
+import { usePersistedFilters } from "@/hooks/usePersistedFilters";
 import { api, errMsg } from "@/lib/api";
 import { ago, cityName } from "@/lib/format";
 import type { TailoringListItem, TailoringStatus } from "@/lib/types";
@@ -95,14 +97,27 @@ function Card({ t }: { t: TailoringListItem }) {
   );
 }
 
+const FILTER_DEFAULTS = { q: "", status: "" };
+
 export function ResumesPage() {
-  const [q, setQ] = useState("");
-  const [debounced, setDebounced] = useState("");
-  const [status, setStatus] = useState<"" | TailoringStatus>("");
+  const filters = usePersistedFilters("resumes", FILTER_DEFAULTS);
+  const debounced = filters.values.q;
+  const status = filters.values.status as "" | TailoringStatus;
+  const setFilter = filters.set;
+  const setStatus = (s: string) => setFilter({ status: s });
+  const [q, setQ] = useState(debounced);
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(q.trim()), 250);
+    if (q.trim() === debounced) return;
+    const t = setTimeout(() => setFilter({ q: q.trim() }), 250);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, debounced, setFilter]);
+  const lastUrlQ = useRef(debounced);
+  useEffect(() => {
+    if (debounced !== lastUrlQ.current) {
+      lastUrlQ.current = debounced;
+      setQ(debounced);
+    }
+  }, [debounced]);
 
   const current = useQuery({
     queryKey: ["resume-current"],
@@ -168,6 +183,7 @@ export function ResumesPage() {
                 </button>
               ))}
             </div>
+            <ResetFilters onReset={() => { setQ(""); filters.reset(); }} disabled={filters.isDefault && !q} />
           </div>
           {list.error ? (
             <p className="mt-6 bg-chip px-4 py-3 text-sm">{errMsg(list.error)}</p>

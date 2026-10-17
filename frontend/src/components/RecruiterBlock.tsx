@@ -95,7 +95,7 @@ export function RecruiterBlock({ job, jobId }: { job: Contact; jobId?: number })
           {search.google && <ExtLink href={search.google}>Search Google</ExtLink>}
         </div>
       </div>
-      {jobId !== undefined && name && <RecruiterQuickLog jobId={jobId} />}
+      {jobId !== undefined && name && <RecruiterQuickLog jobId={jobId} name={name} company={job.company} />}
     </section>
   );
 }

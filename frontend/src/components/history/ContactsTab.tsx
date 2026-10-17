@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useDebouncedInput } from "@/hooks/useDebouncedInput";
 import { api, errMsg } from "@/lib/api";
 import { adelaideTime, ago } from "@/lib/format";
 import type { Contact, InteractionKind } from "@/lib/types";
@@ -13,6 +14,8 @@ import { KIND_BUTTON, QuickLog, StageTag, useInvalidateHistory } from "./shared"
 const TH = "kicker px-3 py-2 text-left text-[10.5px] font-medium text-ink-muted";
 const QUICK: InteractionKind[] = ["call", "email", "linkedin_invite", "linkedin_accepted", "meeting", "note"];
 const KIND_NAME: Record<string, string> = { ...KIND_BUTTON, linkedin_message: "LinkedIn message" };
+const CONTACTS_HELP =
+  "People you've contacted or applied through. Log a call, email or LinkedIn invite from a job's Recruiter block to add someone.";
 const telHref = (p: string) => `tel:${p.replace(/[^\d+]/g, "")}`;
 
 function ContactDetailRow({ contact, colSpan }: { contact: Contact; colSpan: number }) {
@@ -37,7 +40,7 @@ function ContactDetailRow({ contact, colSpan }: { contact: Contact; colSpan: num
           <section aria-label={`Interactions with ${contact.name}`}>
             <p className="kicker text-ink-muted">Log</p>
             <div className="mt-2">
-              <QuickLog kinds={QUICK} pending={log.isPending} onLog={(kind, note) => log.mutateAsync({ kind, note })} />
+              <QuickLog kinds={QUICK} pending={log.isPending} onLog={(kind, note) => log.mutateAsync({ kind, note })} onUndo={(id) => remove.mutateAsync(id)} />
             </div>
             <ol className="mt-4 divide-y divide-rule border-y border-rule">
               {interactions.map((i) => (
@@ -159,14 +162,15 @@ function AddContact({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function ContactsTab({ initialOpen }: { initialOpen?: number | null }) {
-  const [q, setQ] = useState("");
+export function ContactsTab({ initialOpen, q: urlQ, setQ: commitQ }: { initialOpen?: number | null; q: string; setQ: (q: string) => void }) {
+  const [q, setQ] = useDebouncedInput(urlQ, commitQ);
   const [open, setOpen] = useState<number | null>(initialOpen ?? null);
   const [adding, setAdding] = useState(false);
-  const { data: contacts = [], isLoading } = useQuery({ queryKey: ["contacts", q], queryFn: () => api.contacts(q || undefined), placeholderData: (p) => p });
+  const { data: contacts = [], isLoading } = useQuery({ queryKey: ["contacts", urlQ], queryFn: () => api.contacts(urlQ || undefined), placeholderData: (p) => p });
 
   return (
     <div>
+      <p className="mb-4 max-w-2xl text-[14px] text-ink-muted">{CONTACTS_HELP}</p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Input className="w-full sm:w-72" placeholder="Search name or company" aria-label="Search contacts" value={q} onChange={(e) => setQ(e.target.value)} />
         {!adding && (
@@ -187,7 +191,7 @@ export function ContactsTab({ initialOpen }: { initialOpen?: number | null }) {
               <th className={TH}>Email</th>
               <th className={TH}>LinkedIn</th>
               <th className={TH}>Last contact</th>
-              <th className={cn(TH, "text-right")}>Log · jobs · apps</th>
+              <th className={cn(TH, "text-right")}>Contacts · jobs · apps</th>
             </tr>
           </thead>
           <tbody>
@@ -253,7 +257,16 @@ export function ContactsTab({ initialOpen }: { initialOpen?: number | null }) {
             })}
           </tbody>
         </table>
-        {!isLoading && !contacts.length && <p className="py-12 text-center text-sm text-ink-muted">No contacts yet.</p>}
+        {!isLoading && !contacts.length && (
+          <div className="py-12 text-center">
+            <p className="mx-auto max-w-lg text-[14px] text-ink-muted">{urlQ ? "No contacts match." : CONTACTS_HELP}</p>
+            {!urlQ && (
+              <Link to="/" className="kicker mt-3 inline-block text-blue hover:underline">
+                Go to Jobs
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

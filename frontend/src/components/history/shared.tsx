@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { APPLICATION_STAGES, type ApplicationStage, type InteractionKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -110,27 +110,51 @@ export const smallBtn =
 export function QuickLog({
   kinds,
   onLog,
+  onUndo,
   pending,
   withNote = true,
 }: {
   kinds: InteractionKind[];
+  /** Resolves to the created interaction (its `id` powers UNDO). */
   onLog: (kind: InteractionKind, note: string) => Promise<unknown> | void;
+  onUndo?: (id: number) => Promise<unknown>;
   pending?: boolean;
   withNote?: boolean;
 }) {
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
-  const [logged, setLogged] = useState<string | null>(null);
+  const [logged, setLogged] = useState<{ label: string; id: number | null } | null>(null);
+  const [undone, setUndone] = useState(false);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+  const show = (next: { label: string; id: number | null } | null, undoneNow = false) => {
+    setLogged(next);
+    setUndone(undoneNow);
+    if (timer.current) clearTimeout(timer.current);
+    if (next) timer.current = window.setTimeout(() => setLogged(null), 8000);
+  };
   const log = async (kind: InteractionKind) => {
+    let created: unknown;
     try {
-      await onLog(kind, note.trim());
+      created = await onLog(kind, note.trim());
     } catch {
       return; // the caller toasts the error
     }
-    setLogged(KIND_BUTTON[kind] ?? kind);
+    const id = created && typeof created === "object" && "id" in created ? Number((created as { id: unknown }).id) : null;
+    show({ label: KIND_BUTTON[kind] ?? kind, id });
     setNote("");
     setNoteOpen(false);
-    setTimeout(() => setLogged(null), 2500);
+  };
+  const undo = async () => {
+    if (!logged?.id || !onUndo) return;
+    try {
+      await onUndo(logged.id);
+      show({ ...logged, id: null }, true);
+    } catch {
+      // caller toasts
+    }
   };
   return (
     <div className="space-y-2">
@@ -151,8 +175,13 @@ export function QuickLog({
           </button>
         ))}
         {logged && (
-          <span role="status" className="ml-1 font-mono text-[11.5px] text-blue">
-            Logged · {logged}
+          <span role="status" className="ml-1 inline-flex items-center gap-2 font-mono text-[11.5px] text-blue">
+            {undone ? `Removed · ${logged.label}` : `Logged · ${logged.label}`}
+            {!undone && logged.id !== null && onUndo && (
+              <button type="button" onClick={undo} className="kicker border-b border-blue text-[10.5px] text-blue hover:text-ink">
+                Undo
+              </button>
+            )}
           </span>
         )}
       </div>

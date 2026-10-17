@@ -5,7 +5,9 @@ import { DetailEmpty, JobDetail } from "@/components/JobDetail";
 import { JobList } from "@/components/JobList";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ResetFilters } from "@/components/ResetFilters";
 import { DESKTOP_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
+import { usePersistedFilters } from "@/hooks/usePersistedFilters";
 import { api, errMsg } from "@/lib/api";
 import { cityName } from "@/lib/format";
 import type { Job } from "@/lib/types";
@@ -13,38 +15,48 @@ import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
+/** Remembered per page ("jobs" / "excluded"); `job` (the open ad) is deliberately not persisted. */
+const FILTER_DEFAULTS = { q: "", city: "", work_type: "", status: "", source: "" };
+
 const isTypingTarget = (el: EventTarget | null) =>
   el instanceof HTMLElement &&
   (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || !!el.closest('[role="listbox"],[role="dialog"]'));
 
 export function JobsPage({ view }: { view: "active" | "excluded" }) {
-  const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
-  const [workType, setWorkType] = useState(ALL);
-  const [status, setStatus] = useState(ALL);
-  const [source, setSource] = useState(ALL);
-
   const [searchParams, setSearchParams] = useSearchParams();
+  const filters = usePersistedFilters(view === "excluded" ? "excluded" : "jobs", FILTER_DEFAULTS);
+  const { q: urlQ, city, work_type: workType, status, source } = filters.values;
+  const setFilter = filters.set;
+  const [q, setQ] = useState(urlQ);
   const navigate = useNavigate();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const selectedId = Number(searchParams.get("job")) || null;
-  const city = searchParams.get("city") ?? "";
   // True when the open detail was pushed onto history from the list, so "Back" can pop it.
   const pushedRef = useRef(false);
   const listScrollRef = useRef(0);
   const detailPaneRef = useRef<HTMLDivElement>(null);
 
+  // Typing updates the URL (and so the query) after a short pause; external changes
+  // (saved prefs applied, reset) flow back into the box.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q), 250);
+    if (q === urlQ) return;
+    const t = setTimeout(() => setFilter({ q }), 250);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, urlQ, setFilter]);
+  const lastUrlQ = useRef(urlQ);
+  useEffect(() => {
+    if (urlQ !== lastUrlQ.current) {
+      lastUrlQ.current = urlQ;
+      setQ(urlQ);
+    }
+  }, [urlQ]);
 
   const params = {
     view,
-    q: debouncedQ,
-    work_type: workType === ALL ? undefined : workType,
-    status: status === ALL ? undefined : status,
-    source: source === ALL ? undefined : source,
+    q: urlQ,
+    work_type: workType || undefined,
+    status: status || undefined,
+    source: source || undefined,
     city: city || undefined,
   };
   const { data: cities = [] } = useQuery({ queryKey: ["job-cities", view], queryFn: () => api.jobCities(view) });
@@ -53,17 +65,13 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
     ...cities.map((c): [string, string] => [c.city, `${cityName(c.city)} ${c.count}`]),
     ...(city && !cities.some((c) => c.city === city) ? [[city, cityName(city)] as [string, string]] : []),
   ];
-  const setCity = (v: string) =>
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (v === ALL) next.delete("city");
-        else next.set("city", v);
-        return next;
-      },
-      { replace: true },
-    );
-  const { data = [], isLoading, error } = useQuery({ queryKey: ["jobs", params], queryFn: () => api.jobs(params) });
+  const pick = (key: keyof typeof FILTER_DEFAULTS) => (v: string) => setFilter({ [key]: v === ALL ? "" : v });
+  const { data = [], isLoading: loadingJobs, error } = useQuery({
+    queryKey: ["jobs", params],
+    queryFn: () => api.jobs(params),
+    enabled: filters.ready,
+  });
+  const isLoading = loadingJobs || !filters.ready;
 
   const setJob = useCallback(
     (id: number | null, replace: boolean) =>
@@ -148,8 +156,11 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
             <h1 className="display text-[28px] leading-none">
               {view === "excluded" ? "Excluded" : "Jobs"}
             </h1>
-            <span className="num text-[12px] text-ink-muted" aria-live="polite">
-              {isLoading ? "Loading…" : `${data.length} ${data.length === 1 ? "job" : "jobs"}`}
+            <span className="flex items-baseline gap-4">
+              <ResetFilters onReset={() => { setQ(""); filters.reset(); }} disabled={filters.isDefault && !q} />
+              <span className="num text-[12px] text-ink-muted" aria-live="polite">
+                {isLoading ? "Loading…" : `${data.length} ${data.length === 1 ? "job" : "jobs"}`}
+              </span>
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -160,11 +171,11 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            {select(city || ALL, setCity, cityOptions, "Location")}
-            {select(workType, setWorkType, [[ALL, "All types"], ["part_time", "Part time"], ["contract", "Contract"], ["casual", "Casual"], ["full_time", "Full time"]], "Work type")}
+            {select(city || ALL, pick("city"), cityOptions, "Location")}
+            {select(workType || ALL, pick("work_type"), [[ALL, "All types"], ["part_time", "Part time"], ["contract", "Contract"], ["casual", "Casual"], ["full_time", "Full time"]], "Work type")}
             {view === "active" &&
-              select(status, setStatus, [[ALL, "Any status"], ["new", "New"], ["saved", "Saved"], ["applied", "Applied"], ["hidden", "Hidden"]], "Status")}
-            {select(source, setSource, [[ALL, "All sources"], ["seek", "SEEK"], ["jora", "Jora"]], "Source")}
+              select(status || ALL, pick("status"), [[ALL, "Any status"], ["new", "New"], ["saved", "Saved"], ["applied", "Applied"], ["hidden", "Hidden"]], "Status")}
+            {select(source || ALL, pick("source"), [[ALL, "All sources"], ["seek", "SEEK"], ["jora", "Jora"]], "Source")}
           </div>
         </div>
         {error ? (
