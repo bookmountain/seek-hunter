@@ -23,7 +23,7 @@ class Profile:
 
 
 def _strip_comments(tex: str) -> str:
-    return "\n".join(line for line in tex.splitlines() if not line.lstrip().startswith("%"))
+    return "\n".join(re.sub(r"(?<!\\)%.*", "", line) for line in tex.splitlines())
 
 
 def _clean(tex: str) -> str:
@@ -65,6 +65,26 @@ def _read(path: Path) -> str:
     return _strip_comments(path.read_text(encoding="utf-8")) if path.exists() else ""
 
 
+def _experience_paths(resume_dir: Path) -> list[Path]:
+    """Experience files in resume order, following `experience.tex`'s `\\input{...}` lines.
+
+    Falls back to a sorted glob of `experience/*.tex` if `experience.tex` is missing.
+    """
+    exp_dir = resume_dir / "experience"
+    exp_tex = resume_dir / "experience.tex"
+    if exp_tex.exists():
+        paths: list[Path] = []
+        for m in re.finditer(r"\\input\{([^}]*)\}", _read(exp_tex)):
+            name = m.group(1).strip().rsplit("/", 1)[-1]
+            if not name.endswith(".tex"):
+                name += ".tex"
+            path = exp_dir / name
+            if path.exists():
+                paths.append(path)
+        return paths
+    return sorted(exp_dir.glob("*.tex")) if exp_dir.is_dir() else []
+
+
 def load_profile(resume_dir: Path) -> Profile:
     if not resume_dir.is_dir():
         raise FileNotFoundError(f"resume dir not found: {resume_dir}")
@@ -84,11 +104,11 @@ def load_profile(resume_dir: Path) -> Profile:
 
     titles: list[str] = []
     exp_bullets: list[str] = []
-    exp_dir = resume_dir / "experience"
-    for path in sorted(exp_dir.glob("*.tex")) if exp_dir.is_dir() else []:
+    for path in _experience_paths(resume_dir):
         for args in _brace_args(_read(path), "resumeExperience", 5):
             titles.append(_clean(args[0]))
             exp_bullets.extend(_clean(b) for b in args[4].split("\\item") if _clean(b))
+    titles = list(dict.fromkeys(titles))
 
     bullets = exp_bullets + project_bullets
     corpus = " ".join(skill_lines + [summary] + project_stacks + bullets)
