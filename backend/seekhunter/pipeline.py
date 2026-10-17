@@ -198,3 +198,21 @@ def run_recap(session: Session, notifier, public_url: str) -> None:  # noqa: ANN
         _send(session, notifier, text)
     session.add(Run(kind="recap", finished_at=utcnow(), new_jobs=len(rows)))
     session.commit()
+
+
+def run_rescore(session: Session, profile: Profile, days: int = 7) -> int:
+    settings = repo.load_settings(session)
+    count = 0
+    for job in repo.jobs_since(session, utcnow() - timedelta(days=days)):
+        data = repo.to_jobdata(job)
+        fr = evaluate_exclusions(data, settings)
+        sr = score_job(data, profile.skills, settings)
+        existing = repo.get_evaluation(session, job.id)
+        llm_score = existing.llm_score if existing else None
+        repo.save_evaluation(session, job.id, excluded=fr.excluded, reasons=fr.reasons, snippets=fr.snippets,
+                             rule_score=sr.rule_score, final_score=blend(sr.rule_score, llm_score),
+                             matched_skills=sr.matched_skills, flags=sr.flags)
+        count += 1
+    session.add(Run(kind="rescore", finished_at=utcnow(), new_jobs=count))
+    session.commit()
+    return count

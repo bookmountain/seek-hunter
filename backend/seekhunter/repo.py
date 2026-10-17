@@ -75,6 +75,15 @@ def unevaluated_jobs(session: Session) -> list[Job]:
     return list(session.exec(stmt).all())
 
 
+def jobs_since(session: Session, since: datetime) -> list[Job]:
+    return list(session.exec(
+        select(Job).where(Job.first_seen_at >= since, col(Job.canonical_job_id).is_(None))).all())
+
+
+def get_evaluation(session: Session, job_id: int) -> JobEvaluation | None:
+    return session.exec(select(JobEvaluation).where(JobEvaluation.job_id == job_id)).first()
+
+
 def _active_clause():
     return (
         col(Job.canonical_job_id).is_(None),

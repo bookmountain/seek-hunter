@@ -6,3 +6,7 @@ def test_parser_commands():
     assert p.parse_args(["run", "--dry-run"]).dry_run is True
     assert p.parse_args(["recap"]).command == "recap"
     assert p.parse_args(["notify-test"]).command == "notify-test"
+
+
+def test_parser_rescore():
+    assert cli.build_parser().parse_args(["rescore"]).command == "rescore"

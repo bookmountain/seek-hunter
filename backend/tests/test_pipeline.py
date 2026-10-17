@@ -8,7 +8,7 @@ from seekhunter.llm.base import LLMScore
 from seekhunter.lock import RunLocked, run_lock
 from seekhunter.models import Job, JobEvaluation, Outbox
 from seekhunter.notify import NotifyError
-from seekhunter.pipeline import run_crawl, run_recap
+from seekhunter.pipeline import run_crawl, run_recap, run_rescore
 from seekhunter.profile import Profile
 
 PROFILE = Profile(skills={"React", "TypeScript"}, summary="s", titles=[], skill_lines=[], bullets=[])
@@ -172,3 +172,46 @@ def test_details_error_on_one_job_does_not_abort_the_source(session):
     assert "details:" in report.source_status["seek"]["error"]
     job2 = session.exec(select(Job).where(Job.external_id == "2")).one()
     assert session.exec(select(JobEvaluation).where(JobEvaluation.job_id == job2.id)).first() is not None
+
+
+def test_rescore_uses_new_profile_keeps_llm_and_sends_nothing(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="React TypeScript Kotlin")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    ev = session.exec(select(JobEvaluation)).one()
+    assert "Kotlin" not in ev.matched_skills
+
+    richer = Profile(skills={"React", "TypeScript", "Kotlin"}, summary="s", titles=[], skill_lines=[],
+                     bullets=[])
+    assert run_rescore(session, richer) == 1
+    session.refresh(ev)
+    assert "Kotlin" in ev.matched_skills
+    assert ev.llm_score == 50
+    assert ev.final_score == round(0.6 * ev.rule_score + 0.4 * 50)
+
+
+def _hold_lock_for(data_dir, seconds, held_event):  # noqa: ANN001  module-level: picklable for spawn
+    import time
+
+    from seekhunter.lock import run_lock
+
+    with run_lock(data_dir):
+        held_event.set()
+        time.sleep(seconds)
+
+
+def test_blocking_lock_waits(tmp_path):
+    # flock() is scoped per-process (on BSD/macOS) or per-open-file-description (on Linux); either way
+    # two threads in the *same* process don't reliably contend with each other. Use a real second
+    # process, which also better matches how systemd invokes separate `seekhunter` processes in prod.
+    import multiprocessing
+    import time
+
+    held = multiprocessing.Event()
+    proc = multiprocessing.Process(target=_hold_lock_for, args=(tmp_path, 0.3, held))
+    proc.start()
+    assert held.wait(timeout=5), "child process never acquired the lock"
+    start = time.monotonic()
+    with run_lock(tmp_path, blocking=True):
+        elapsed = time.monotonic() - start
+    proc.join()
+    assert elapsed >= 0.15

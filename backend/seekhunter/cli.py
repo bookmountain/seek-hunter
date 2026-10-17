@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     recap = sub.add_parser("recap", help="send today's recap")
     recap.add_argument("--dry-run", action="store_true")
     sub.add_parser("notify-test", help="send a test Telegram message")
+    sub.add_parser("rescore", help="re-score recent jobs after a resume change (no LLM, no notifications)")
     return parser
 
 
@@ -35,8 +36,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        with run_lock(env.data_dir), Session(get_engine()) as session:
+        with run_lock(env.data_dir, blocking=args.command == "rescore"), Session(get_engine()) as session:
             repo.ensure_seed(session)
+            if args.command == "rescore":
+                from seekhunter.pipeline import run_rescore
+                from seekhunter.profile import load_profile
+
+                print(f"rescored {run_rescore(session, load_profile(env.resume_dir))} jobs")
+                return 0
+
             if args.command == "recap":
                 from seekhunter.pipeline import run_recap
 
