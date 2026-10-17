@@ -140,3 +140,24 @@ def test_plus61_numbers_normalised_to_local():
     assert extract_contacts("call +61 8 8306 8208").phone == "08 8306 8208"
     assert extract_contacts("call +61 412 345 678").phone == "0412 345 678"
     assert normalize_phone("+61 8 8306 8208") == "08 8306 8208"
+
+
+def test_brave_retries_429_and_falls_back_to_loose_query():
+    from types import SimpleNamespace
+
+    from seekhunter.contacts import find_linkedin_profile
+    calls = []
+
+    def fake_get(url, params, headers):
+        calls.append(params["q"])
+        if len(calls) == 1:
+            return SimpleNamespace(status_code=429, json=lambda: {})
+        if len(calls) == 2:  # strict query retried: no match
+            return SimpleNamespace(status_code=200, json=lambda: {"web": {"results": [
+                {"url": "https://www.linkedin.com/in/someone-else", "title": "Someone Else - Agency"}]}})
+        return SimpleNamespace(status_code=200, json=lambda: {"web": {"results": [
+            {"url": "https://au.linkedin.com/in/jane-doe-123", "title": "Jane Doe - Recruiter - Agency"}]}})
+
+    url = find_linkedin_profile("Jane Doe", "Agency", "k", http_get=fake_get, sleep=lambda s: None)
+    assert url == "https://au.linkedin.com/in/jane-doe-123"
+    assert calls[0] == calls[1] and "linkedin" in calls[2] and "site:" not in calls[2]

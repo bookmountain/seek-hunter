@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -150,34 +151,54 @@ def _default_http_get(url: str, params: dict, headers: dict) -> Any:
     return cffi_requests.get(url, params=params, headers=headers, timeout=15)
 
 
+_BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
+_BRAVE_MIN_INTERVAL = 1.1  # free tier: ~1 request/second
+_last_brave_call = 0.0
+
+
+def _brave_search(query: str, api_key: str, http_get: Callable[..., Any],
+                  sleep: Callable[[float], None]) -> list[dict]:
+    global _last_brave_call
+    for attempt in range(2):
+        wait = _BRAVE_MIN_INTERVAL - (time.monotonic() - _last_brave_call)
+        if wait > 0:
+            sleep(wait)
+        _last_brave_call = time.monotonic()
+        resp = http_get(_BRAVE_URL, params={"q": query, "count": 5},
+                        headers={"X-Subscription-Token": api_key, "Accept": "application/json"})
+        if getattr(resp, "status_code", 200) == 429 and attempt == 0:
+            sleep(2.0)
+            continue
+        try:
+            return resp.json()["web"]["results"] or []
+        except (KeyError, TypeError, ValueError):
+            return []
+    return []
+
+
 def find_linkedin_profile(
     name: str | None,
     company: str,
     api_key: str | None,
     http_get: Callable[..., Any] | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> str | None:
+    """Best-effort lookup of a recruiter's LinkedIn profile via Brave Search.
+
+    Only returns linkedin.com/in/ URLs whose result title contains both the first and last name."""
     if not name or not api_key:
         return None
     http_get = http_get or _default_http_get
-    query = f'site:linkedin.com/in "{name}" "{company}"'
-    try:
-        resp = http_get(
-            "https://api.search.brave.com/res/v1/web/search",
-            params={"q": query, "count": 5},
-            headers={"X-Subscription-Token": api_key, "Accept": "application/json"},
-        )
-        data = resp.json()
-    except Exception as e:  # noqa: BLE001  any network/parse failure means "no result"
-        log.warning("brave linkedin lookup failed for %r at %r: %s", name, company, e)
-        return None
-    try:
-        results = data["web"]["results"]
-    except (KeyError, TypeError):
-        return None
     parts = name.split()
     first, last = parts[0].lower(), parts[-1].lower()
-    for r in results:
-        url, title = r.get("url") or "", (r.get("title") or "").lower()
-        if _LINKEDIN_PROFILE_RE.match(url) and first in title and last in title:
-            return url
+    for query in (f'site:linkedin.com/in "{name}" "{company}"', f"{name} {company} linkedin"):
+        try:
+            results = _brave_search(query, api_key, http_get, sleep)
+        except Exception as e:  # noqa: BLE001  any network/parse failure means "no result"
+            log.warning("brave linkedin lookup failed for %r at %r: %s", name, company, e)
+            return None
+        for r in results:
+            url, title = r.get("url") or "", (r.get("title") or "").lower()
+            if _LINKEDIN_PROFILE_RE.match(url) and first in title and last in title:
+                return url
     return None
