@@ -12,6 +12,7 @@ dependencies = [
   "anthropic>=0.70",
   "pypdfium2>=5.14.0",
   "pillow>=13.0.0",
+  "httpx>=0.27",
 ]
 
 [project.scripts]
