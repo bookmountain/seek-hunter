@@ -10,6 +10,7 @@ from seekhunter.api import create_app
 from seekhunter.config import get_env
 from seekhunter.db import get_session
 from seekhunter.domain import JobData
+from seekhunter.models import utcnow
 
 AUTH = {"Authorization": "Bearer t0k"}
 
@@ -209,6 +210,43 @@ def test_job_out_includes_contact_fields_and_search_urls(client):
 
     detail = client.get(f"/api/jobs/{job['id']}").json()
     assert "contact_search" in detail
+
+
+def test_job_out_includes_insight_fields_defaulting_to_none(client):
+    job = client.get("/api/jobs").json()[0]
+    assert job["applicant_count"] is None
+    assert job["applicant_volume"] is None
+    assert job["resume_pct"] is None
+    assert job["cover_letter_pct"] is None
+    assert job["insights_checked_at"] is None
+
+
+def test_brief_includes_competition_line_when_insights_present(client, monkeypatch):
+    job_id = client.get("/api/jobs").json()[0]["id"]
+
+    from seekhunter import api as api_module
+
+    original = api_module._get_job
+
+    def patched(session, jid):
+        job, ev = original(session, jid)
+        job.applicant_count = 77
+        job.applicant_volume = "Medium application volume"
+        job.resume_pct = 100
+        job.cover_letter_pct = 57
+        job.insights_checked_at = utcnow()
+        return job, ev
+
+    monkeypatch.setattr(api_module, "_get_job", patched)
+    r = client.get(f"/api/jobs/{job_id}/brief")
+    assert "Competition: 77 applicants (Medium application volume) · 100% resume · 57% cover letter" in r.text
+    assert "checked" in r.text
+
+
+def test_brief_omits_competition_line_when_no_insights(client):
+    job_id = client.get("/api/jobs").json()[0]["id"]
+    r = client.get(f"/api/jobs/{job_id}/brief")
+    assert "Competition:" not in r.text
 
 
 def test_brief_includes_recruiter_line_when_job_has_contact(client, monkeypatch):

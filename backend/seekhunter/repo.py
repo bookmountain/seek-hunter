@@ -44,7 +44,9 @@ def to_jobdata(job: Job) -> JobData:
     return JobData(source=job.source, external_id=job.external_id, title=job.title, company=job.company,
                    location=job.location, work_type=job.work_type, url=job.url, salary_label=job.salary_label,
                    listed_at=job.listed_at, teaser=job.teaser, description_html=job.description_html,
-                   contact_phone=job.contact_phone, contact_email=job.contact_email)
+                   contact_phone=job.contact_phone, contact_email=job.contact_email,
+                   applicant_count=job.applicant_count, applicant_volume=job.applicant_volume,
+                   resume_pct=job.resume_pct, cover_letter_pct=job.cover_letter_pct)
 
 
 def set_contacts(session: Session, job: Job, *, name: str | None = None, phone: str | None = None,
@@ -59,6 +61,38 @@ def set_contacts(session: Session, job: Job, *, name: str | None = None, phone: 
         job.contact_linkedin = linkedin
     session.add(job)
     session.commit()
+
+
+def set_insights(session: Session, job: Job, data: dict | None, checked_at: datetime) -> None:
+    """Applies a SEEK insights refresh. `data` may be `None` (the lookup failed, e.g. a GraphQL
+    error) or an empty dict (SEEK has no insights published for this ad); either way
+    `insights_checked_at` is still bumped so the job isn't retried again immediately. Present keys
+    overwrite the matching field; absent keys are left untouched."""
+    if data:
+        job.applicant_count = data.get("applicant_count", job.applicant_count)
+        job.applicant_volume = data.get("applicant_volume", job.applicant_volume)
+        job.resume_pct = data.get("resume_pct", job.resume_pct)
+        job.cover_letter_pct = data.get("cover_letter_pct", job.cover_letter_pct)
+    job.insights_checked_at = checked_at
+    session.add(job)
+    session.commit()
+
+
+def jobs_needing_insights(session: Session, now: datetime, limit: int) -> list[Job]:
+    """SEEK jobs eligible for an insights refresh: canonical (not a duplicate), not hidden, first
+    seen within the last 7 days, and not checked within the last 3 hours. Never-checked jobs
+    (`insights_checked_at IS NULL`) sort first, then the longest-stale ones."""
+    cutoff = now - timedelta(hours=3)
+    window = now - timedelta(days=7)
+    stmt = (
+        select(Job)
+        .where(Job.source == "seek", col(Job.canonical_job_id).is_(None), Job.status != "hidden",
+               Job.first_seen_at >= window,
+               or_(col(Job.insights_checked_at).is_(None), Job.insights_checked_at < cutoff))
+        .order_by(col(Job.insights_checked_at).asc())
+        .limit(limit)
+    )
+    return list(session.exec(stmt).all())
 
 
 def find_duplicate(session: Session, job: Job) -> int | None:

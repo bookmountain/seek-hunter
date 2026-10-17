@@ -8,6 +8,7 @@ import { api, errMsg } from "@/lib/api";
 import { since, sourceName } from "@/lib/format";
 import type { Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { CompetitionBlock } from "./CompetitionBlock";
 import { RecruiterBlock } from "./RecruiterBlock";
 import { Score } from "./Score";
 import { WorkTypeLabel } from "./WorkTypeLabel";
@@ -173,6 +174,8 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
             </p>
           </div>
         )}
+
+        <CompetitionBlock job={view} />
 
         <RecruiterBlock job={view} />
 

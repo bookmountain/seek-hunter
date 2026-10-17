@@ -75,6 +75,7 @@ class AppSettings(BaseModel):
     recap_enabled: bool = True
     max_pages_per_search: int = 3
     max_notify_per_run: int = 20
+    max_insights_per_run: int = 30
 
     @field_validator(
         "clearance_patterns",

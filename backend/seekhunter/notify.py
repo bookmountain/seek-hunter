@@ -32,6 +32,7 @@ class DigestItem:
     contact_name: str | None = None
     contact_phone: str | None = None
     contact_email: str | None = None
+    applicant_count: int | None = None
 
 
 def _strip_scheme(url: str) -> str:
@@ -91,6 +92,8 @@ def _meta_line(it: DigestItem) -> str:
     line = " · ".join(parts)
     if "hours" in it.flags:
         line += " · hours?"
+    if it.applicant_count is not None:
+        line += f" · {it.applicant_count} applicants"
     return line
 
 
@@ -211,7 +214,7 @@ def format_brief(*, job_id: int, title: str, company: str, location: str, work_t
                  reasons: list[str], status: str, url: str, description: str,
                  contact_name: str | None = None, contact_phone: str | None = None,
                  contact_email: str | None = None, contact_linkedin: str | None = None,
-                 contact_search: dict | None = None) -> str:
+                 contact_search: dict | None = None, competition: str | None = None) -> str:
     lines = [
         f"#{job_id} {title} — {company} · {location} · {WORK_TYPE_LABELS.get(work_type, work_type)}"
         + (f" · {salary}" if salary else ""),
@@ -226,6 +229,8 @@ def format_brief(*, job_id: int, title: str, company: str, location: str, work_t
         lines.append(f"Flags: {', '.join(flags)}")
     if reasons:
         lines.append(f"Excluded for: {', '.join(reasons)}")
+    if competition:
+        lines.append(f"Competition: {competition}")
     contact_bits = [b for b in (contact_name, contact_phone, contact_email) if b]
     if contact_bits:
         lines.append(f"Recruiter: {' · '.join(contact_bits)}")

@@ -213,6 +213,26 @@ def test_digest_contact_line_prefers_phone_over_email():
     assert "brayden@acme.com" not in msgs[0]
 
 
+def test_digest_meta_line_includes_applicant_count_when_present():
+    it = item(1, flags=())
+    it.applicant_count = 77
+    msgs = format_digest([it], datetime(2026, 10, 17, 9, 0), "https://sh", [])
+    assert "Acme · Contract · 77 applicants" in msgs[0]
+
+
+def test_digest_meta_line_omits_applicant_count_when_absent():
+    it = item(1, flags=())
+    msgs = format_digest([it], datetime(2026, 10, 17, 9, 0), "https://sh", [])
+    assert "applicants" not in msgs[0]
+
+
+def test_digest_meta_line_orders_applicants_after_hours_flag():
+    it = item(1, flags=("hours",))
+    it.applicant_count = 10
+    msgs = format_digest([it], datetime(2026, 10, 17, 9, 0), "https://sh", [])
+    assert "Acme · Contract · hours? · 10 applicants" in msgs[0]
+
+
 def test_digest_omits_contact_line_when_no_contact_info():
     it = item(1)
     msgs = format_digest([it], datetime(2026, 10, 17, 9, 0), "https://sh", [])
@@ -243,6 +263,28 @@ def test_format_brief_falls_back_to_search_url_when_no_linkedin_profile():
         contact_search={"linkedin": "https://www.linkedin.com/search/results/people/?keywords=x"},
     )
     assert "LinkedIn: https://www.linkedin.com/search/results/people/?keywords=x" in text
+
+
+def test_format_brief_includes_competition_line_when_present():
+    text = format_brief(
+        job_id=7, title="React Dev", company="Acme", location="Adelaide SA", work_type="contract",
+        salary="$90/h", score=80, rule_score=75, llm_score=88, llm_note="Strong React",
+        matched=["React"], missing=["Kotlin"], flags=["flexible"], reasons=[], status="new",
+        url="https://x/7", description="desc", competition="77 applicants (Medium application volume) "
+        "· 100% resume · 57% cover letter · checked 2026-10-17T09:00:00",
+    )
+    assert ("Competition: 77 applicants (Medium application volume) · 100% resume · 57% cover letter "
+           "· checked 2026-10-17T09:00:00") in text
+
+
+def test_format_brief_omits_competition_line_when_absent():
+    text = format_brief(
+        job_id=7, title="React Dev", company="Acme", location="Adelaide SA", work_type="contract",
+        salary="$90/h", score=80, rule_score=75, llm_score=88, llm_note="Strong React",
+        matched=["React"], missing=["Kotlin"], flags=["flexible"], reasons=[], status="new",
+        url="https://x/7", description="desc",
+    )
+    assert "Competition:" not in text
 
 
 def test_format_brief_omits_recruiter_and_linkedin_lines_when_absent():

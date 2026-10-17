@@ -18,7 +18,7 @@ All access goes through the `seekhunter-api METHOD PATH [JSON]` command (localho
 
 ## Read
 - What's new: `seekhunter-api GET "/api/summary?hours=24"` (plain text, one job per line)
-- One job in detail (fit, matched/missing skills, AI note, recruiter contact, description): `seekhunter-api GET /api/jobs/142/brief`. The brief includes a `Recruiter: Name · phone · email` line when known and a `LinkedIn: <url>` line — a real profile URL when one was found, otherwise a LinkedIn search URL for that name/company.
+- One job in detail (fit, matched/missing skills, AI note, recruiter contact, competition, description): `seekhunter-api GET /api/jobs/142/brief`. The brief includes a `Recruiter: Name · phone · email` line when known and a `LinkedIn: <url>` line — a real profile URL when one was found, otherwise a LinkedIn search URL for that name/company. For SEEK ads with published applicant stats, it also includes a `Competition: N applicants (volume label) · resume % · cover letter % · checked <time>` line — SEEK's own "how many people applied" numbers. Jora ads and SEEK ads that haven't published stats yet have no `Competition:` line.
 - List as JSON: `seekhunter-api GET "/api/jobs?view=active&status=saved"` (`view=excluded` for excluded; filters: `work_type=part_time|contract|casual|full_time`, `source=seek|jora`, `q=text`)
 - Searches: `seekhunter-api GET /api/search-profiles`
 - Settings: `seekhunter-api GET /api/settings`
@@ -34,6 +34,7 @@ All access goes through the `seekhunter-api METHOD PATH [JSON]` command (localho
 
 ## How to answer
 - "why #142?" / "am I a fit?": read the brief, then explain the overlap and the gaps in 3–5 lines. Mention visa fit (hours flag) when relevant.
+- "how many applied to #142?" / "how much competition on #142?": read the brief's `Competition:` line and report the applicant count, volume label, and resume/cover-letter percentages. If there's no `Competition:` line, say SEEK hasn't published applicant numbers for that ad (or it's a Jora ad, which never has them) — don't guess a number.
 - "who's the recruiter for #142?" / "can I call them?": read the brief and answer with the recruiter's name (if known), their phone number (call it out as tap-to-call), and their LinkedIn — a profile link if one was found, otherwise the LinkedIn search link. Don't invent a name, phone, or profile that isn't in the brief; if nothing is known, say so and offer the LinkedIn search link only.
 - Before destructive changes (deleting searches, editing blocklists), restate the change in one line and do it. If ambiguous, ask.
 - When Book states a lasting preference ("no recruiter X", "only contract"), apply it via settings/searches and remember it.

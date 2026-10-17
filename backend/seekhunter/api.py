@@ -55,6 +55,11 @@ class JobOut(BaseModel):
     contact_email: str | None
     contact_linkedin: str | None
     contact_search: dict[str, str]
+    applicant_count: int | None
+    applicant_volume: str | None
+    resume_pct: int | None
+    cover_letter_pct: int | None
+    insights_checked_at: datetime | None
 
 
 class JobDetailOut(JobOut):
@@ -91,10 +96,29 @@ def _job_out(job: Job, ev: JobEvaluation, detail: bool = False) -> JobOut:
         contact_phone=job.contact_phone, contact_email=job.contact_email,
         contact_linkedin=job.contact_linkedin,
         contact_search=linkedin_search_urls(job.contact_name, job.company),
+        applicant_count=job.applicant_count, applicant_volume=job.applicant_volume,
+        resume_pct=job.resume_pct, cover_letter_pct=job.cover_letter_pct,
+        insights_checked_at=job.insights_checked_at,
     )
     if detail:
         return JobDetailOut(**base, description_html=job.description_html, teaser=job.teaser)
     return JobOut(**base)
+
+
+def _competition_line(job: Job) -> str | None:
+    if job.applicant_count is None:
+        return None
+    bits = [f"{job.applicant_count} applicants"]
+    if job.applicant_volume:
+        bits[0] += f" ({job.applicant_volume})"
+    if job.resume_pct is not None:
+        bits.append(f"{job.resume_pct}% resume")
+    if job.cover_letter_pct is not None:
+        bits.append(f"{job.cover_letter_pct}% cover letter")
+    line = " · ".join(bits)
+    if job.insights_checked_at:
+        line += f" · checked {job.insights_checked_at.isoformat()}"
+    return line
 
 
 def _get_job(session: Session, job_id: int) -> tuple[Job, JobEvaluation]:
@@ -239,6 +263,7 @@ def create_app(init: bool = True) -> FastAPI:
             contact_name=job.contact_name, contact_phone=job.contact_phone,
             contact_email=job.contact_email, contact_linkedin=job.contact_linkedin,
             contact_search=linkedin_search_urls(job.contact_name, job.company),
+            competition=_competition_line(job),
         )
 
     @app.get("/api/summary", response_class=PlainTextResponse)

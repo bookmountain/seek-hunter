@@ -37,6 +37,11 @@ class Job(SQLModel, table=True):
     contact_phone: str | None = None
     contact_email: str | None = None
     contact_linkedin: str | None = None
+    applicant_count: int | None = None
+    applicant_volume: str | None = None
+    resume_pct: int | None = None
+    cover_letter_pct: int | None = None
+    insights_checked_at: NaiveDatetime | None = None
 
 
 class JobEvaluation(SQLModel, table=True):

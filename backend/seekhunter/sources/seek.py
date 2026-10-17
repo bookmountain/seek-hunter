@@ -12,9 +12,18 @@ SEARCH_URL = "https://www.seek.com.au/api/jobsearch/v5/search"
 GRAPHQL_URL = "https://www.seek.com.au/graphql"
 PAGE_SIZE = 22
 WORKTYPE_IDS = {"full_time": "242", "part_time": "243", "contract": "244", "casual": "245"}
+_INSIGHTS_FIELDS = (
+    "insights { __typename "
+    "... on ApplicantCount { count countLabel(locale: $locale) volumeLabel(locale: $locale) } "
+    "... on ApplicantsWithResumePercentage { percentage } "
+    "... on ApplicantsWithCoverLetterPercentage { percentage } }"
+)
 DETAILS_QUERY = (
-    "query jobDetails($jobId: ID!) { jobDetails(id: $jobId) { job { id content(platform: WEB) "
-    "contactMatches { type value } } } }"
+    "query jobDetails($jobId: ID!, $locale: Locale!) { jobDetails(id: $jobId) { "
+    "job { id content(platform: WEB) contactMatches { type value } } " + _INSIGHTS_FIELDS + " } }"
+)
+INSIGHTS_QUERY = (
+    "query jobInsights($jobId: ID!, $locale: Locale!) { jobDetails(id: $jobId) { " + _INSIGHTS_FIELDS + " } }"
 )
 
 
@@ -35,6 +44,22 @@ def _parse_contacts(matches: list[dict]) -> tuple[str | None, str | None]:
     phone = next((m.get("value") for m in matches if m.get("type") == "Phone"), None)
     email = next((m.get("value") for m in matches if m.get("type") == "Email"), None)
     return phone, email
+
+
+def _parse_insights(insights: list[dict]) -> dict:
+    """Parses SEEK's `insights` union list into our flat field names. An empty list (SEEK hasn't
+    published applicant stats for this ad) yields an empty dict, not an error."""
+    result: dict = {}
+    for entry in insights:
+        typename = entry.get("__typename")
+        if typename == "ApplicantCount":
+            result["applicant_count"] = entry.get("count")
+            result["applicant_volume"] = entry.get("volumeLabel")
+        elif typename == "ApplicantsWithResumePercentage":
+            result["resume_pct"] = entry.get("percentage")
+        elif typename == "ApplicantsWithCoverLetterPercentage":
+            result["cover_letter_pct"] = entry.get("percentage")
+    return result
 
 
 def parse_search_item(item: dict) -> JobData:
@@ -84,7 +109,7 @@ class SeekSource:
         resp = self.client.post(
             GRAPHQL_URL,
             json={
-                "operationName": "jobDetails", "variables": {"jobId": job.external_id},
+                "operationName": "jobDetails", "variables": {"jobId": job.external_id, "locale": "en-AU"},
                 "query": DETAILS_QUERY,
             },
             headers={"seek-request-brand": "seek", "seek-request-country": "AU"},
@@ -93,7 +118,8 @@ class SeekSource:
         if "errors" in payload:
             logger.warning("SEEK details for job %s returned errors: %s", job.external_id, payload["errors"])
             return job
-        job_data = (((payload.get("data") or {}).get("jobDetails") or {}).get("job")) or {}
+        job_details = (payload.get("data") or {}).get("jobDetails") or {}
+        job_data = job_details.get("job") or {}
         content = job_data.get("content")
         phone, email = _parse_contacts(job_data.get("contactMatches") or [])
         updates = {}
@@ -103,4 +129,24 @@ class SeekSource:
             updates["contact_phone"] = phone
         if email:
             updates["contact_email"] = email
+        updates.update(_parse_insights(job_details.get("insights") or []))
         return replace(job, **updates) if updates else job
+
+    def insights(self, external_id: str) -> dict | None:
+        """Lighter-weight refresh query for insights only (applicant count, resume/cover-letter %),
+        used when re-checking a job seen in an earlier run. Returns `None` on a GraphQL error
+        (logged, not raised); an empty dict means SEEK has no insights published for this ad."""
+        resp = self.client.post(
+            GRAPHQL_URL,
+            json={
+                "operationName": "jobInsights", "variables": {"jobId": external_id, "locale": "en-AU"},
+                "query": INSIGHTS_QUERY,
+            },
+            headers={"seek-request-brand": "seek", "seek-request-country": "AU"},
+        )
+        payload = _parse_json(resp)
+        if "errors" in payload:
+            logger.warning("SEEK insights for job %s returned errors: %s", external_id, payload["errors"])
+            return None
+        job_details = (payload.get("data") or {}).get("jobDetails") or {}
+        return _parse_insights(job_details.get("insights") or [])

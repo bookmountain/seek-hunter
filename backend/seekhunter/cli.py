@@ -32,6 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("rescore", help="re-score recent jobs after a resume change (no LLM, no notifications)")
     contacts = sub.add_parser("contacts", help="backfill recruiter contacts for recently seen jobs")
     contacts.add_argument("--days", type=int, default=7)
+    insights = sub.add_parser("insights", help="refresh SEEK applicant insights on demand")
+    insights.add_argument("--limit", type=int, default=60)
     return parser
 
 
@@ -47,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        blocking = args.command in ("rescore", "contacts")
+        blocking = args.command in ("rescore", "contacts", "insights")
         with run_lock(env.data_dir, blocking=blocking), Session(get_engine()) as session:
             repo.ensure_seed(session)
             if args.command == "rescore":
@@ -71,6 +73,15 @@ def main(argv: list[str] | None = None) -> int:
                 report = run_contacts_backfill(
                     session, SeekSource(PoliteClient()), _build_contact_lookup(env), days=args.days)
                 print(json.dumps(report, default=str, indent=1))
+                return 0
+
+            if args.command == "insights":
+                from seekhunter.http import PoliteClient
+                from seekhunter.pipeline import run_insights_refresh
+                from seekhunter.sources.seek import SeekSource
+
+                report = run_insights_refresh(session, SeekSource(PoliteClient()), limit=args.limit)
+                print(json.dumps(report, indent=1))
                 return 0
 
             from seekhunter.llm.chain import build_chain

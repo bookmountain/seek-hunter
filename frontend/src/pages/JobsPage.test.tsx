@@ -34,6 +34,11 @@ const job = (id: number, title: string, extra: Partial<Job> = {}): Job => ({
   contact_email: null,
   contact_linkedin: null,
   contact_search: { linkedin: "https://www.linkedin.com/search/results/people/?keywords=x" },
+  applicant_count: null,
+  applicant_volume: null,
+  resume_pct: null,
+  cover_letter_pct: null,
+  insights_checked_at: null,
   ...extra,
 });
 

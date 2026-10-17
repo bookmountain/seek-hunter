@@ -188,3 +188,82 @@ def test_details_returns_job_unchanged_on_errors(fixtures_dir):
     src = SeekSource(FakeClient({}, {"errors": [{"message": "boom"}]}))
     result = src.details(job)
     assert result == job
+
+
+INSIGHTS_PAYLOAD = {
+    "data": {
+        "jobDetails": {
+            "insights": [
+                {"__typename": "ApplicantCount", "count": 77, "countLabel": "77 applicants",
+                 "volumeLabel": "Medium application volume"},
+                {"__typename": "ApplicantsWithResumePercentage", "percentage": 100},
+                {"__typename": "ApplicantsWithCoverLetterPercentage", "percentage": 57},
+            ]
+        }
+    }
+}
+
+
+def test_details_sends_locale_and_parses_insights(fixtures_dir):
+    item = json.loads((fixtures_dir / "seek_search.json").read_text())["data"][0]
+    payload = {
+        "data": {
+            "jobDetails": {
+                "job": {"id": "95229403", "content": "<p>ad</p>"},
+                "insights": INSIGHTS_PAYLOAD["data"]["jobDetails"]["insights"],
+            }
+        }
+    }
+    client = FakeClient({}, payload)
+    src = SeekSource(client)
+    job = src.details(parse_search_item(item))
+    assert job.applicant_count == 77
+    assert job.applicant_volume == "Medium application volume"
+    assert job.resume_pct == 100
+    assert job.cover_letter_pct == 57
+    variables = client.calls[0][2]["json"]["variables"]
+    assert variables == {"jobId": "95229403", "locale": "en-AU"}
+    assert "$locale" in client.calls[0][2]["json"]["query"]
+
+
+def test_details_with_empty_insights_leaves_fields_none(fixtures_dir):
+    item = json.loads((fixtures_dir / "seek_search.json").read_text())["data"][0]
+    payload = {"data": {"jobDetails": {"job": {"id": "95229403", "content": "<p>ad</p>"}, "insights": []}}}
+    src = SeekSource(FakeClient({}, payload))
+    job = src.details(parse_search_item(item))
+    assert job.applicant_count is None
+    assert job.applicant_volume is None
+    assert job.resume_pct is None
+    assert job.cover_letter_pct is None
+
+
+def test_insights_parses_count_and_percentages():
+    src = SeekSource(FakeClient({}, INSIGHTS_PAYLOAD))
+    result = src.insights("95262793")
+    assert result == {
+        "applicant_count": 77, "applicant_volume": "Medium application volume",
+        "resume_pct": 100, "cover_letter_pct": 57,
+    }
+
+
+def test_insights_sends_jobid_and_locale_variables():
+    client = FakeClient({}, INSIGHTS_PAYLOAD)
+    SeekSource(client).insights("95262793")
+    variables = client.calls[0][2]["json"]["variables"]
+    assert variables == {"jobId": "95262793", "locale": "en-AU"}
+
+
+def test_insights_empty_list_returns_empty_dict():
+    payload = {"data": {"jobDetails": {"insights": []}}}
+    src = SeekSource(FakeClient({}, payload))
+    assert src.insights("1") == {}
+
+
+def test_insights_returns_none_on_graphql_errors():
+    src = SeekSource(FakeClient({}, {"errors": [{"message": "boom"}]}))
+    assert src.insights("1") is None
+
+
+def test_insights_raises_source_blocked_on_non_json():
+    with pytest.raises(SourceBlocked):
+        SeekSource(BadJsonClient()).insights("1")

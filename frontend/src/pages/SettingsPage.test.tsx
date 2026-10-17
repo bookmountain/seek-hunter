@@ -24,6 +24,7 @@ const SETTINGS: AppSettings = {
   recap_enabled: true,
   max_pages_per_search: 3,
   max_notify_per_run: 20,
+  max_insights_per_run: 30,
 };
 
 function renderPage() {

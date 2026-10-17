@@ -32,6 +32,14 @@ export interface Job {
   contact_linkedin: string | null;
   /** Always has a LinkedIn people-search URL; `google` only when a name exists. */
   contact_search: { linkedin: string; google?: string };
+  /** SEEK's "how many people applied" stats; always null for Jora and for SEEK ads SEEK hasn't
+   * published stats for. */
+  applicant_count: number | null;
+  /** SEEK's volume label, e.g. "Medium application volume". */
+  applicant_volume: string | null;
+  resume_pct: number | null;
+  cover_letter_pct: number | null;
+  insights_checked_at: string | null;
 }
 
 export interface JobDetail extends Job {
@@ -76,6 +84,7 @@ export interface AppSettings {
   recap_enabled: boolean;
   max_pages_per_search: number;
   max_notify_per_run: number;
+  max_insights_per_run: number;
 }
 
 export interface SourceStatus {

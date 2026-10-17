@@ -4,10 +4,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session
 
 from seekhunter import repo
 from seekhunter.contacts import extract_contacts, is_plausible_name, normalize_phone
+from seekhunter.domain import JobData
 from seekhunter.filters import evaluate_exclusions
 from seekhunter.http import SourceBlocked
 from seekhunter.llm.base import LLMJobInput
@@ -39,7 +41,8 @@ def digest_item(job: Job, ev: JobEvaluation) -> DigestItem:
     return DigestItem(job_id=job.id, score=ev.final_score, title=job.title, company=job.company,
                       location=job.location, work_type=job.work_type, matched=ev.matched_skills,
                       why=ev.llm_note, url=job.url, flags=ev.flags, contact_name=job.contact_name,
-                      contact_phone=job.contact_phone, contact_email=job.contact_email)
+                      contact_phone=job.contact_phone, contact_email=job.contact_email,
+                      applicant_count=job.applicant_count)
 
 
 def _apply_contacts(session: Session, job: Job) -> None:
@@ -92,6 +95,21 @@ def _flush_outbox(session: Session, notifier) -> None:  # noqa: ANN001
         session.commit()
 
 
+def _jobdata_insights(data: JobData) -> dict:
+    fields = ("applicant_count", "applicant_volume", "resume_pct", "cover_letter_pct")
+    return {f: getattr(data, f) for f in fields if getattr(data, f) is not None}
+
+
+def _apply_details(session: Session, name: str, source, job: Job, data: JobData) -> None:  # noqa: ANN001
+    """Fetches and persists a job's detail page: description/contacts, and for SEEK, applicant
+    insights too (SeekSource.details() now returns them in the same GraphQL request)."""
+    details = source.details(data)
+    repo.update_job_details(session, job, details)
+    _apply_contacts(session, job)
+    if name == "seek":
+        repo.set_insights(session, job, _jobdata_insights(details), utcnow())
+
+
 def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict]:  # noqa: ANN001
     status: dict = {}
     new_jobs: list[Job] = []
@@ -123,8 +141,7 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
                             session.commit()
                             repo.delete_evaluation(session, other.id)
                             try:
-                                repo.update_job_details(session, job, source.details(data))
-                                _apply_contacts(session, job)
+                                _apply_details(session, name, source, job, data)
                             except Exception as e:  # noqa: BLE001  one bad detail page mustn't abort the rest
                                 session.rollback()
                                 log.warning("details failed for %s %s: %s", name, data.external_id, e)
@@ -135,8 +152,7 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
                         session.commit()
                         continue
                     try:
-                        repo.update_job_details(session, job, source.details(data))
-                        _apply_contacts(session, job)
+                        _apply_details(session, name, source, job, data)
                     except Exception as e:  # noqa: BLE001  one bad detail page must not abort the source
                         session.rollback()
                         log.warning("details failed for %s %s: %s", name, data.external_id, e)
@@ -187,6 +203,39 @@ def _evaluate(session: Session, jobs: list[Job], profile: Profile, settings, llm
     return used
 
 
+def run_insights_refresh(session: Session, seek_source, limit: int = 30) -> dict:  # noqa: ANN001
+    """Refreshes SEEK applicant insights for up to `limit` eligible jobs (see
+    `repo.jobs_needing_insights`). A `SourceBlocked` from the source stops the loop early (SEEK is
+    rate-limiting us this run); any other per-job error is logged and skipped so one bad job
+    doesn't block the rest."""
+    jobs = repo.jobs_needing_insights(session, utcnow(), limit)
+    refreshed = 0
+    error = None
+    for job in jobs:
+        try:
+            data = seek_source.insights(job.external_id)
+        except SourceBlocked as e:
+            error = str(e)
+            break
+        except Exception as e:  # noqa: BLE001  one bad lookup must not abort the refresh
+            log.warning("insights refresh failed for seek %s: %s", job.external_id, e)
+            continue
+        repo.set_insights(session, job, data, utcnow())
+        refreshed += 1
+    return {"checked": len(jobs), "refreshed": refreshed, "error": error}
+
+
+def _refresh_insights(session: Session, sources: dict, status: dict, settings) -> None:  # noqa: ANN001
+    seek_source = sources.get("seek")
+    if not seek_source:
+        return
+    report = run_insights_refresh(session, seek_source, settings.max_insights_per_run)
+    seek_status = status.setdefault("seek", {})
+    seek_status["insights_refreshed"] = report["refreshed"]
+    if report["error"]:
+        seek_status["insights_error"] = report["error"]
+
+
 def _maybe_health_alert(session: Session, notifier, run: Run) -> None:  # noqa: ANN001
     recent = repo.recent_runs(session, "crawl", 3)
     if len(recent) < 3:
@@ -235,6 +284,14 @@ def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, 
 
         if contact_lookup:
             _lookup_linkedin(session, new_jobs + recovered, contact_lookup, LINKEDIN_LOOKUP_CAP)
+
+        _refresh_insights(session, sources, status, settings)
+        # `status` is mutated in place above; an autoflush earlier in this transaction may already
+        # have persisted its pre-mutation content and left the JSON attribute looking "unchanged"
+        # (same dict object, so a plain re-assignment is a no-op to SQLAlchemy's dirty tracking).
+        # flag_modified forces it back into the next flush regardless.
+        run.source_status = status
+        flag_modified(run, "source_status")
 
         now = utcnow()
         candidates = repo.notification_candidates(session, now)

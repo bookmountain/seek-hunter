@@ -9,7 +9,14 @@ from seekhunter.llm.base import LLMScore
 from seekhunter.lock import RunLocked, run_lock
 from seekhunter.models import Job, JobEvaluation, Outbox, Run
 from seekhunter.notify import NotifyError
-from seekhunter.pipeline import _lookup_linkedin, run_contacts_backfill, run_crawl, run_recap, run_rescore
+from seekhunter.pipeline import (
+    _lookup_linkedin,
+    run_contacts_backfill,
+    run_crawl,
+    run_insights_refresh,
+    run_recap,
+    run_rescore,
+)
 from seekhunter.profile import Profile
 
 PROFILE = Profile(skills={"React", "TypeScript"}, summary="s", titles=[], skill_lines=[], bullets=[])
@@ -28,21 +35,38 @@ def session():
         yield s
 
 
-def jd(source, ext, title="React Developer", company="Acme", desc="React TypeScript", wt="contract"):
+def jd(source, ext, title="React Developer", company="Acme", desc="React TypeScript", wt="contract",
+      applicant_count=None, applicant_volume=None, resume_pct=None, cover_letter_pct=None):
     return JobData(source=source, external_id=ext, title=title, company=company, location="Adelaide SA",
-                   work_type=wt, url=f"https://x/{source}/{ext}", description_html=f"<p>{desc}</p>")
+                   work_type=wt, url=f"https://x/{source}/{ext}", description_html=f"<p>{desc}</p>",
+                   applicant_count=applicant_count, applicant_volume=applicant_volume,
+                   resume_pct=resume_pct, cover_letter_pct=cover_letter_pct)
 
 
 class FakeSource:
-    def __init__(self, name, jobs, blocked=False):
+    def __init__(self, name, jobs, blocked=False, insights_blocked=False):
         self.name, self.jobs, self.blocked = name, jobs, blocked
+        self.insights_blocked = insights_blocked
         self.client = type("C", (), {"request_count": 0, "blocked_count": 0})()
         self.detail_calls = 0
+        self.insights_calls = 0
 
     def search(self, profile, max_pages):
         if self.blocked:
             raise SourceBlocked("403")
         return [JobData(**{**j.__dict__, "description_html": ""}) for j in self.jobs]
+
+    def insights(self, external_id):
+        self.insights_calls += 1
+        if self.insights_blocked:
+            raise SourceBlocked("403")
+        job = next((j for j in self.jobs if j.external_id == external_id), None)
+        if job is None:
+            return {}
+        return {k: v for k, v in (
+            ("applicant_count", job.applicant_count), ("applicant_volume", job.applicant_volume),
+            ("resume_pct", job.resume_pct), ("cover_letter_pct", job.cover_letter_pct),
+        ) if v is not None}
 
     def details(self, job):
         self.detail_calls += 1
@@ -476,3 +500,114 @@ def test_run_contacts_backfill_ignores_jobs_outside_window():
         report = run_contacts_backfill(s, seek_source=type("S", (), {"details": lambda self, d: d})(),
                                        days=7)
         assert report["jobs_checked"] == 0
+
+
+def test_new_seek_job_persists_insights_from_details(session):
+    seek = FakeSource("seek", [jd("seek", "1", applicant_count=77,
+                                  applicant_volume="Medium application volume", resume_pct=100,
+                                  cover_letter_pct=57)])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    assert job.applicant_count == 77
+    assert job.applicant_volume == "Medium application volume"
+    assert job.resume_pct == 100
+    assert job.cover_letter_pct == 57
+    assert job.insights_checked_at is not None
+
+
+def test_jora_job_details_do_not_touch_insights(session):
+    jora = FakeSource("jora", [jd("jora", "a")])
+    run_crawl(session, {"jora": jora}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "a")).one()
+    assert job.applicant_count is None
+    assert job.insights_checked_at is None
+
+
+def test_run_crawl_refreshes_insights_for_jobs_never_checked(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    job.insights_checked_at = None  # simulate a row migrated in before this feature existed
+    session.add(job)
+    session.commit()
+
+    seek.jobs = [jd("seek", "1", applicant_count=12, applicant_volume="Low application volume")]
+    report = run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    session.refresh(job)
+    assert job.applicant_count == 12
+    assert job.applicant_volume == "Low application volume"
+    assert job.insights_checked_at is not None
+    assert report.source_status["seek"]["insights_refreshed"] == 1
+
+
+def test_run_crawl_skips_insights_refresh_checked_within_three_hours(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    report = run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    assert report.source_status["seek"]["insights_refreshed"] == 0
+
+
+def test_run_crawl_insights_source_blocked_stops_loop_and_is_recorded(session):
+    seek = FakeSource("seek", [jd("seek", "1"), jd("seek", "2", company="Other", title="Backend Dev")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    # Both jobs already got an insights check at creation time; force them to look overdue again
+    # so the next run's refresh loop actually has jobs to process.
+    for job in session.exec(select(Job).where(Job.source == "seek")).all():
+        job.insights_checked_at = None
+        session.add(job)
+    session.commit()
+
+    seek.insights_blocked = True
+    report = run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    assert report.source_status["seek"]["insights_error"] == "403"
+    assert report.source_status["seek"]["insights_refreshed"] == 0
+
+
+def test_run_crawl_insights_refresh_without_seek_source_is_a_noop(session):
+    jora = FakeSource("jora", [jd("jora", "a")])
+    report = run_crawl(session, {"jora": jora}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    assert "seek" not in report.source_status
+
+
+def test_run_crawl_runs_insights_refresh_during_dry_run_too(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    job = session.exec(select(Job).where(Job.external_id == "1")).one()
+    job.insights_checked_at = None
+    session.add(job)
+    session.commit()
+
+    report = run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh",
+                       dry_run=True)
+    assert report.source_status["seek"]["insights_refreshed"] == 1
+
+
+def test_run_insights_refresh_reports_checked_and_refreshed_counts():
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        job, _ = repo.upsert_job(s, jd("seek", "1", applicant_count=9))
+        seek = FakeSource("seek", [jd("seek", "1", applicant_count=9)])
+        report = run_insights_refresh(s, seek, limit=10)
+        s.refresh(job)
+        assert report == {"checked": 1, "refreshed": 1, "error": None}
+        assert job.applicant_count == 9
+
+
+def test_run_insights_refresh_generic_exception_is_skipped_and_continues():
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        repo.upsert_job(s, jd("seek", "1"))
+        repo.upsert_job(s, jd("seek", "2"))
+
+        class FlakyInsightsSource(FakeSource):
+            def insights(self, external_id):
+                self.insights_calls += 1
+                if external_id == "1":
+                    raise ValueError("boom")
+                return {"applicant_count": 3}
+
+        seek = FlakyInsightsSource("seek", [jd("seek", "1"), jd("seek", "2")])
+        report = run_insights_refresh(s, seek, limit=10)
+        assert report == {"checked": 2, "refreshed": 1, "error": None}

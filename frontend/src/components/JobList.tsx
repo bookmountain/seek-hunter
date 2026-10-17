@@ -149,6 +149,14 @@ export function JobList({
                           TEL
                         </span>
                       )}
+                      {j.applicant_count !== null && (
+                        <span
+                          title={`${j.applicant_count} applicants on SEEK`}
+                          className="ml-2 border border-rule px-1 py-px align-[1px] font-mono text-[9.5px] font-medium tracking-[0.1em] text-ink-muted"
+                        >
+                          {j.applicant_count} APPS
+                        </span>
+                      )}
                     </span>
                   </span>
                   {firstSnippet && (

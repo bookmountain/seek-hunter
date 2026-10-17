@@ -172,3 +172,84 @@ def test_notification_candidates(session):
     assert [c[0].id for c in cands] == [j.id]
     repo.mark_notified(session, [j.id], utcnow())
     assert repo.notification_candidates(session, utcnow()) == []
+
+
+def test_set_insights_applies_data_and_checked_at(session):
+    job, _ = repo.upsert_job(session, data())
+    now = utcnow()
+    repo.set_insights(session, job, {
+        "applicant_count": 77, "applicant_volume": "Medium application volume",
+        "resume_pct": 100, "cover_letter_pct": 57,
+    }, now)
+    session.refresh(job)
+    assert job.applicant_count == 77
+    assert job.applicant_volume == "Medium application volume"
+    assert job.resume_pct == 100
+    assert job.cover_letter_pct == 57
+    assert job.insights_checked_at == now
+
+
+def test_set_insights_with_none_data_still_records_checked_at(session):
+    job, _ = repo.upsert_job(session, data())
+    now = utcnow()
+    repo.set_insights(session, job, None, now)
+    session.refresh(job)
+    assert job.applicant_count is None
+    assert job.insights_checked_at == now
+
+
+def test_set_insights_with_empty_dict_records_checked_at_without_clobbering(session):
+    job, _ = repo.upsert_job(session, data())
+    repo.set_insights(session, job, {"applicant_count": 5}, utcnow())
+    later = utcnow() + timedelta(minutes=1)
+    repo.set_insights(session, job, {}, later)
+    session.refresh(job)
+    assert job.applicant_count == 5  # not clobbered by an empty refresh result
+    assert job.insights_checked_at == later
+
+
+def test_jobs_needing_insights_only_seek_canonical_not_hidden_within_window(session):
+    seek_job, _ = repo.upsert_job(session, data(ext="s1", source="seek"))
+    jora_job, _ = repo.upsert_job(session, data(ext="j1", source="jora"))
+    hidden, _ = repo.upsert_job(session, data(ext="s2", source="seek"))
+    hidden.status = "hidden"
+    session.add(hidden)
+    dup, _ = repo.upsert_job(session, data(ext="s3", source="seek"))
+    dup.canonical_job_id = seek_job.id
+    session.add(dup)
+    old, _ = repo.upsert_job(session, data(ext="s4", source="seek"))
+    old.first_seen_at = utcnow() - timedelta(days=8)
+    session.add(old)
+    session.commit()
+
+    jobs = repo.jobs_needing_insights(session, utcnow(), limit=10)
+    ids = {j.id for j in jobs}
+    assert ids == {seek_job.id}
+    assert jora_job.id not in ids
+
+
+def test_jobs_needing_insights_skips_recently_checked(session):
+    job, _ = repo.upsert_job(session, data(ext="s1", source="seek"))
+    repo.set_insights(session, job, {}, utcnow())
+    assert repo.jobs_needing_insights(session, utcnow(), limit=10) == []
+
+    stale_time = utcnow() - timedelta(hours=4)
+    repo.set_insights(session, job, {}, stale_time)
+    jobs = repo.jobs_needing_insights(session, utcnow(), limit=10)
+    assert [j.id for j in jobs] == [job.id]
+
+
+def test_jobs_needing_insights_orders_nulls_first_then_oldest_checked(session):
+    checked, _ = repo.upsert_job(session, data(ext="s1", source="seek"))
+    repo.set_insights(session, checked, {}, utcnow() - timedelta(hours=5))
+    never_checked, _ = repo.upsert_job(session, data(ext="s2", source="seek"))
+
+    jobs = repo.jobs_needing_insights(session, utcnow(), limit=10)
+    assert [j.id for j in jobs] == [never_checked.id, checked.id]
+
+
+def test_jobs_needing_insights_respects_limit(session):
+    for i in range(5):
+        repo.upsert_job(session, data(ext=f"s{i}", source="seek"))
+    jobs = repo.jobs_needing_insights(session, utcnow(), limit=2)
+    assert len(jobs) == 2
