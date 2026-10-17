@@ -16,3 +16,18 @@ def test_does_not_match_inside_words():
 
 def test_case_insensitive():
     assert "Python" in extract_skills("PYTHON scripting")
+
+
+def test_bare_node_and_spring_no_longer_match():
+    assert "Node.js" not in extract_skills("a node in the network")
+    assert "Spring" not in extract_skills("Spring 2026 intake")
+
+
+def test_csharp_dotnet_combo():
+    found = extract_skills("C#.NET developer")
+    assert "C#" in found
+    assert ".NET" in found
+
+
+def test_ms_sql_matches_sql_server():
+    assert "SQL Server" in extract_skills("MS SQL")
