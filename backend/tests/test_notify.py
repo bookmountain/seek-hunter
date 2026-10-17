@@ -1,5 +1,6 @@
 import subprocess
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -312,17 +313,34 @@ def test_format_brief():
     assert _no_disallowed_chars(text)
 
 
-def test_notifier_send_file_uses_media_and_force_document(monkeypatch, tmp_path):
+def test_notifier_send_file_stages_into_openclaw_media_dir(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        staged = Path(cmd[cmd.index("--media") + 1])
+        seen["exists_during_send"] = staged.exists()
+        seen["content"] = staged.read_bytes()
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
     pdf = tmp_path / "r.pdf"
-    Notifier("openclaw", "123").send_file(pdf, "#7 resume")
-    assert calls[0] == ["openclaw", "message", "send", "--channel", "telegram", "--target", "123",
-                        "--media", str(pdf), "--force-document", "--message", "#7 resume"]
+    pdf.write_bytes(b"%PDF-1.4 test")
+    media = tmp_path / "openclaw-media"
+    Notifier("openclaw", "123", media_dir=media).send_file(pdf, "#7 resume")
+    cmd = calls[0]
+    staged = Path(cmd[cmd.index("--media") + 1])
+    assert staged.parent == media and staged.name.endswith("-r.pdf")
+    assert cmd[:7] == ["openclaw", "message", "send", "--channel", "telegram", "--target", "123"]
+    assert "--force-document" in cmd and cmd[-2:] == ["--message", "#7 resume"]
+    assert seen == {"exists_during_send": True, "content": b"%PDF-1.4 test"}
+    assert not staged.exists()  # cleaned up after sending
 
 
 def test_notifier_send_file_failure_raises(monkeypatch, tmp_path):
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "nope"))
     with pytest.raises(NotifyError):
-        Notifier("openclaw", "123").send_file(tmp_path / "r.pdf", "c")
+        pdf = tmp_path / "r.pdf"
+        pdf.write_bytes(b"x")
+        Notifier("openclaw", "123", media_dir=tmp_path / "m").send_file(pdf, "c")

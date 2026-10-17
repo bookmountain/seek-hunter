@@ -1,5 +1,7 @@
 import re
+import shutil
 import subprocess
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -244,9 +246,14 @@ def format_brief(*, job_id: int, title: str, company: str, location: str, work_t
     return "\n".join(lines)
 
 
+DEFAULT_OPENCLAW_MEDIA_DIR = Path.home() / ".openclaw" / "media" / "outbound" / "seekhunter"
+
+
 class Notifier:
-    def __init__(self, bin_path: str, target: str, dry_run: bool = False) -> None:
+    def __init__(self, bin_path: str, target: str, dry_run: bool = False,
+                 media_dir: Path = DEFAULT_OPENCLAW_MEDIA_DIR) -> None:
         self.bin_path, self.target, self.dry_run = bin_path, target, dry_run
+        self.media_dir = media_dir
 
     def send(self, text: str) -> None:
         if self.dry_run:
@@ -268,13 +275,22 @@ class Notifier:
         if self.dry_run:
             print(f"--- [dry-run telegram file → {self.target}] {path} ---\n{caption}\n")
             return
+        # OpenClaw only reads local media from its own media dir, so stage a copy there first.
+        staged = self.media_dir / f"{uuid.uuid4().hex[:8]}-{path.name}"
+        try:
+            self.media_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, staged)
+        except OSError as e:
+            raise NotifyError(f"cannot stage {path} in {self.media_dir}: {e}") from e
         cmd = [
             self.bin_path, "message", "send", "--channel", "telegram", "--target", self.target,
-            "--media", str(path), "--force-document", "--message", caption,
+            "--media", str(staged), "--force-document", "--message", caption,
         ]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         except (OSError, subprocess.TimeoutExpired) as e:
             raise NotifyError(str(e)) from e
+        finally:
+            staged.unlink(missing_ok=True)
         if proc.returncode != 0:
             raise NotifyError(f"exit {proc.returncode}: {proc.stderr[-300:]}")
