@@ -1,0 +1,48 @@
+import type { AppSettings, Job, JobDetail, JobStatus, Run, SearchProfile } from "./types";
+
+const TOKEN_KEY = "seekhunter.token";
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY) ?? "";
+export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
+
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (method !== "GET") headers.Authorization = `Bearer ${getToken()}`;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  if (!res.ok) throw new ApiError(res.status, await res.text());
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+const qs = (params: Record<string, string | undefined>) => {
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== "") as [string, string][];
+  return entries.length ? `?${new URLSearchParams(entries).toString()}` : "";
+};
+
+export const api = {
+  jobs: (p: { view?: string; status?: string; work_type?: string; source?: string; q?: string }) =>
+    request<Job[]>("GET", `/api/jobs${qs(p)}`),
+  job: (id: number) => request<JobDetail>("GET", `/api/jobs/${id}`),
+  patchJob: (id: number, body: { status?: JobStatus; notes?: string }) =>
+    request<Job>("PATCH", `/api/jobs/${id}`, body),
+  unexclude: (id: number, allowlist_employer: boolean) =>
+    request<Job>("POST", `/api/jobs/${id}/unexclude`, { allowlist_employer }),
+  profiles: () => request<SearchProfile[]>("GET", "/api/search-profiles"),
+  createProfile: (p: SearchProfile) => request<SearchProfile>("POST", "/api/search-profiles", p),
+  updateProfile: (p: SearchProfile) => request<SearchProfile>("PUT", `/api/search-profiles/${p.id}`, p),
+  deleteProfile: (id: number) => request<void>("DELETE", `/api/search-profiles/${id}`),
+  settings: () => request<AppSettings>("GET", "/api/settings"),
+  saveSettings: (s: AppSettings) => request<AppSettings>("PUT", "/api/settings", s),
+  runs: () => request<Run[]>("GET", "/api/runs"),
+  triggerRun: () => request<{ started: boolean }>("POST", "/api/runs"),
+  notifyTest: () => request<{ sent: boolean }>("POST", "/api/notify/test"),
+};
