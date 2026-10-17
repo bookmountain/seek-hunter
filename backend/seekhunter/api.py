@@ -13,7 +13,18 @@ from seekhunter import market, repo
 from seekhunter.config import get_env
 from seekhunter.contacts import linkedin_search_urls
 from seekhunter.db import get_session, init_db
-from seekhunter.models import Job, JobEvaluation, Run, SearchProfile, Tailoring, utcnow
+from seekhunter.domain import APPLICATION_STAGES, INTERACTION_KINDS, company_key
+from seekhunter.models import (
+    Application,
+    Contact,
+    Interaction,
+    Job,
+    JobEvaluation,
+    Run,
+    SearchProfile,
+    Tailoring,
+    utcnow,
+)
 from seekhunter.notify import Notifier, NotifyError, format_brief
 from seekhunter.profile import load_profile
 from seekhunter.resume_doc import ResumeDoc
@@ -33,6 +44,21 @@ SPA_SECURITY_HEADERS = {
     ),
     "X-Content-Type-Options": "nosniff",
 }
+
+
+class ApplicationSummaryOut(BaseModel):
+    id: int
+    stage: str
+    applied_at: datetime
+    tailoring_id: int | None
+    notes: str
+
+
+class PriorApplicationOut(BaseModel):
+    application_id: int
+    title: str
+    applied_at: datetime
+    stage: str
 
 
 class JobOut(BaseModel):
@@ -68,6 +94,8 @@ class JobOut(BaseModel):
     resume_pct: int | None
     cover_letter_pct: int | None
     insights_checked_at: datetime | None
+    application: ApplicationSummaryOut | None
+    prior_applications: list[PriorApplicationOut]
 
 
 class JobDetailOut(JobOut):
@@ -82,6 +110,158 @@ class JobPatch(BaseModel):
 
 class UnexcludeIn(BaseModel):
     allowlist_employer: bool = False
+
+
+class ApplicationOut(BaseModel):
+    id: int
+    job_id: int | None
+    company: str
+    company_key: str
+    title: str
+    url: str | None
+    location: str | None
+    applied_at: datetime
+    tailoring_id: int | None
+    stage: str
+    source: str
+    notes: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ContactInlineIn(BaseModel):
+    name: str
+    role: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    linkedin: str | None = None
+
+
+class ApplicationCreateIn(BaseModel):
+    company: str
+    title: str
+    url: str | None = None
+    location: str | None = None
+    applied_at: datetime | None = None
+    notes: str = ""
+    contact: ContactInlineIn | None = None
+
+
+class ApplicationPatchIn(BaseModel):
+    stage: str | None = None
+    notes: str | None = None
+    applied_at: datetime | None = None
+    tailoring_id: int | None = None
+
+
+class ContactOut(BaseModel):
+    id: int
+    name: str
+    company: str
+    company_key: str
+    role: str | None
+    phone: str | None
+    email: str | None
+    linkedin: str | None
+    notes: str
+    created_at: datetime
+    updated_at: datetime
+    last_interaction: datetime | None
+    interaction_count: int
+    job_count: int
+    application_count: int
+
+
+class ContactCreateIn(BaseModel):
+    name: str
+    company: str = ""
+    role: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    linkedin: str | None = None
+    notes: str = ""
+
+
+class ContactPatchIn(BaseModel):
+    name: str | None = None
+    company: str | None = None
+    role: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    linkedin: str | None = None
+    notes: str | None = None
+
+
+class InteractionOut(BaseModel):
+    id: int
+    contact_id: int | None
+    application_id: int | None
+    kind: str
+    at: datetime
+    note: str
+    created_at: datetime
+
+
+class InteractionCreateIn(BaseModel):
+    contact_id: int | None = None
+    application_id: int | None = None
+    kind: str
+    at: datetime | None = None
+    note: str = ""
+
+
+class ContactLogIn(BaseModel):
+    kind: str
+    note: str = ""
+
+
+class ContactJobOut(BaseModel):
+    id: int
+    title: str
+    company: str
+    url: str
+
+
+class ContactDetailOut(ContactOut):
+    interactions: list[InteractionOut]
+    jobs: list[ContactJobOut]
+    applications: list[ApplicationOut]
+
+
+class CompanyApplicationOut(BaseModel):
+    id: int
+    title: str
+    applied_at: datetime
+    stage: str
+    tailoring_id: int | None
+
+
+class CompanyContactOut(BaseModel):
+    id: int
+    name: str
+
+
+class CompanyOut(BaseModel):
+    company: str
+    company_key: str
+    application_count: int
+    last_applied_at: datetime
+    applications: list[CompanyApplicationOut]
+    contacts: list[CompanyContactOut]
+
+
+class HistoryEventOut(BaseModel):
+    at: datetime
+    type: str
+    kind: str
+    company: str | None
+    title: str | None
+    contact_name: str | None
+    application_id: int | None
+    contact_id: int | None
+    note: str
+    from_stage: str | None
+    to_stage: str | None
 
 
 class SearchProfileIn(BaseModel):
@@ -223,7 +403,57 @@ class RoleFamilyOut(BaseModel):
     top_skills: list[str]
 
 
-def _job_out(job: Job, ev: JobEvaluation, detail: bool = False) -> JobOut:
+def _application_summary(app: Application | None) -> ApplicationSummaryOut | None:
+    if not app:
+        return None
+    return ApplicationSummaryOut(id=app.id, stage=app.stage, applied_at=app.applied_at,
+                                 tailoring_id=app.tailoring_id, notes=app.notes)
+
+
+def _prior_applications(apps: list[Application], exclude_job_id: int | None) -> list[PriorApplicationOut]:
+    """`apps` is already newest-applied-first (see repo.applications_by_company_keys); this just
+    drops the job's own application and caps at 5."""
+    out = []
+    for a in apps:
+        if exclude_job_id is not None and a.job_id == exclude_job_id:
+            continue
+        out.append(PriorApplicationOut(application_id=a.id, title=a.title, applied_at=a.applied_at,
+                                       stage=a.stage))
+        if len(out) >= 5:
+            break
+    return out
+
+
+def _enrich_one(session: Session, job: Job) -> tuple[Application | None, list[PriorApplicationOut]]:
+    """Single-job version of the jobs-list batch enrichment below, for the detail/patch/unexclude
+    endpoints where only one job needs application/prior_applications data."""
+    application = repo.get_application_by_job(session, job.id)
+    key = company_key(job.company)
+    apps = repo.applications_by_company_keys(session, {key}).get(key, [])
+    return application, _prior_applications(apps, job.id)
+
+
+def _application_out(a: Application) -> ApplicationOut:
+    return ApplicationOut(id=a.id, job_id=a.job_id, company=a.company, company_key=a.company_key,
+                          title=a.title, url=a.url, location=a.location, applied_at=a.applied_at,
+                          tailoring_id=a.tailoring_id, stage=a.stage, source=a.source, notes=a.notes,
+                          created_at=a.created_at, updated_at=a.updated_at)
+
+
+def _contact_out(session: Session, c: Contact) -> ContactOut:
+    stats = repo.contact_stats(session, c.id)
+    return ContactOut(id=c.id, name=c.name, company=c.company, company_key=c.company_key, role=c.role,
+                      phone=c.phone, email=c.email, linkedin=c.linkedin, notes=c.notes,
+                      created_at=c.created_at, updated_at=c.updated_at, **stats)
+
+
+def _interaction_out(i: Interaction) -> InteractionOut:
+    return InteractionOut(id=i.id, contact_id=i.contact_id, application_id=i.application_id, kind=i.kind,
+                          at=i.at, note=i.note, created_at=i.created_at)
+
+
+def _job_out(job: Job, ev: JobEvaluation, application: Application | None = None,
+            priors: list[PriorApplicationOut] | None = None, detail: bool = False) -> JobOut:
     base = dict(
         id=job.id, source=job.source, title=job.title, company=job.company, location=job.location,
         work_type=job.work_type, salary_label=job.salary_label, listed_at=job.listed_at,
@@ -236,7 +466,8 @@ def _job_out(job: Job, ev: JobEvaluation, detail: bool = False) -> JobOut:
         contact_search=linkedin_search_urls(job.contact_name, job.company),
         applicant_count=job.applicant_count, applicant_volume=job.applicant_volume,
         resume_pct=job.resume_pct, cover_letter_pct=job.cover_letter_pct,
-        insights_checked_at=job.insights_checked_at,
+        insights_checked_at=job.insights_checked_at, application=_application_summary(application),
+        prior_applications=priors or [],
     )
     if detail:
         return JobDetailOut(**base, description_html=job.description_html, teaser=job.teaser)
@@ -366,11 +597,22 @@ def create_app(init: bool = True) -> FastAPI:
                   offset: int = Query(0, ge=0), session: Session = Depends(get_session)):
         rows = repo.list_jobs(session, view=view, status=status, work_type=work_type, source=source, q=q,
                               limit=limit, offset=offset)
-        return [_job_out(j, e) for j, e in rows]
+        # Batched (not per-job) so this stays O(1) queries regardless of list size (~300 jobs).
+        job_ids = [j.id for j, _ in rows]
+        apps_by_job = repo.applications_by_job_ids(session, job_ids)
+        keys = {company_key(j.company) for j, _ in rows}
+        apps_by_key = repo.applications_by_company_keys(session, keys)
+        return [
+            _job_out(j, e, application=apps_by_job.get(j.id),
+                    priors=_prior_applications(apps_by_key.get(company_key(j.company), []), j.id))
+            for j, e in rows
+        ]
 
     @app.get("/api/jobs/{job_id}", response_model=JobDetailOut)
     def get_job(job_id: int, session: Session = Depends(get_session)):
-        return _job_out(*_get_job(session, job_id), detail=True)
+        job, ev = _get_job(session, job_id)
+        application, priors = _enrich_one(session, job)
+        return _job_out(job, ev, application=application, priors=priors, detail=True)
 
     @app.patch("/api/jobs/{job_id}", response_model=JobOut, dependencies=write)
     def patch_job(job_id: int, body: JobPatch, session: Session = Depends(get_session)):
@@ -383,7 +625,15 @@ def create_app(init: bool = True) -> FastAPI:
             job.notes = body.notes
         session.add(job)
         session.commit()
-        return _job_out(job, ev)
+        if body.status == "applied":
+            repo.ensure_application_for_job(session, job, utcnow())
+            if job.contact_name:
+                contact = repo.upsert_contact(session, name=job.contact_name, company=job.company,
+                                              role="Recruiter", phone=job.contact_phone,
+                                              email=job.contact_email, linkedin=job.contact_linkedin)
+                repo.link_contact_job(session, contact.id, job.id)
+        application, priors = _enrich_one(session, job)
+        return _job_out(job, ev, application=application, priors=priors)
 
     @app.post("/api/jobs/{job_id}/unexclude", response_model=JobOut, dependencies=write)
     def unexclude(job_id: int, body: UnexcludeIn, session: Session = Depends(get_session)):
@@ -397,7 +647,173 @@ def create_app(init: bool = True) -> FastAPI:
             if job.company.casefold() not in existing:
                 settings.employer_allowlist.append(job.company)
                 repo.save_settings(session, settings)
-        return _job_out(job, ev)
+        application, priors = _enrich_one(session, job)
+        return _job_out(job, ev, application=application, priors=priors)
+
+    # ------------------------------------------------------------------ application history
+    def _get_application(session: Session, aid: int) -> Application:
+        app_row = session.get(Application, aid)
+        if not app_row:
+            raise HTTPException(404, "application not found")
+        return app_row
+
+    def _get_contact(session: Session, cid: int) -> Contact:
+        contact = session.get(Contact, cid)
+        if not contact:
+            raise HTTPException(404, "contact not found")
+        return contact
+
+    @app.get("/api/applications", response_model=list[ApplicationOut])
+    def list_applications(stage: str | None = None, q: str | None = None,
+                          session: Session = Depends(get_session)):
+        return [_application_out(a) for a in repo.list_applications(session, stage=stage, q=q)]
+
+    @app.post("/api/applications", response_model=ApplicationOut, status_code=201, dependencies=write)
+    def create_application(body: ApplicationCreateIn, session: Session = Depends(get_session)):
+        app_row = repo.create_application(session, job_id=None, company=body.company, title=body.title,
+                                          url=body.url, location=body.location,
+                                          applied_at=body.applied_at, source="manual", notes=body.notes)
+        if body.contact:
+            # Not linked via contact_jobs: a manual application (outside SeekHunter) has no job row.
+            repo.upsert_contact(session, name=body.contact.name, company=body.company,
+                               role=body.contact.role, phone=body.contact.phone,
+                               email=body.contact.email, linkedin=body.contact.linkedin)
+        return _application_out(app_row)
+
+    @app.patch("/api/applications/{aid}", response_model=ApplicationOut, dependencies=write)
+    def patch_application(aid: int, body: ApplicationPatchIn, session: Session = Depends(get_session)):
+        app_row = _get_application(session, aid)
+        if body.stage is not None and body.stage not in APPLICATION_STAGES:
+            raise HTTPException(422, "invalid stage")
+        updated = repo.update_application(session, app_row, stage=body.stage, notes=body.notes,
+                                          applied_at=body.applied_at, tailoring_id=body.tailoring_id)
+        return _application_out(updated)
+
+    @app.delete("/api/applications/{aid}", status_code=204, dependencies=write)
+    def delete_application(aid: int, session: Session = Depends(get_session)):
+        app_row = session.get(Application, aid)
+        if app_row:
+            repo.delete_application(session, app_row)
+        return Response(status_code=204)
+
+    @app.get("/api/contacts", response_model=list[ContactOut])
+    def list_contacts(q: str | None = None, session: Session = Depends(get_session)):
+        return [_contact_out(session, c) for c in repo.list_contacts(session, q=q)]
+
+    @app.post("/api/contacts", response_model=ContactOut, status_code=201, dependencies=write)
+    def create_contact(body: ContactCreateIn, session: Session = Depends(get_session)):
+        contact = repo.upsert_contact(session, name=body.name, company=body.company, role=body.role,
+                                      phone=body.phone, email=body.email, linkedin=body.linkedin,
+                                      notes=body.notes)
+        return _contact_out(session, contact)
+
+    @app.patch("/api/contacts/{cid}", response_model=ContactOut, dependencies=write)
+    def patch_contact(cid: int, body: ContactPatchIn, session: Session = Depends(get_session)):
+        contact = _get_contact(session, cid)
+        for field in ("name", "company", "role", "phone", "email", "linkedin", "notes"):
+            value = getattr(body, field)
+            if value is not None:
+                setattr(contact, field, value)
+        if body.company is not None:
+            contact.company_key = company_key(body.company)
+        contact.updated_at = utcnow()
+        session.add(contact)
+        session.commit()
+        session.refresh(contact)
+        return _contact_out(session, contact)
+
+    @app.get("/api/contacts/{cid}", response_model=ContactDetailOut)
+    def get_contact(cid: int, session: Session = Depends(get_session)):
+        contact = _get_contact(session, cid)
+        base = _contact_out(session, contact)
+        interactions = [_interaction_out(i) for i in repo.interactions_for_contact(session, cid)]
+        jobs = [ContactJobOut(id=j.id, title=j.title, company=j.company, url=j.url)
+               for j in repo.jobs_for_contact(session, cid)]
+        applications = [_application_out(a) for a in repo.applications_for_contact(session, cid)]
+        return ContactDetailOut(**base.model_dump(), interactions=interactions, jobs=jobs,
+                                applications=applications)
+
+    @app.post("/api/interactions", response_model=InteractionOut, status_code=201, dependencies=write)
+    def create_interaction(body: InteractionCreateIn, session: Session = Depends(get_session)):
+        if not body.contact_id and not body.application_id:
+            raise HTTPException(422, "contact_id or application_id required")
+        if body.kind not in INTERACTION_KINDS:
+            raise HTTPException(422, "invalid kind")
+        if body.contact_id and not session.get(Contact, body.contact_id):
+            raise HTTPException(404, "contact not found")
+        if body.application_id and not session.get(Application, body.application_id):
+            raise HTTPException(404, "application not found")
+        interaction = repo.create_interaction(session, contact_id=body.contact_id,
+                                              application_id=body.application_id, kind=body.kind,
+                                              at=body.at, note=body.note)
+        return _interaction_out(interaction)
+
+    @app.delete("/api/interactions/{iid}", status_code=204, dependencies=write)
+    def delete_interaction(iid: int, session: Session = Depends(get_session)):
+        interaction = session.get(Interaction, iid)
+        if interaction:
+            repo.delete_interaction(session, interaction)
+        return Response(status_code=204)
+
+    @app.post("/api/jobs/{job_id}/contact-log", response_model=InteractionOut, status_code=201,
+              dependencies=write)
+    def job_contact_log(job_id: int, body: ContactLogIn, session: Session = Depends(get_session)):
+        job, _ev = _get_job(session, job_id)
+        if not job.contact_name:
+            raise HTTPException(422, "job has no recruiter contact")
+        if body.kind not in INTERACTION_KINDS:
+            raise HTTPException(422, "invalid kind")
+        contact = repo.upsert_contact(session, name=job.contact_name, company=job.company, role="Recruiter",
+                                      phone=job.contact_phone, email=job.contact_email,
+                                      linkedin=job.contact_linkedin)
+        repo.link_contact_job(session, contact.id, job.id)
+        interaction = repo.create_interaction(session, contact_id=contact.id, kind=body.kind,
+                                              note=body.note)
+        return _interaction_out(interaction)
+
+    @app.get("/api/companies", response_model=list[CompanyOut])
+    def list_companies(q: str | None = None, session: Session = Depends(get_session)):
+        return repo.list_companies(session, q=q)
+
+    @app.get("/api/history", response_model=list[HistoryEventOut])
+    def history(limit: int = Query(100, ge=1, le=500), session: Session = Depends(get_session)):
+        return repo.history_timeline(session, limit=limit)
+
+    @app.get("/api/history/summary", response_class=PlainTextResponse)
+    def history_summary(days: int = Query(14, ge=1, le=90), session: Session = Depends(get_session)):
+        now = utcnow()
+        since = now - timedelta(days=days)
+        counts = repo.stage_counts(session)
+        lines = ["Applications by stage:"]
+        stage_bits = [f"{stage} {counts[stage]}" for stage in APPLICATION_STAGES if counts.get(stage)]
+        lines.append(", ".join(stage_bits) if stage_bits else "none yet")
+
+        recent_apps = repo.recent_applications(session, since)
+        lines.append("")
+        lines.append(f"Recent applications (last {days}d): {len(recent_apps)}")
+        for a in recent_apps[:10]:
+            age = (now - a.applied_at).days
+            lines.append(f"- {a.company} · {a.title} · {age}d ago · {a.stage}")
+
+        recent_ints = repo.recent_interactions(session, since)
+        lines.append("")
+        lines.append(f"Recent interactions (last {days}d): {len(recent_ints)}")
+        for i in recent_ints[:10]:
+            contact = session.get(Contact, i.contact_id) if i.contact_id else None
+            application = session.get(Application, i.application_id) if i.application_id else None
+            who = contact.name if contact else (application.company if application else "unknown")
+            age = (now - i.at).days
+            note = f" — {i.note}" if i.note else ""
+            lines.append(f"- {who}: {i.kind} · {age}d ago{note}")
+
+        due = repo.follow_ups_due(session, now)
+        lines.append("")
+        lines.append(f"Follow-ups due (applied, no activity in 7d): {len(due)}")
+        for a in due[:10]:
+            age = (now - a.applied_at).days
+            lines.append(f"- {a.company} · {a.title} · {age}d")
+
+        return "\n".join(lines)
 
     @app.get("/api/search-profiles", response_model=list[SearchProfile])
     def list_profiles(session: Session = Depends(get_session)):
