@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 
 from seekhunter.domain import JobData
 from seekhunter.settings_model import AppSettings
+from seekhunter.skills import extract_skills
 
 _PRE_NEGATION = re.compile(r"\b(no|not)\s+(?:[\w/-]+\s+){0,2}$", re.IGNORECASE)
 _POST_NEGATION = re.compile(
@@ -64,5 +65,20 @@ def evaluate_exclusions(job: JobData, settings: AppSettings) -> FilterResult:
         if settings.exclude_fintech:
             add("fintech", _first_hit(settings.fintech_keywords, text))
 
+    if settings.exclude_off_topic and not result.reasons:
+        add("off_topic", _off_topic(job, settings))
+
     result.excluded = bool(result.reasons)
     return result
+
+
+def _off_topic(job: JobData, settings: AppSettings) -> str | None:
+    """Snippet explaining why the job isn't IT/software, or None when it is on-topic."""
+    title = job.title or ""
+    if any(re.search(p, title, re.IGNORECASE) for p in settings.it_title_patterns):
+        return None
+    skills = extract_skills(f"{title} {job.text}")
+    if len(skills) >= settings.off_topic_min_skills:
+        return None
+    found = ", ".join(sorted(skills)) or "none"
+    return f"Not an IT/software role: title '{title[:80]}', tech skills in ad: {found}"

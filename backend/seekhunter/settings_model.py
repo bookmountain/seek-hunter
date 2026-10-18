@@ -12,62 +12,207 @@ class Weights(BaseModel):
 
 
 class AppSettings(BaseModel):
-    defence_employers: list[str] = Field(default_factory=lambda: [
-        "BAE Systems", "Saab", "Raytheon", "Boeing Defence", "ASC Pty", "ASC Shipbuilding",
-        "Naval Group", "Thales", "Leidos", "Babcock", "Northrop Grumman", "Kongsberg", "DSTG",
-        "Defence Science and Technology", "Department of Defence", "Nova Systems", "Lockheed", "L3Harris",
-        "General Dynamics", "Hanwha Defence", "Rheinmetall", "Australian Submarine Agency",
-        "CEA Technologies", "Ultra Maritime", "Penten", "Silentium Defence", "Shoal Group",
-        "Airbus Defence", "RTX", "Defence", "Defense",
-    ])
-    bank_employers: list[str] = Field(default_factory=lambda: [
-        "Commonwealth Bank", "CBA", "NAB", "National Australia Bank", "ANZ", "Westpac", "BankSA", "St.George",
-        "St George Bank", "Bank of Melbourne", "Macquarie Group", "Macquarie Bank", "Bendigo Bank",
-        "Bendigo and Adelaide Bank", "Adelaide Bank", "BOQ", "Bank of Queensland", "ING",
-        "Suncorp Bank", "HSBC", "Citi", "Bankwest", "People's Choice", "Beyond Bank",
-        "People First Bank", "Heritage Bank", "Bank",
-    ])
+    defence_employers: list[str] = Field(
+        default_factory=lambda: [
+            "BAE Systems",
+            "Saab",
+            "Raytheon",
+            "Boeing Defence",
+            "ASC Pty",
+            "ASC Shipbuilding",
+            "Naval Group",
+            "Thales",
+            "Leidos",
+            "Babcock",
+            "Northrop Grumman",
+            "Kongsberg",
+            "DSTG",
+            "Defence Science and Technology",
+            "Department of Defence",
+            "Nova Systems",
+            "Lockheed",
+            "L3Harris",
+            "General Dynamics",
+            "Hanwha Defence",
+            "Rheinmetall",
+            "Australian Submarine Agency",
+            "CEA Technologies",
+            "Ultra Maritime",
+            "Penten",
+            "Silentium Defence",
+            "Shoal Group",
+            "Airbus Defence",
+            "RTX",
+            "Defence",
+            "Defense",
+        ]
+    )
+    bank_employers: list[str] = Field(
+        default_factory=lambda: [
+            "Commonwealth Bank",
+            "CBA",
+            "NAB",
+            "National Australia Bank",
+            "ANZ",
+            "Westpac",
+            "BankSA",
+            "St.George",
+            "St George Bank",
+            "Bank of Melbourne",
+            "Macquarie Group",
+            "Macquarie Bank",
+            "Bendigo Bank",
+            "Bendigo and Adelaide Bank",
+            "Adelaide Bank",
+            "BOQ",
+            "Bank of Queensland",
+            "ING",
+            "Suncorp Bank",
+            "HSBC",
+            "Citi",
+            "Bankwest",
+            "People's Choice",
+            "Beyond Bank",
+            "People First Bank",
+            "Heritage Bank",
+            "Bank",
+        ]
+    )
     employer_allowlist: list[str] = Field(default_factory=list)
-    clearance_patterns: list[str] = Field(default_factory=lambda: [
-        r"\bNV\s*-?\s*[12]\b", r"\bNV1\b", r"\bTS\s*-?\s*PV\b", r"top\s+secret",
-        r"negative vetting",
-        r"\bbaseline\s+(security\s+)?clearance",
-        r"\bAGSVA\b", r"\bPV\s+clearance", r"\bsecurity\s+clearance",
-        r"\b(obtain|hold|maintain)\w*\s+(an?\s+)?(australian\s+)?"
-        r"(government\s+)?(security\s+)?clearance",
-    ])
-    citizenship_patterns: list[str] = Field(default_factory=lambda: [
-        r"australian\s+citizen(s|ship)?\s+(is\s+|are\s+)?(required|only|essential|mandatory|a\s+requirement)",
-        r"must\s+(be|hold|have)\s+(an?\s+)?australian\s+citizen(s|ship)?",
-        r"permanent\s+residen(t|ts|cy)\s+(is\s+)?(required|only)",
-        r"\bPR\s+(is\s+)?required", r"citizens\s+(or|and)\s+permanent\s+residents\s+only",
-        r"australian\s+citizens\s+only",
-        r"(open|available)\s+to\s+australian\s+citizens",
-        r"must\s+(have|hold)\s+(australian\s+)?PR\b",
-        r"only\s+australian\s+citizens",
-        r"\b(australian\s+)?(citizen(ship)?|PR|permanent\s+residen\w*)\s+(or|/)\s+"
-        r"(citizen(ship)?|PR|permanent\s+residen\w*)\b",
-        r"without\s+australian\s+citizenship",
-    ])
-    defence_keywords: list[str] = Field(default_factory=lambda: [
-        r"defence\s+industry", r"defence\s+prime", r"defence\s+program", r"department\s+of\s+defence",
-        r"defence\s+sector", r"defence\s+projects?", r"defense\s+(industry|contractor|sector)",
-    ])
-    bank_keywords: list[str] = Field(default_factory=lambda: [
-        r"leading\s+bank", r"big\s+(four|4)\s+bank", r"major\s+bank", r"tier\s*1\s+bank",
-        r"banking\s+client",
-    ])
+    clearance_patterns: list[str] = Field(
+        default_factory=lambda: [
+            r"\bNV\s*-?\s*[12]\b",
+            r"\bNV1\b",
+            r"\bTS\s*-?\s*PV\b",
+            r"top\s+secret",
+            r"negative vetting",
+            r"\bbaseline\s+(security\s+)?clearance",
+            r"\bAGSVA\b",
+            r"\bPV\s+clearance",
+            r"\bsecurity\s+clearance",
+            r"\b(obtain|hold|maintain)\w*\s+(an?\s+)?(australian\s+)?"
+            r"(government\s+)?(security\s+)?clearance",
+        ]
+    )
+    citizenship_patterns: list[str] = Field(
+        default_factory=lambda: [
+            r"australian\s+citizen(s|ship)?\s+(is\s+|are\s+)?(required|only|essential|mandatory|a\s+requirement)",
+            r"must\s+(be|hold|have)\s+(an?\s+)?australian\s+citizen(s|ship)?",
+            r"permanent\s+residen(t|ts|cy)\s+(is\s+)?(required|only)",
+            r"\bPR\s+(is\s+)?required",
+            r"citizens\s+(or|and)\s+permanent\s+residents\s+only",
+            r"australian\s+citizens\s+only",
+            r"(open|available)\s+to\s+australian\s+citizens",
+            r"must\s+(have|hold)\s+(australian\s+)?PR\b",
+            r"only\s+australian\s+citizens",
+            r"\b(australian\s+)?(citizen(ship)?|PR|permanent\s+residen\w*)\s+(or|/)\s+"
+            r"(citizen(ship)?|PR|permanent\s+residen\w*)\b",
+            r"without\s+australian\s+citizenship",
+        ]
+    )
+    defence_keywords: list[str] = Field(
+        default_factory=lambda: [
+            r"defence\s+industry",
+            r"defence\s+prime",
+            r"defence\s+program",
+            r"department\s+of\s+defence",
+            r"defence\s+sector",
+            r"defence\s+projects?",
+            r"defense\s+(industry|contractor|sector)",
+        ]
+    )
+    bank_keywords: list[str] = Field(
+        default_factory=lambda: [
+            r"leading\s+bank",
+            r"big\s+(four|4)\s+bank",
+            r"major\s+bank",
+            r"tier\s*1\s+bank",
+            r"banking\s+client",
+        ]
+    )
     exclude_fintech: bool = False
+    # Drop jobs that aren't IT/software at all (loose Jora/LinkedIn keyword matching returns e.g.
+    # therapists, civil engineers, accountants). Off-topic = title matches none of
+    # it_title_patterns AND the ad mentions fewer than off_topic_min_skills tech skills.
+    exclude_off_topic: bool = True
+    off_topic_min_skills: int = 3
+    it_title_patterns: list[str] = Field(
+        default_factory=lambda: [
+            r"\bsoftware\b",
+            r"^(?!.*\b(property|land|business|sales|residential|project)\b).*\bdevelopers?\b",
+            r"\bprogrammer",
+            r"\bdevs?\b",
+            r"\b(it|ict)\b",
+            r"\bdata\b",
+            r"\bcloud\b",
+            r"\bdevops\b",
+            r"\bsre\b",
+            r"\bplatform\b",
+            r"\b(full[ -]?stack|front[ -]?end|back[ -]?end|web)\b",
+            r"\b(qa|test(er|ing)?|quality assurance)\b",
+            r"\bcyber",
+            r"\bsecurity analyst",
+            r"\b(ai|ml|machine learning|llm)\b",
+            r"\bsystems?\b",
+            r"\b(service|help) ?desk\b",
+            r"\bdesktop support",
+            r"\btechnical support",
+            r"\bsupport (analyst|engineer|officer|technician)",
+            r"\bnetwork",
+            r"\b(sys)?admin(istrator)?\b.*\b(system|it|network|database)",
+            r"\bdatabase",
+            r"\bsolutions? (architect|engineer)",
+            r"\bapplication",
+            r"\bintegration",
+            r"\bautomation",
+            r"\bdigital\b",
+            r"\btechnolog",
+            r"\bcomputer",
+            r"\binformation (systems|technology|management)",
+            r"\bproduct (owner|manager)\b",
+            r"\bscrum master",
+            r"\bux\b|\bui\b",
+            r"\bmobile\b|\bios\b|\bandroid\b",
+            r"\b(\.net|java|python|react|node|php|ruby|golang|rust|c#|c\+\+|javascript|typescript|sql|azure|aws)\b",
+        ]
+    )
     fintech_keywords: list[str] = Field(default_factory=lambda: [r"\bfintech\b"])
-    role_boost_terms: list[str] = Field(default_factory=lambda: [
-        "software", "full stack", "full-stack", "fullstack", "frontend", "front end", "front-end",
-        "backend", "back end", "developer", "ai engineer", "machine learning", "graduate", "web",
-        "it support", "support analyst", "support officer", "support engineer", "helpdesk", "help desk",
-        "service desk", "desktop support", "technician",
-    ])
-    role_penalty_terms: list[str] = Field(default_factory=lambda: [
-        "principal", "head of", "director", "10+ years", "network engineer",
-    ])
+    role_boost_terms: list[str] = Field(
+        default_factory=lambda: [
+            "software",
+            "full stack",
+            "full-stack",
+            "fullstack",
+            "frontend",
+            "front end",
+            "front-end",
+            "backend",
+            "back end",
+            "developer",
+            "ai engineer",
+            "machine learning",
+            "graduate",
+            "web",
+            "it support",
+            "support analyst",
+            "support officer",
+            "support engineer",
+            "helpdesk",
+            "help desk",
+            "service desk",
+            "desktop support",
+            "technician",
+        ]
+    )
+    role_penalty_terms: list[str] = Field(
+        default_factory=lambda: [
+            "principal",
+            "head of",
+            "director",
+            "10+ years",
+            "network engineer",
+        ]
+    )
     weights: Weights = Field(default_factory=Weights)
     llm_enabled: bool = True
     llm_providers: list[str] = Field(default_factory=lambda: ["anthropic", "openclaw"])
@@ -89,12 +234,20 @@ class AppSettings(BaseModel):
     # Per-page UI filter memory (synced across devices); owned by /api/ui-prefs, preserved on PUT.
     ui_prefs: dict = Field(default_factory=dict)
     market_enabled: bool = True
-    market_cities: list[str] = Field(
-        default_factory=lambda: ["adelaide", "melbourne", "sydney", "perth"])
-    market_keywords: list[str] = Field(default_factory=lambda: [
-        "software engineer", "developer", "full stack", "frontend", "backend", "AI engineer",
-        "data engineer", "devops", "IT support",
-    ])
+    market_cities: list[str] = Field(default_factory=lambda: ["adelaide", "melbourne", "sydney", "perth"])
+    market_keywords: list[str] = Field(
+        default_factory=lambda: [
+            "software engineer",
+            "developer",
+            "full stack",
+            "frontend",
+            "backend",
+            "AI engineer",
+            "data engineer",
+            "devops",
+            "IT support",
+        ]
+    )
     market_details_per_city: int = 40
 
     @field_validator(
