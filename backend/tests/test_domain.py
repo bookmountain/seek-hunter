@@ -97,3 +97,24 @@ def test_derive_city_from_location_matches_known_cities_case_insensitively():
     assert derive_city_from_location(None) == "other"
     assert derive_city_from_location(None, default="adelaide") == "adelaide"
     assert derive_city_from_location("Remote", default="adelaide") == "adelaide"
+
+
+def test_infer_work_type_from_ad_text():
+    from seekhunter.domain import infer_work_type
+    assert infer_work_type("Job type: Contract/Temp. 6 month initial term") == "contract"
+    assert infer_work_type("This is a 12 month contract with possible extension") == "contract"
+    assert infer_work_type("Permanent full-time position in our Adelaide office") == "full_time"
+    assert infer_work_type("Part-time role, 3 days per week") == "part_time"
+    assert infer_work_type("Casual position, flexible hours") == "casual"
+    assert infer_work_type("Must be an Australian citizen or permanent resident.") == "unknown"
+    assert infer_work_type("Relaxed, casual dress code. Full time role.") == "full_time"
+    assert infer_work_type("We value contract management skills.") == "unknown"
+    assert infer_work_type("") == "unknown"
+
+
+def test_normalize_location():
+    from seekhunter.domain import normalize_location
+    assert normalize_location("Adelaide, South Australia, Australia") == "Adelaide SA"
+    assert normalize_location("Melbourne, Victoria, Australia") == "Melbourne VIC"
+    assert normalize_location("Daw Park, Adelaide SA") == "Daw Park, Adelaide SA"
+    assert normalize_location("South Australia, Australia") == "SA"

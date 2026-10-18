@@ -3,7 +3,15 @@ from datetime import datetime, timedelta
 from sqlalchemy import case, func, or_
 from sqlmodel import Session, col, select
 
-from seekhunter.domain import JobData, company_key, dedupe_key, derive_city
+from seekhunter.domain import (
+    JobData,
+    company_key,
+    dedupe_key,
+    derive_city,
+    html_to_text,
+    infer_work_type,
+    normalize_location,
+)
 from seekhunter.models import (
     Application,
     ApplicationEvent,
@@ -45,7 +53,7 @@ def upsert_job(session: Session, data: JobData, profile_location: str | None = N
         return existing, False
     job = Job(
         source=data.source, external_id=data.external_id, title=data.title, company=data.company,
-        location=data.location, city=derive_city(profile_location, data.location),
+        location=normalize_location(data.location), city=derive_city(profile_location, data.location),
         work_type=data.work_type, salary_label=data.salary_label,
         listed_at=data.listed_at, url=data.url, teaser=data.teaser, description_html=data.description_html,
         dedupe_key=dedupe_key(data.title, data.company),
@@ -60,10 +68,28 @@ def update_job_details(session: Session, job: Job, data: JobData) -> None:
     job.description_html = data.description_html or job.description_html
     if job.work_type == "unknown" and data.work_type != "unknown":
         job.work_type = data.work_type
+    if job.work_type == "unknown":  # board didn't label it (common on Jora): infer from the ad text
+        job.work_type = infer_work_type(html_to_text(job.description_html) or job.teaser)
     job.contact_phone = job.contact_phone or data.contact_phone
     job.contact_email = job.contact_email or data.contact_email
     session.add(job)
     session.commit()
+
+
+def backfill_job_fields(session: Session, job: Job) -> None:
+    """Fill fields that older crawls left blank/raw: infer an unknown work type from the ad text and
+    normalise LinkedIn-style locations ('Adelaide, South Australia, Australia' -> 'Adelaide SA')."""
+    changed = False
+    if job.work_type == "unknown":
+        inferred = infer_work_type(html_to_text(job.description_html) or job.teaser)
+        if inferred != "unknown":
+            job.work_type, changed = inferred, True
+    normalized = normalize_location(job.location)
+    if normalized != job.location:
+        job.location, changed = normalized, True
+    if changed:
+        session.add(job)
+        session.commit()
 
 
 def to_jobdata(job: Job) -> JobData:

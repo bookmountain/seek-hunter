@@ -435,6 +435,7 @@ def run_rescore(session: Session, profile: Profile, days: int = 7) -> int:
     settings = repo.load_settings(session)
     count = 0
     for job in repo.jobs_since(session, utcnow() - timedelta(days=days)):
+        repo.backfill_job_fields(session, job)
         data = repo.to_jobdata(job)
         fr = evaluate_exclusions(data, settings)
         sr = score_job(data, profile.skills, settings)
