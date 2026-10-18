@@ -140,7 +140,7 @@ class AppSettings(BaseModel):
         default_factory=lambda: [
             r"\bsoftware\b",
             r"^(?!.*\b(property|land|business|sales|residential|project)\b).*\bdevelopers?\b",
-            r"\bprogrammer",
+            r"^(?!.*\b(cnc|machinist|toolmaker|cam|plc)\b).*\bprogrammer",
             r"\bdevs?\b",
             r"\b(it|ict)\b",
             r"\bdata\b",

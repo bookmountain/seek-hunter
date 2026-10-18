@@ -134,6 +134,7 @@ OFF_TOPIC = [
     "Underwriter",
     "Office Manager",
     "Property Developer - Residential",
+    "CNC MACHINIST - CAM PROGRAMMER - CUSTOMER SERVICE",
     "Business Development Manager",
 ]
 ON_TOPIC = [
