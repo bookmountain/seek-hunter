@@ -72,7 +72,7 @@ def test_unknown_work_type_falls_back_to_type_na():
     it = item(1, flags=())
     it.work_type = "internship"
     msgs = format_digest([it], datetime(2026, 10, 17, 9, 0), "https://sh", [])
-    assert "Type n/a" in msgs[0]
+    assert "Not stated" in msgs[0]
 
 
 def test_already_applied_line_appears_under_meta_line_when_present():
