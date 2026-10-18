@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { DetailEmpty, JobDetail } from "@/components/JobDetail";
-import { JobList } from "@/components/JobList";
+import { JobList, type JobSort } from "@/components/JobList";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ResetFilters } from "@/components/ResetFilters";
@@ -11,12 +11,23 @@ import { usePersistedFilters } from "@/hooks/usePersistedFilters";
 import { api, errMsg } from "@/lib/api";
 import { cityName } from "@/lib/format";
 import type { Job } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, parseIsoUtc } from "@/lib/utils";
 
 const ALL = "all";
 
 /** Remembered per page ("jobs" / "excluded"); `job` (the open ad) is deliberately not persisted. */
-const FILTER_DEFAULTS = { q: "", city: "", work_type: "", status: "", source: "" };
+const FILTER_DEFAULTS = { q: "", city: "", work_type: "", status: "", source: "", sort: "score" };
+
+const time = (iso: string | null) => (iso ? parseIsoUtc(iso).getTime() : -Infinity);
+
+/** Client-side order over the loaded page (the API returns up to 500 rows). Newest first for dates. */
+function sortJobs(jobs: Job[], sort: JobSort): Job[] {
+  const rows = [...jobs];
+  if (sort === "listed") rows.sort((a, b) => time(b.listed_at) - time(a.listed_at) || b.final_score - a.final_score);
+  else if (sort === "seen") rows.sort((a, b) => time(b.first_seen_at) - time(a.first_seen_at) || b.final_score - a.final_score);
+  else rows.sort((a, b) => b.final_score - a.final_score || time(b.listed_at) - time(a.listed_at));
+  return rows;
+}
 
 const isTypingTarget = (el: EventTarget | null) =>
   el instanceof HTMLElement &&
@@ -58,6 +69,7 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
     status: status || undefined,
     source: source || undefined,
     city: city || undefined,
+    limit: "500",
   };
   const { data: cities = [] } = useQuery({ queryKey: ["job-cities", view], queryFn: () => api.jobCities(view) });
   const cityOptions: [string, string][] = [
@@ -66,12 +78,14 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
     ...(city && !cities.some((c) => c.city === city) ? [[city, cityName(city)] as [string, string]] : []),
   ];
   const pick = (key: keyof typeof FILTER_DEFAULTS) => (v: string) => setFilter({ [key]: v === ALL ? "" : v });
-  const { data = [], isLoading: loadingJobs, error } = useQuery({
+  const { data: rawJobs = [], isLoading: loadingJobs, error } = useQuery({
     queryKey: ["jobs", params],
     queryFn: () => api.jobs(params),
     enabled: filters.ready,
   });
   const isLoading = loadingJobs || !filters.ready;
+  const sort = (["score", "listed", "seen"].includes(filters.values.sort) ? filters.values.sort : "score") as JobSort;
+  const data = useMemo(() => sortJobs(rawJobs, sort), [rawJobs, sort]);
 
   const setJob = useCallback(
     (id: number | null, replace: boolean) =>
@@ -188,6 +202,8 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
             view={view}
             selectedId={selectedId}
             onSelect={open}
+            sort={sort}
+            onSort={(s) => setFilter({ sort: s })}
             onArrowSelect={(j) => isDesktop && open(j)}
           />
         )}

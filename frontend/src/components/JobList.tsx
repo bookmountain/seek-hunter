@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useRef } from "react";
 import { cityName, since, sourceName } from "@/lib/format";
 import type { Job, JobStatus } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, parseIsoUtc } from "@/lib/utils";
 import { Score } from "./Score";
 import { WorkTypeLabel } from "./WorkTypeLabel";
 
@@ -12,7 +12,32 @@ const STATUS_CLASS: Record<JobStatus, string> = {
   hidden: "text-ink-muted line-through decoration-1",
 };
 
-const MAX_SKILLS = 4;
+const MAX_SKILLS = 3;
+
+export type JobSort = "score" | "listed" | "seen";
+
+const DAY_MS = 86_400_000;
+const isFresh = (iso: string | null) => !!iso && Date.now() - parseIsoUtc(iso).getTime() <= DAY_MS;
+const exactAdelaide = (iso: string) =>
+  parseIsoUtc(iso).toLocaleString("en-AU", {
+    timeZone: "Australia/Adelaide",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+function Listed({ iso, className }: { iso: string | null; className?: string }) {
+  if (!iso) return <span className={cn("text-ink-faint", className)}>—</span>;
+  return (
+    <span title={`Listed ${exactAdelaide(iso)} (Adelaide)`} className={cn(isFresh(iso) ? "font-medium text-blue" : "text-ink-muted", className)}>
+      {since(iso)}
+    </span>
+  );
+}
 
 /** Set once the first list has painted, so the reveal runs only on page load. */
 let revealed = false;
@@ -44,7 +69,25 @@ function Reasons({ reasons }: { reasons: string[] }) {
 // Column template shared by the column head and rows. Narrow containers fold
 // type/skills under the title; wide ones (>= 48rem) get a true classifieds grid.
 const GRID =
-  "grid grid-cols-[3.25rem_minmax(0,1fr)_auto] gap-x-4 @3xl:grid-cols-[3.5rem_minmax(0,1fr)_6.5rem_11.5rem_2.5rem_4.75rem]";
+  "grid grid-cols-[3.25rem_minmax(0,1fr)_auto] gap-x-4 @4xl:grid-cols-[3.25rem_minmax(0,1fr)_4.5rem_6.25rem_8rem_3.5rem_2.5rem_4.25rem] @4xl:gap-x-3";
+
+const SORT_LABEL: Record<JobSort, string> = { score: "Score", listed: "Listed", seen: "Seen" };
+
+function SortHead({ sort, current, onSort, className }: { sort: JobSort; current: JobSort; onSort: (s: JobSort) => void; className?: string }) {
+  const active = sort === current;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sort)}
+      aria-pressed={active}
+      aria-label={`Sort by ${SORT_LABEL[sort].toLowerCase()}`}
+      className={cn("kicker text-[10px] whitespace-nowrap hover:text-blue", active ? "text-ink underline decoration-blue decoration-2 underline-offset-4" : "text-ink-muted", className)}
+    >
+      {SORT_LABEL[sort]}
+      {active && <span aria-hidden> ↓</span>}
+    </button>
+  );
+}
 
 export function JobList({
   jobs,
@@ -52,7 +95,11 @@ export function JobList({
   selectedId,
   onSelect,
   onArrowSelect,
+  sort = "score",
+  onSort = () => {},
 }: {
+  sort?: JobSort;
+  onSort?: (s: JobSort) => void;
   jobs: Job[];
   view: "active" | "excluded";
   selectedId: number | null;
@@ -92,16 +139,28 @@ export function JobList({
 
   return (
     <div className="@container">
-      <div
-        aria-hidden
-        className={cn(GRID, "kicker hidden border-b-2 border-ink px-5 py-2 text-[10px] text-ink-muted @3xl:grid lg:px-6")}
-      >
-        <span>Score</span>
+      <div role="group" aria-label="Sort jobs" className={cn(GRID, "kicker hidden border-b-2 border-ink px-5 py-2 text-[10px] text-ink-muted @4xl:grid lg:px-6")}>
+        <span>
+          <SortHead sort="score" current={sort} onSort={onSort} />
+        </span>
         <span>Position</span>
+        <span>Source</span>
         <span>Type</span>
         <span>{view === "excluded" ? "Reason" : "Skills"}</span>
-        <span className="text-right">Seen</span>
+        <span className="text-right">
+          <SortHead sort="listed" current={sort} onSort={onSort} />
+        </span>
+        <span className="text-right">
+          <SortHead sort="seen" current={sort} onSort={onSort} />
+        </span>
         <span className="text-right">Status</span>
+      </div>
+      {/* narrow layout: the column heads are hidden, so offer the sort as a compact row */}
+      <div role="group" aria-label="Sort jobs (compact)" className="flex items-center gap-4 border-b border-rule px-5 py-2 @4xl:hidden lg:px-6">
+        <span className="kicker text-[10px] text-ink-faint">Sort</span>
+        {(["score", "listed", "seen"] as const).map((k) => (
+          <SortHead key={k} sort={k} current={sort} onSort={onSort} />
+        ))}
       </div>
       <ol ref={listRef} onKeyDown={onKeyDown} aria-label="Jobs">
         {jobs.map((j, i) => {
@@ -139,8 +198,14 @@ export function JobList({
                     <span className="text-ink-faint"> · </span>
                     <span className="whitespace-nowrap">{j.location}</span>
                     <span className="whitespace-nowrap">
-                      <span className="text-ink-faint"> · </span>
-                      <span className="font-mono text-[11.5px]">{sourceName(j.source)}</span>
+                      <span className="@4xl:hidden">
+                        <span className="text-ink-faint"> · </span>
+                        <span className="font-mono text-[11px] tracking-[0.06em] uppercase">{sourceName(j.source)}</span>
+                        <span className="text-ink-faint"> · </span>
+                        <span className="font-mono text-[11.5px]">
+                          listed <Listed iso={j.listed_at} />
+                        </span>
+                      </span>
                       {j.city && j.city !== "adelaide" && (
                         <span className="ml-2 font-mono text-[10.5px] tracking-[0.1em] text-ink uppercase">{cityName(j.city)}</span>
                       )}
@@ -181,23 +246,31 @@ export function JobList({
                     <span className="mt-1 block truncate font-mono text-[11.5px] text-ink-muted">…{firstSnippet}…</span>
                   )}
                   {/* folded layout (narrow column) */}
-                  <span className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 @3xl:hidden">
+                  <span className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 @4xl:hidden">
                     <WorkTypeLabel type={j.work_type} hours={hours} />
                     {view === "excluded" ? <Reasons reasons={j.reasons} /> : <Skills skills={j.matched_skills} />}
                   </span>
                 </span>
 
-                <span className="hidden pt-1 @3xl:block">
+                <span className="hidden pt-1 @4xl:block">
+                  <span data-col="source" className="font-mono text-[11px] font-medium tracking-[0.1em] text-ink uppercase">
+                    {sourceName(j.source)}
+                  </span>
+                </span>
+                <span className="hidden pt-1 @4xl:block">
                   <WorkTypeLabel type={j.work_type} hours={hours} className="flex-col items-start" />
                 </span>
-                <span className="hidden pt-0.5 @3xl:block">
+                <span className="hidden pt-0.5 @4xl:block">
                   {view === "excluded" ? <Reasons reasons={j.reasons} /> : <Skills skills={j.matched_skills} />}
                 </span>
-                <span className="num hidden pt-0.5 text-right text-[12px] text-ink-muted @3xl:block">
+                <span data-col="listed" className="num hidden pt-0.5 text-right text-[12px] @4xl:block">
+                  <Listed iso={j.listed_at} />
+                </span>
+                <span className="num hidden pt-0.5 text-right text-[12px] text-ink-muted @4xl:block">
                   {since(j.first_seen_at)}
                 </span>
                 <span className="flex flex-col items-end gap-1 pt-0.5 text-right">
-                  <span className="num text-[12px] text-ink-muted @3xl:hidden">{since(j.first_seen_at)}</span>
+                  <span className="num text-[12px] text-ink-muted @4xl:hidden">{since(j.first_seen_at)}</span>
                   <span className={cn("kicker text-[10.5px]", STATUS_CLASS[j.status])}>{j.status}</span>
                 </span>
               </button>

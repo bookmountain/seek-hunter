@@ -122,4 +122,45 @@ describe("JobsPage split view", () => {
     await screen.findByRole("button", { name: /Frontend Developer/ });
     expect(jobs.mock.calls[0][0].city).toBeUndefined();
   });
+
+  it("shows source and listed columns, highlights ads listed within 24h, and sorts by listed", async () => {
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+    vi.spyOn(api, "jobs").mockResolvedValue([
+      job(1, "Older High Score", { final_score: 90, source: "jora", listed_at: hoursAgo(80) }),
+      job(2, "Fresh Lower Score", { final_score: 60, source: "linkedin", listed_at: hoursAgo(3) }),
+      job(3, "No Listing Date", { final_score: 70, listed_at: null }),
+    ]);
+    vi.spyOn(api, "uiPrefs").mockResolvedValue({});
+    const put = vi.spyOn(api, "putUiPrefs").mockResolvedValue({});
+    const { container } = renderPage();
+    await screen.findByRole("button", { name: /Older High Score/ });
+    const order = () => Array.from(container.querySelectorAll("[data-row]")).map((r) => r.getAttribute("data-job-id"));
+    expect(order()).toEqual(["1", "3", "2"]); // default: score
+
+    const sources = Array.from(container.querySelectorAll('[data-col="source"]')).map((n) => n.textContent);
+    expect(sources).toEqual(["Jora", "SEEK", "LinkedIn"]);
+    const listed = container.querySelectorAll('[data-col="listed"]');
+    expect(listed[2].firstElementChild?.className).toContain("text-blue"); // 3h ago
+    expect(listed[0].firstElementChild?.className).not.toContain("text-blue"); // 80h ago
+    expect(listed[1].textContent).toBe("—");
+
+    fireEvent.click(within(screen.getByRole("group", { name: "Sort jobs" })).getByRole("button", { name: "Sort by listed" }));
+    await waitFor(() => expect(order()).toEqual(["2", "1", "3"]));
+    expect(screen.getByTestId("loc").textContent).toContain("sort=listed");
+    await waitFor(() => expect(put).toHaveBeenCalledWith("jobs", expect.objectContaining({ sort: "listed" })), { timeout: 2000 });
+  });
+
+  it("applies a remembered sort", async () => {
+    vi.spyOn(api, "jobs").mockResolvedValue([
+      job(1, "Seen Long Ago", { final_score: 90, first_seen_at: new Date(Date.now() - 5 * 86_400_000).toISOString() }),
+      job(2, "Seen Just Now", { final_score: 50 }),
+    ]);
+    vi.spyOn(api, "uiPrefs").mockResolvedValue({ jobs: { sort: "seen" } });
+    const { container } = renderPage();
+    await screen.findByRole("button", { name: /Seen Just Now/ });
+    await waitFor(() =>
+      expect(Array.from(container.querySelectorAll("[data-row]")).map((r) => r.getAttribute("data-job-id"))).toEqual(["2", "1"]),
+    );
+    expect(within(screen.getByRole("group", { name: "Sort jobs" })).getByRole("button", { name: "Sort by seen" }).getAttribute("aria-pressed")).toBe("true");
+  });
 });

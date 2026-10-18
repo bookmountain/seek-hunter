@@ -45,9 +45,9 @@ describe("usePersistedFilters", () => {
     vi.spyOn(api, "uiPrefs").mockResolvedValue({ jobs: { city: "melbourne", status: "saved" } });
     const put = vi.spyOn(api, "putUiPrefs").mockResolvedValue({});
     renderAt("/?job=5");
-    await waitFor(() => expect(screen.getByTestId("ready").textContent).toBe("true"));
+    await waitFor(() => expect(new URLSearchParams(screen.getByTestId("search").textContent!).get("city")).toBe("melbourne"));
+    expect(screen.getByTestId("ready").textContent).toBe("true");
     const params = new URLSearchParams(screen.getByTestId("search").textContent!);
-    expect(params.get("city")).toBe("melbourne");
     expect(params.get("status")).toBe("saved");
     expect(params.get("job")).toBe("5");
     await new Promise((r) => setTimeout(r, 600));
