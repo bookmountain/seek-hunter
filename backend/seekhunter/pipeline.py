@@ -167,6 +167,28 @@ def _max_pages_for(profile: SearchProfile, settings, source: str | None = None) 
     return base
 
 
+def _retry_missing_details(session: Session, name: str, source, settings) -> int:  # noqa: ANN001
+    """Re-fetch detail pages that an earlier run couldn't get (e.g. LinkedIn rate-limited the
+    request), so those jobs gain a description, work type, contacts and applicant count. Their
+    evaluation is dropped so `_evaluate` re-scores them (incl. the LLM) as unevaluated jobs.
+    A block stops the retries for this source; the next run continues."""
+    done = 0
+    for job in repo.jobs_missing_details(session, name, utcnow() - timedelta(days=7),
+                                         settings.details_retry_per_run):
+        try:
+            _apply_details(session, name, source, job, repo.to_jobdata(job))
+        except SourceBlocked:
+            raise
+        except Exception as e:  # noqa: BLE001  one bad page must not stop the rest
+            session.rollback()
+            log.warning("details retry failed for %s %s: %s", name, job.external_id, e)
+            continue
+        if job.description_html:
+            repo.delete_evaluation(session, job.id)
+            done += 1
+    return done
+
+
 def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict]:  # noqa: ANN001
     status: dict = {}
     new_jobs: list[Job] = []
@@ -216,6 +238,7 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
                         session.rollback()
                         log.warning("details failed for %s %s: %s", name, data.external_id, e)
                         st["error"] = f"details: {e}"
+            st["details_retried"] = _retry_missing_details(session, name, source, settings)
         except SourceBlocked as e:
             session.rollback()
             st["status"], st["error"] = "degraded", str(e)

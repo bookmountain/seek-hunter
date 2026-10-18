@@ -125,7 +125,7 @@ export const WORK_TYPE_LABEL: Record<WorkType, string> = {
   part_time: "Part time",
   contract: "Contract",
   casual: "Casual",
-  unknown: "n/a",
+  unknown: "Not stated",
 };
 
 // ---------------------------------------------------------------- tailoring

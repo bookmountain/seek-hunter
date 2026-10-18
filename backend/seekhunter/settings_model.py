@@ -134,6 +134,7 @@ class AppSettings(BaseModel):
     # Drop jobs that aren't IT/software at all (loose Jora/LinkedIn keyword matching returns e.g.
     # therapists, civil engineers, accountants). Off-topic = title matches none of
     # it_title_patterns AND the ad mentions fewer than off_topic_min_skills tech skills.
+    details_retry_per_run: int = 15
     exclude_off_topic: bool = True
     off_topic_min_skills: int = 3
     it_title_patterns: list[str] = Field(

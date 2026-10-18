@@ -76,6 +76,15 @@ def update_job_details(session: Session, job: Job, data: JobData) -> None:
     session.commit()
 
 
+def jobs_missing_details(session: Session, source: str, since: datetime, limit: int) -> list[Job]:
+    """Canonical, non-hidden jobs from `source` seen since `since` whose detail page was never
+    fetched (empty description), newest first."""
+    return list(session.exec(
+        select(Job).where(Job.source == source, Job.first_seen_at >= since, Job.description_html == "",
+                          col(Job.canonical_job_id).is_(None), Job.status != "hidden")
+        .order_by(col(Job.first_seen_at).desc()).limit(limit)).all())
+
+
 def backfill_job_fields(session: Session, job: Job) -> None:
     """Fill fields that older crawls left blank/raw: infer an unknown work type from the ad text and
     normalise LinkedIn-style locations ('Adelaide, South Australia, Australia' -> 'Adelaide SA')."""

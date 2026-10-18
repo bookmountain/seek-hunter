@@ -990,3 +990,20 @@ def test_run_recap_omits_follow_up_line_when_nothing_due(session):
     n = FakeNotifier()
     run_recap(session, n, "https://sh")
     assert not any("Follow up:" in m for m in n.sent)
+
+
+def test_crawl_retries_jobs_missing_details_and_rescores_them(session):
+    # A job stored by an earlier run whose detail page was blocked: no description, rule-only score.
+    stub = jd("seek", "9", title="React Developer", desc="")
+    job, _ = repo.upsert_job(session, JobData(**{**stub.__dict__, "description_html": ""}))
+    repo.save_evaluation(session, job.id, excluded=False, reasons=[], snippets={}, rule_score=40,
+                         llm_score=None, llm_note=None, llm_provider=None, final_score=40,
+                         matched_skills=[], flags=[])
+    full = jd("seek", "9", title="React Developer", desc="Contract role. React TypeScript Node.js")
+    seek = FakeSource("seek", [full])
+    seek.search = lambda profile, max_pages: []  # nothing new this run
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    session.refresh(job)
+    assert "React TypeScript" in job.description_html
+    ev = session.exec(select(JobEvaluation).where(JobEvaluation.job_id == job.id)).one()
+    assert ev.llm_score == 50 and "TypeScript" in ev.matched_skills

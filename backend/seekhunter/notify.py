@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 WORK_TYPE_LABELS = {"full_time": "Full time", "part_time": "Part time", "contract": "Contract",
-                    "casual": "Casual", "unknown": "Type n/a"}
+                    "casual": "Casual", "unknown": "Not stated"}
 PER_MESSAGE = 10
 MAX_CHARS = 3800
 RECAP_MAX_ITEMS = 15
@@ -89,7 +89,7 @@ def _note_line(it: DigestItem) -> str | None:
 
 
 def _meta_line(it: DigestItem) -> str:
-    work_type = WORK_TYPE_LABELS.get(it.work_type, "Type n/a")
+    work_type = WORK_TYPE_LABELS.get(it.work_type, "Not stated")
     parts = [it.company, work_type]
     loc = _short_location(it.location)
     if loc:

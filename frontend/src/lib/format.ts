@@ -16,7 +16,7 @@ export const WORK_TYPE_CAPS: Record<WorkType, string> = {
   part_time: "Part-time",
   contract: "Contract",
   casual: "Casual",
-  unknown: "Type n/a",
+  unknown: "Not stated",
 };
 
 export const CITY_NAME: Record<string, string> = {
