@@ -32,6 +32,7 @@ from seekhunter.resume_matcher import RMError, client_from_env
 from seekhunter.security import ensure_safe_write_token, ip_allowlist_middleware, require_write
 from seekhunter.settings_model import AppSettings
 from seekhunter.skills import extract_skills
+from seekhunter.tailor import letter as letter_step
 from seekhunter.tailor import rm as rm_step
 from seekhunter.tailor.changes import change_counts, compute_changes
 from seekhunter.tailor.current import current_dir, read_current
@@ -396,6 +397,13 @@ class CoverLetterOut(BaseModel):
     word_count: int
 
 
+class CoverLetterRegenOut(BaseModel):
+    status: str  # queued | running | done | failed
+    error: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
 class TailoringFilesOut(BaseModel):
     resume_pdf: str
     cover_letter_pdf: str
@@ -443,6 +451,7 @@ class TailoringDetailOut(TailoringOut):
     current: ResumeCurrentOut | None
     ats: AtsOut
     resume_matcher: ResumeMatcherOut | None
+    cover_letter_regen: CoverLetterRegenOut | None = None
 
 
 class SendOut(BaseModel):
@@ -635,6 +644,24 @@ def _current_out(data_dir: Path, resume_hash: str | None, error: str | None = No
 
 
 RM_STALE_AFTER = timedelta(minutes=45)
+LETTER_STALE_AFTER = timedelta(minutes=20)
+
+
+def _letter_regen_out(t: Tailoring) -> CoverLetterRegenOut | None:
+    r = (t.result or {}).get("cover_letter_regen")
+    if not r:
+        return None
+    fields = CoverLetterRegenOut.model_fields
+    out = CoverLetterRegenOut.model_validate({k: v for k, v in r.items() if k in fields})
+    if out.status in ("queued", "running"):
+        try:
+            stale = (not out.started_at
+                     or datetime.fromisoformat(out.started_at) < utcnow() - LETTER_STALE_AFTER)
+        except ValueError:
+            stale = True
+        if stale:
+            out.status, out.error = "failed", "timed out (the cover letter step did not finish)"
+    return out
 
 
 def _ats(t: Tailoring, job: Job | None) -> AtsOut:
@@ -681,10 +708,13 @@ def _tailoring_detail(t: Tailoring, job: Job, data_dir: Path) -> TailoringDetail
                                   ResumeDoc.model_validate(result["tailored"]))
         pages = result.get("pages", {})
         base = f"/api/tailorings/{t.id}"
+        # The files are served immutable; a regenerated letter gets new URLs so browsers refetch it.
+        version = int((result.get("cover_letter_regen") or {}).get("version") or 0)
+        v = f"?v={version}" if version else ""
         files = TailoringFilesOut(
-            resume_pdf=f"{base}/resume.pdf", cover_letter_pdf=f"{base}/cover_letter.pdf",
+            resume_pdf=f"{base}/resume.pdf", cover_letter_pdf=f"{base}/cover_letter.pdf{v}",
             resume_pages=[f"{base}/pages/resume/{i}.png" for i in range(1, pages.get("resume", 0) + 1)],
-            cover_letter_pages=[f"{base}/pages/cover_letter/{i}.png"
+            cover_letter_pages=[f"{base}/pages/cover_letter/{i}.png{v}"
                                 for i in range(1, pages.get("cover_letter", 0) + 1)])
         current_info = _current_out(data_dir, t.resume_hash)
     return TailoringDetailOut(
@@ -694,7 +724,7 @@ def _tailoring_detail(t: Tailoring, job: Job, data_dir: Path) -> TailoringDetail
         warnings=list(t.warnings or []), keywords_matched=list(result.get("keywords_matched", [])),
         gaps=list(result.get("gaps", [])), cover_letter=letter, changes=changes or [],
         change_counts=ChangeCountsOut(**change_counts(changes or [])), files=files, current=current_info,
-        ats=_ats(t, job), resume_matcher=_resume_matcher_out(t))
+        ats=_ats(t, job), resume_matcher=_resume_matcher_out(t), cover_letter_regen=_letter_regen_out(t))
 
 
 def _get_tailoring(session: Session, tid: int) -> tuple[Tailoring, Job]:
@@ -1285,6 +1315,20 @@ def create_app(init: bool = True) -> FastAPI:
                                                    "started_at": utcnow().isoformat()}}
         repo.save_tailoring(session, t)
         _spawn_cli("resume-matcher", str(tid))
+        return ResumeMatcherRunOut(status="queued", started=True)
+
+    @app.post("/api/tailorings/{tid}/cover-letter", response_model=ResumeMatcherRunOut, status_code=202,
+              dependencies=write)
+    def regenerate_cover_letter(tid: int, session: Session = Depends(get_session)):
+        """Write a new cover letter for a finished tailoring; the tailored resume is kept."""
+        t, _ = _get_tailoring(session, tid)
+        if t.status != "done":
+            raise HTTPException(409, "tailoring is not finished")
+        existing = _letter_regen_out(t)
+        if existing and existing.status in ("queued", "running"):
+            return ResumeMatcherRunOut(status=existing.status, started=False)
+        letter_step.mark_queued(session, t)
+        _spawn_cli("cover-letter", str(tid))
         return ResumeMatcherRunOut(status="queued", started=True)
 
     @app.get("/api/resume-matcher/status", response_model=ResumeMatcherStatusOut)

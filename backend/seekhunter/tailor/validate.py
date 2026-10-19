@@ -18,9 +18,12 @@ from seekhunter.tailor.textdiff import is_trivial_change
 SUMMARY_MAX = 480
 MIN_BULLETS_RECENT = 2
 RECENT_ROLES = 2
-LETTER_WORDS = (220, 350)
-LETTER_PARAGRAPHS = (3, 4)
+LETTER_WORDS = (130, 200)
+LETTER_PARAGRAPHS = (3, 3)
 LIST_CAP = 20
+# Student-visa work limits, quoted in letters for part-time/contract/casual roles.
+AVAILABILITY = ("I can work up to 48 hours per fortnight during study periods and full-time during "
+                "university holidays.")
 
 
 @dataclass
@@ -180,6 +183,15 @@ def _validate_projects(base: ResumeDoc, out: TailorOutput, warnings: list[str]) 
     return chosen
 
 
+def validate_letter_only(base: ResumeDoc, letter: CoverLetter, *, contact_name: str | None = None,
+                         supported: list[str] | tuple[str, ...] = ()) -> tuple[CoverLetter, list[str]]:
+    """A regenerated cover letter checked against `base` (the tailored resume): (letter, warnings)."""
+    warnings: list[str] = []
+    corpus = base.corpus() + "\n" + base.education_tex
+    known = extract_skills(corpus) | extract_skills("\n".join(supported))
+    return _validate_letter(letter, contact_name, numbers(corpus), known, warnings), warnings
+
+
 def _validate_letter(letter: CoverLetter, contact_name: str | None, corpus_numbers: set[str],
                      known: set[str], warnings: list[str]) -> CoverLetter:
     paragraphs = [" ".join(p.split()) for p in letter.paragraphs if p and p.strip()]
@@ -199,13 +211,13 @@ def _validate_letter(letter: CoverLetter, contact_name: str | None, corpus_numbe
     if not LETTER_WORDS[0] <= words <= LETTER_WORDS[1]:
         warnings.append(f"Cover letter is {words} words (target {LETTER_WORDS[0]}–{LETTER_WORDS[1]}).")
     if not LETTER_PARAGRAPHS[0] <= len(paragraphs) <= LETTER_PARAGRAPHS[1]:
-        warnings.append(f"Cover letter has {len(paragraphs)} paragraphs (target 3–4).")
+        warnings.append(f"Cover letter has {len(paragraphs)} paragraphs (target {LETTER_PARAGRAPHS[1]}).")
     body = " ".join(paragraphs)
     unknown_skills = sorted(extract_skills(body) - known)
     if unknown_skills:
         warnings.append(f"Cover letter mentions {', '.join(unknown_skills)}, which isn't in your resume; "
                         "check the wording before sending.")
-    new_numbers = sorted(numbers(body) - corpus_numbers)
+    new_numbers = sorted(numbers(body) - corpus_numbers - numbers(AVAILABILITY))
     if new_numbers:
         warnings.append(f"Cover letter uses numbers not in your resume ({', '.join(new_numbers)}); "
                         "check them before sending.")

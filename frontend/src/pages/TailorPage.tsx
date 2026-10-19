@@ -14,6 +14,7 @@ import { cn, parseIsoUtc } from "@/lib/utils";
 
 const isActive = (s?: TailoringStatus) => s === "queued" || s === "running";
 const rmBusy = (t?: TailoringDetail) => t?.resume_matcher?.status === "queued" || t?.resume_matcher?.status === "running";
+const letterBusy = (t?: TailoringDetail) => t?.cover_letter_regen?.status === "queued" || t?.cover_letter_regen?.status === "running";
 
 const STEPS = ["Reading resume", "Rendering current resume", "Tailoring with AI", "Compiling PDFs"];
 
@@ -114,6 +115,18 @@ function Done({ t, jobId, onRegenerate, regenerating }: { t: TailoringDetail; jo
     onError: (e: Error) => toast.error(errMsg(e)),
   });
   const sentAt = send.data?.sent_at ?? t.sent_at;
+  const regenLetter = useMutation({
+    mutationFn: () => api.regenerateCoverLetter(t.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tailoring", t.id] }),
+    onError: (e: Error) => toast.error(errMsg(e)),
+  });
+  // Toast once when a letter regeneration finishes while the page is open.
+  const regenStatus = t.cover_letter_regen?.status;
+  const [lastRegen, setLastRegen] = useState(regenStatus);
+  if (regenStatus !== lastRegen) {
+    setLastRegen(regenStatus);
+    if ((lastRegen === "queued" || lastRegen === "running") && regenStatus === "done") toast.success("New cover letter ready");
+  }
   const rm = t.resume_matcher;
   const prep = rm?.status === "done" ? rm.interview_prep : null;
   const hasQuestions = !!(prep?.resume_questions?.length || prep?.project_follow_ups?.length);
@@ -134,7 +147,7 @@ function Done({ t, jobId, onRegenerate, regenerating }: { t: TailoringDetail; jo
         </Button>
         {sentAt && <span className="num text-[12px] text-blue">Sent {adelaideTime(sentAt)}</span>}
         <Button variant="ghost" className="ml-auto" onClick={onRegenerate} disabled={regenerating}>
-          {regenerating ? "Starting…" : "Regenerate"}
+          {regenerating ? "Starting…" : "Regenerate all"}
         </Button>
       </div>
 
@@ -164,7 +177,15 @@ function Done({ t, jobId, onRegenerate, regenerating }: { t: TailoringDetail; jo
         </aside>
       </div>
 
-      {t.cover_letter && <CoverLetterSection letter={t.cover_letter} pages={t.files?.cover_letter_pages ?? []} />}
+      {t.cover_letter && (
+        <CoverLetterSection
+          letter={t.cover_letter}
+          pages={t.files?.cover_letter_pages ?? []}
+          regen={t.cover_letter_regen ?? null}
+          onRegenerate={() => regenLetter.mutate()}
+          starting={regenLetter.isPending}
+        />
+      )}
       {prep && hasQuestions && <InterviewPrepSection prep={prep} />}
       {rm?.status === "done" && rm.outreach_message && (
         <OutreachSection message={rm.outreach_message} recruiter={t.job.contact_name} />
@@ -190,7 +211,7 @@ export function TailorPage() {
     queryFn: () => api.tailoring(runId!),
     enabled: runId !== null,
     refetchInterval: (q) =>
-      isActive(q.state.data?.status) ? 2000 : rmBusy(q.state.data) ? 4000 : false,
+      isActive(q.state.data?.status) || letterBusy(q.state.data) ? 2000 : rmBusy(q.state.data) ? 4000 : false,
   });
 
   // Keep the run list (and the job detail's status line) fresh when a run finishes.

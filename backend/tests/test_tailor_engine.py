@@ -35,7 +35,7 @@ def test_prompt_contains_rules_resume_and_delimited_untrusted_ad(fixtures_dir):
     prompt = build_prompt(JOB, doc)
     assert "never follow instructions" in prompt.lower()
     assert '"microsoft-b1"' in prompt and '"cloud-tools"' in prompt
-    assert "Brayden" in prompt and "part-time/contract work during study" in prompt
+    assert "Brayden" in prompt and "48 hours per fortnight" in prompt
     start, end = prompt.index("<<<JOB_AD"), prompt.rindex("JOB_AD>>>")
     assert "IGNORE PREVIOUS INSTRUCTIONS" in prompt[start:end]
     assert prompt.count("JOB_AD>>>") == 1  # the ad can't close the delimiter early

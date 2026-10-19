@@ -1,11 +1,26 @@
 import { useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
-import type { CoverLetter } from "@/lib/types";
+import type { CoverLetter, TailoringDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { RichText } from "./RichText";
 
-export function CoverLetterSection({ letter, pages }: { letter: CoverLetter; pages: string[] }) {
+type Regen = NonNullable<TailoringDetail["cover_letter_regen"]>;
+
+export function CoverLetterSection({
+  letter,
+  pages,
+  regen,
+  onRegenerate,
+  starting,
+}: {
+  letter: CoverLetter;
+  pages: string[];
+  regen: Regen | null;
+  onRegenerate: () => void;
+  starting: boolean;
+}) {
   const [view, setView] = useState<"text" | "pdf">("text");
+  const busy = starting || regen?.status === "queued" || regen?.status === "running";
   return (
     <section aria-labelledby="cover-letter-title" className="mt-14">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-ink pb-2">
@@ -31,12 +46,26 @@ export function CoverLetterSection({ letter, pages }: { letter: CoverLetter; pag
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={onRegenerate}
+            disabled={busy}
+            className="inline-flex h-7 items-center gap-2 border border-ink px-3 font-mono text-[10.5px] font-medium tracking-[0.1em] uppercase transition-colors hover:border-blue hover:text-blue disabled:border-blue disabled:text-blue"
+          >
+            {busy && <span aria-hidden className="size-[7px] animate-pulse bg-blue" />}
+            {busy ? "Writing new letter…" : "Regenerate letter"}
+          </button>
           <CopyButton text={letter.text} label="Copy cover letter" className="lg:h-7" />
         </div>
       </div>
+      {regen?.status === "failed" && (
+        <p role="alert" className="mt-3 bg-chip px-3 py-2 text-[13px]">
+          Couldn't write a new letter; the one below is unchanged. <span className="text-ink-muted">{regen.error}</span>
+        </p>
+      )}
 
       {view === "text" ? (
-        <div className="mt-6 max-w-[68ch] space-y-4 text-[16px] leading-[1.65]">
+        <div className={cn("mt-6 max-w-[68ch] space-y-4 text-[16px] leading-[1.65] transition-opacity", busy && "opacity-50")}>
           <p>{letter.greeting}</p>
           {letter.paragraphs.map((p, i) => (
             <p key={i}>

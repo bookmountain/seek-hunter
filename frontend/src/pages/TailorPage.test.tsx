@@ -124,8 +124,30 @@ describe("TailorPage", () => {
     vi.spyOn(api, "tailoring").mockResolvedValue(DONE);
     const tailor = vi.spyOn(api, "tailor").mockResolvedValue({ tailoring_id: 6, status: "queued", reused: false });
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Regenerate" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Regenerate all" }));
     await waitFor(() => expect(tailor).toHaveBeenCalledWith(7));
+  });
+
+  it("Regenerate letter POSTs a letter-only run and shows progress", async () => {
+    vi.spyOn(api, "tailorings").mockResolvedValue([summary({ status: "done" })]);
+    const get = vi.spyOn(api, "tailoring").mockResolvedValue(DONE);
+    const regen = vi.spyOn(api, "regenerateCoverLetter").mockResolvedValue({ status: "queued", started: true });
+    const tailor = vi.spyOn(api, "tailor");
+    renderPage();
+    const button = await screen.findByRole("button", { name: "Regenerate letter" });
+    get.mockResolvedValue({ ...DONE, cover_letter_regen: { status: "running", error: null, started_at: null, finished_at: null } });
+    fireEvent.click(button);
+    await waitFor(() => expect(regen).toHaveBeenCalledWith(5));
+    expect(tailor).not.toHaveBeenCalled();
+    expect(await screen.findByRole("button", { name: "Writing new letter…" })).toBeTruthy();
+  });
+
+  it("says when a letter regeneration failed", async () => {
+    vi.spyOn(api, "tailorings").mockResolvedValue([summary({ status: "done" })]);
+    vi.spyOn(api, "tailoring").mockResolvedValue({ ...DONE, cover_letter_regen: { status: "failed", error: "model down", started_at: null, finished_at: null } });
+    renderPage();
+    expect(await screen.findByText(/Couldn't write a new letter/)).toBeTruthy();
+    expect(screen.getByText("model down")).toBeTruthy();
   });
 
   it("shows the error and a Try again button when failed", async () => {

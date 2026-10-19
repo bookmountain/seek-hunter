@@ -48,13 +48,16 @@ def build_parser() -> argparse.ArgumentParser:
                         help="run an existing queued tailoring row (the API creates one)")
     tailor.add_argument("--send", action="store_true", help="send both PDFs to Telegram when done")
     sub.add_parser("resume-preview", help="build/cache the PDF + PNG preview of the current resume")
+    clp = sub.add_parser("cover-letter", help="regenerate only the cover letter of a finished tailoring")
+    clp.add_argument("tailoring_id", type=int)
     rmp = sub.add_parser("resume-matcher", help="(re)run the Resume-Matcher analysis of a finished tailoring")
     rmp.add_argument("tailoring_id", type=int)
     return parser
 
 
 def _tailor_commands(args: argparse.Namespace, env: Env, notifier: Notifier) -> int:
-    """`tailor` and `resume-preview` run under `tailor.lock`, independent of the crawl's run.lock."""
+    """`tailor`, `cover-letter` and `resume-preview` run under `tailor.lock`, independent of the crawl's
+    run.lock."""
     from seekhunter.tailor import pipeline
     from seekhunter.tailor.render import tectonic_compiler
 
@@ -69,6 +72,22 @@ def _tailor_commands(args: argparse.Namespace, env: Env, notifier: Notifier) -> 
         except RunLocked:
             print("a tailoring is in progress (it builds the preview too)", file=sys.stderr)
             return 75
+
+    if args.command == "cover-letter":
+        from seekhunter.tailor.engine import openclaw_llm
+        from seekhunter.tailor.letter import run_letter_regen
+
+        with run_lock(env.data_dir, blocking=True, name="tailor.lock"), Session(get_engine()) as session:
+            try:
+                t = run_letter_regen(session, args.tailoring_id, env=env, llm=openclaw_llm(env),
+                                     compiler=compiler)
+            except ValueError as e:
+                print(str(e), file=sys.stderr)
+                return 2
+            regen = (t.result or {}).get("cover_letter_regen") or {}
+            print(json.dumps({"tailoring_id": t.id, "status": regen.get("status"),
+                              "error": regen.get("error")}, indent=1))
+            return 0 if regen.get("status") == "done" else 1
 
     with Session(get_engine()) as session:
         job = session.get(Job, args.job_id)
@@ -133,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         notifier.send("SeekHunter test message")
         return 0
 
-    if args.command in ("tailor", "resume-preview"):
+    if args.command in ("tailor", "cover-letter", "resume-preview"):
         return _tailor_commands(args, env, notifier)
     if args.command == "resume-matcher":
         return _resume_matcher(env, args.tailoring_id)

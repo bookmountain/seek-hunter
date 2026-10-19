@@ -142,6 +142,8 @@ export const api = {
   rerunResumeMatcher: (tid: number) =>
     request<{ status: string; started: boolean }>("POST", `/api/tailorings/${tid}/resume-matcher`),
   resumeMatcherStatus: () => request<ResumeMatcherHealth>("GET", "/api/resume-matcher/status"),
+  regenerateCoverLetter: (tid: number) =>
+    request<{ status: string; started: boolean }>("POST", `/api/tailorings/${tid}/cover-letter`),
   sendTailoring: (tid: number) =>
     request<{ sent: boolean; sent_at: string | null }>("POST", `/api/tailorings/${tid}/send`),
 };

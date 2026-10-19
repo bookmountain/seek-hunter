@@ -249,6 +249,8 @@ export interface TailoringDetail extends TailoringSummary {
   ats?: AtsPair;
   /** null when Resume-Matcher never ran for this tailoring (disabled, or older run). */
   resume_matcher?: ResumeMatcherResult | null;
+  /** Letter-only regeneration; null until one is requested. */
+  cover_letter_regen?: { status: "queued" | "running" | "done" | "failed"; error: string | null; started_at: string | null; finished_at: string | null } | null;
 }
 
 export interface AtsBreakdown {

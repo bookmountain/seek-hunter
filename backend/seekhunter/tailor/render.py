@@ -178,6 +178,42 @@ def _resume_rel(latex_dir: Path, resume_dir: Path) -> Path:
         return Path("sections/resume")
 
 
+def _compile_letter(work: Path, resume_tex: str, letter: CoverLetter, out_dir: Path, compiler: Compiler,
+                    warnings: list[str], **kwargs) -> None:
+    """Compile `cover_letter.pdf` into `out_dir`, retrying in the compact layout if it spills onto page 2."""
+    (work / "cover_letter.tex").write_text(cover_letter_tex(resume_tex, letter, **kwargs), encoding="utf-8")
+    letter_pdf = compiler(work, "cover_letter.tex")
+    if page_count(letter_pdf) > 1:
+        (work / "cover_letter.tex").write_text(
+            cover_letter_tex(resume_tex, letter, compact=True, **kwargs), encoding="utf-8")
+        letter_pdf = compiler(work, "cover_letter.tex")
+        if page_count(letter_pdf) > 1:
+            warnings.append("Cover letter runs over one page; consider shortening it.")
+    shutil.move(letter_pdf, out_dir / "cover_letter.pdf")
+
+
+def build_letter(latex_dir: Path, resume_dir: Path, letter: CoverLetter, out_dir: Path, compiler: Compiler, *,
+                 job_title: str, company: str, contact_name: str | None, location: str, today: date) -> dict:
+    """Re-render only the cover letter in `out_dir` (`cover_letter.pdf`, `cover_letter-<n>.png`).
+    Returns `{"pages": int, "warnings": [...]}`."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    work = out_dir / "work-letter"
+    shutil.rmtree(work, ignore_errors=True)
+    warnings: list[str] = []
+    try:
+        copy_latex(latex_dir, work)
+        sections = work / _resume_rel(latex_dir, resume_dir)
+        if not sections.is_dir():
+            shutil.copytree(resume_dir, sections)
+        resume_tex = (work / "resume.tex").read_text(encoding="utf-8")
+        _compile_letter(work, resume_tex, letter, out_dir, compiler, warnings, job_title=job_title,
+                        company=company, contact_name=contact_name, location=location, today=today)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    pages = render_pages(out_dir / "cover_letter.pdf", out_dir, "cover_letter")
+    return {"pages": pages, "warnings": warnings}
+
+
 def build_tailored(latex_dir: Path, resume_dir: Path, doc: ResumeDoc, letter: CoverLetter, out_dir: Path,
                    compiler: Compiler, *, job_title: str, company: str, contact_name: str | None,
                    location: str, today: date, max_resume_pages: int | None = None) -> dict:
@@ -208,18 +244,8 @@ def build_tailored(latex_dir: Path, resume_dir: Path, doc: ResumeDoc, letter: Co
             resume_pdf = compiler(work, "resume.tex")
         shutil.move(resume_pdf, out_dir / "resume.pdf")
 
-        kwargs = dict(job_title=job_title, company=company, contact_name=contact_name, location=location,
-                      today=today)
-        letter_tex = cover_letter_tex(resume_tex, letter, **kwargs)
-        (work / "cover_letter.tex").write_text(letter_tex, encoding="utf-8")
-        letter_pdf = compiler(work, "cover_letter.tex")
-        if page_count(letter_pdf) > 1:
-            (work / "cover_letter.tex").write_text(
-                cover_letter_tex(resume_tex, letter, compact=True, **kwargs), encoding="utf-8")
-            letter_pdf = compiler(work, "cover_letter.tex")
-            if page_count(letter_pdf) > 1:
-                warnings.append("Cover letter runs over one page; consider shortening it.")
-        shutil.move(letter_pdf, out_dir / "cover_letter.pdf")
+        _compile_letter(work, resume_tex, letter, out_dir, compiler, warnings, job_title=job_title,
+                        company=company, contact_name=contact_name, location=location, today=today)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     pages = {"resume": render_pages(out_dir / "resume.pdf", out_dir, "resume"),

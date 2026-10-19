@@ -147,3 +147,35 @@ def test_rm_status_unreachable(ctx, monkeypatch):  # noqa: F811
                         lambda env: _StatusRM(error=RMError("Resume-Matcher unreachable: refused")))
     s = ctx.client.get("/api/resume-matcher/status").json()
     assert s["enabled"] and s["reachable"] is False and "refused" in s["error"]
+
+
+def test_regenerate_cover_letter_marks_queued_spawns_and_versions_urls(ctx):  # noqa: F811
+    tid = _finished(ctx)
+    assert ctx.client.post(f"/api/tailorings/{tid}/cover-letter").status_code == 401
+    r = ctx.client.post(f"/api/tailorings/{tid}/cover-letter", headers=AUTH)
+    assert r.status_code == 202 and r.json() == {"status": "queued", "started": True}
+    assert ctx.spawned[-1][1:] == ["-m", "seekhunter.cli", "cover-letter", str(tid)]
+    d = ctx.client.get(f"/api/tailorings/{tid}").json()
+    assert d["cover_letter_regen"]["status"] == "queued"
+    again = ctx.client.post(f"/api/tailorings/{tid}/cover-letter", headers=AUTH)
+    assert again.json() == {"status": "queued", "started": False} and len(ctx.spawned) == 1
+    with ctx.session() as s:
+        t = s.get(Tailoring, tid)
+        t.result = {**t.result, "cover_letter_regen": {"status": "done", "version": 2}}
+        repo.save_tailoring(s, t)
+    files = ctx.client.get(f"/api/tailorings/{tid}").json()["files"]
+    assert files["cover_letter_pdf"].endswith("cover_letter.pdf?v=2")
+    assert files["cover_letter_pages"][0].endswith("1.png?v=2") and "?v" not in files["resume_pdf"]
+
+
+def test_regenerate_cover_letter_requires_finished(ctx):  # noqa: F811
+    with ctx.session() as s:
+        running_id = repo.create_tailoring(s, ctx.job_id).id
+    assert ctx.client.post(f"/api/tailorings/{running_id}/cover-letter", headers=AUTH).status_code == 409
+
+
+def test_stale_cover_letter_regen_reads_as_failed(ctx):  # noqa: F811
+    old = (utcnow() - timedelta(hours=1)).isoformat()
+    tid = _with_result(ctx, cover_letter_regen={"status": "running", "started_at": old})
+    regen = ctx.client.get(f"/api/tailorings/{tid}").json()["cover_letter_regen"]
+    assert regen["status"] == "failed" and "timed out" in regen["error"]
