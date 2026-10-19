@@ -24,8 +24,14 @@ class Env(BaseSettings):
     openclaw_agent: str = "seekhunter-scorer"
     public_url: str = "http://localhost:8090"
     seekhunter_dev: bool = False
-    # Self-hosted Resume-Matcher (e.g. http://192.168.4.106:3100); empty disables the integration.
+    # Resume-Matcher API for server-side calls (e.g. http://192.168.4.106:3101); empty disables it.
     rm_base_url: str = ""
+    # Where the browser opens Resume-Matcher links; empty = rm_base_url.
+    rm_public_url: str = ""
+
+    @property
+    def rm_link_base(self) -> str:
+        return (self.rm_public_url or self.rm_base_url or "").strip().rstrip("/")
     # The IP allowlist already limits who can reach the app; when False, writes from allowed
     # networks don't need the bearer token (the OpenClaw wrapper still sends it harmlessly).
     write_requires_token: bool = True

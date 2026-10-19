@@ -179,3 +179,15 @@ def test_stale_cover_letter_regen_reads_as_failed(ctx):  # noqa: F811
     tid = _with_result(ctx, cover_letter_regen={"status": "running", "started_at": old})
     regen = ctx.client.get(f"/api/tailorings/{tid}").json()["cover_letter_regen"]
     assert regen["status"] == "failed" and "timed out" in regen["error"]
+
+
+def test_rm_links_use_public_url(ctx, monkeypatch):  # noqa: F811
+    monkeypatch.setenv("RM_BASE_URL", "http://192.168.4.106:3101")
+    monkeypatch.setenv("RM_PUBLIC_URL", "https://resume-matcher.example/")
+    api_module.get_env.cache_clear()
+    tid = _with_result(ctx, resume_matcher=RM)
+    assert ctx.client.get(f"/api/tailorings/{tid}").json()["resume_matcher"]["rm_url"] == \
+        "https://resume-matcher.example/resumes/t1"
+    monkeypatch.setattr(api_module, "client_from_env", lambda env: _StatusRM({"llm_configured": True}))
+    s = ctx.client.get("/api/resume-matcher/status").json()
+    assert s["settings_url"] == "https://resume-matcher.example/settings"

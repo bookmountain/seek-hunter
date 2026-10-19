@@ -237,13 +237,13 @@ export function InterviewPrepSection({ prep }: { prep: InterviewPrep }) {
         </h2>
         <span className="num text-[11.5px] text-ink-muted">{questions.length} questions · via Resume-Matcher</span>
       </div>
-      <div className="mt-4 grid gap-10 min-[1100px]:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mt-4 grid gap-x-12 gap-y-10 min-[1100px]:grid-cols-2">
         <ol>
           {questions.map((q, i) => (
             <Question key={q.question} q={q} n={i + 1} />
           ))}
         </ol>
-        <aside className="space-y-5 text-[13.5px] leading-relaxed">
+        <aside className="max-w-[75ch] space-y-7 text-[14px] leading-relaxed min-[1100px]:pt-3">
           {!!prep.role_fit_analysis?.length && (
             <div>
               <p className="kicker text-ink-muted">Role fit</p>
@@ -257,11 +257,11 @@ export function InterviewPrepSection({ prep }: { prep: InterviewPrep }) {
           {!!prep.skill_gaps?.length && (
             <div>
               <p className="kicker text-ink-muted">Skill gaps to prepare</p>
-              <ul className="mt-1.5 space-y-2">
+              <ul className="mt-2 divide-y divide-rule border-y border-rule">
                 {prep.skill_gaps.map((g) => (
-                  <li key={g.skill}>
-                    <span className="font-mono text-[12px] text-ink">{g.skill}</span>
-                    <span className="text-ink-muted"> · {g.preparation_suggestion}</span>
+                  <li key={g.skill} className="py-2.5">
+                    <p className="text-[14px] font-semibold text-ink">{g.skill}</p>
+                    <p className="mt-0.5 text-ink-muted">{g.preparation_suggestion}</p>
                   </li>
                 ))}
               </ul>

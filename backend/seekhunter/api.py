@@ -690,7 +690,7 @@ def _resume_matcher_out(t: Tailoring) -> ResumeMatcherOut | None:
             stale = True
         if stale:
             out.status, out.error = "failed", "timed out (the Resume-Matcher step did not finish)"
-    base = (get_env().rm_base_url or "").rstrip("/")
+    base = get_env().rm_link_base
     if base and out.rm_resume_id:
         out.rm_url = f"{base}/resumes/{out.rm_resume_id}"
     return out
@@ -1338,7 +1338,7 @@ def create_app(init: bool = True) -> FastAPI:
         if client is None:
             return ResumeMatcherStatusOut(enabled=False, reachable=False, ready=False,
                                           error="Resume-Matcher is not configured (set RM_BASE_URL)")
-        base = client.base_url
+        base = get_env().rm_link_base or client.base_url
         try:
             st = client.status() or {}
         except RMError as e:
