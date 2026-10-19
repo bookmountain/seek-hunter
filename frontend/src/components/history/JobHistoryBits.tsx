@@ -59,7 +59,7 @@ const RECRUITER_KINDS: InteractionKind[] = ["call", "email", "linkedin_invite"];
 const KIND_NAME: Record<string, string> = { ...KIND_BUTTON, linkedin_message: "LinkedIn message" };
 const same = (a: string | null | undefined, b: string | null | undefined) => (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
 
-/** Quick log for the ad's recruiter (creates/links the contact server-side), with undo and the log so far. */
+/** Quick-log toggles for the ad's recruiter (creates/links the contact server-side), plus the log so far. */
 export function RecruiterQuickLog({ jobId, name, company }: { jobId: number; name: string; company: string }) {
   const invalidate = useInvalidateHistory();
   // The recruiter only becomes a contact once something is logged; find them by name + company.
@@ -85,10 +85,11 @@ export function RecruiterQuickLog({ jobId, name, company }: { jobId: number; nam
     <div className="mt-3">
       <QuickLog
         kinds={RECRUITER_KINDS}
+        interactions={interactions}
         withNote={false}
         pending={log.isPending}
         onLog={(kind) => log.mutateAsync(kind)}
-        onUndo={(id) => remove.mutateAsync(id)}
+        onRemove={(id) => remove.mutateAsync(id)}
       />
       {interactions.length > 0 && (
         <ul aria-label={`Logged with ${name}`} className="mt-3 divide-y divide-rule border-y border-rule">

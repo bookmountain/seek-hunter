@@ -40,7 +40,13 @@ function ContactDetailRow({ contact, colSpan }: { contact: Contact; colSpan: num
           <section aria-label={`Interactions with ${contact.name}`}>
             <p className="kicker text-ink-muted">Log</p>
             <div className="mt-2">
-              <QuickLog kinds={QUICK} pending={log.isPending} onLog={(kind, note) => log.mutateAsync({ kind, note })} onUndo={(id) => remove.mutateAsync(id)} />
+              <QuickLog
+                kinds={QUICK}
+                interactions={interactions}
+                pending={log.isPending}
+                onLog={(kind, note) => log.mutateAsync({ kind, note })}
+                onRemove={(id) => remove.mutateAsync(id)}
+              />
             </div>
             <ol className="mt-4 divide-y divide-rule border-y border-rule">
               {interactions.map((i) => (

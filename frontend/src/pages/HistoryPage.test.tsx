@@ -113,7 +113,7 @@ describe("HistoryPage", () => {
     const log = await screen.findByRole("group", { name: "Log an interaction" });
     fireEvent.click(within(log).getByRole("button", { name: "Called" }));
     await waitFor(() => expect(create).toHaveBeenCalledWith({ contact_id: 9, kind: "call", note: "" }));
-    expect(await screen.findByText(/Logged · Called/)).toBeTruthy();
+    await waitFor(() => expect(within(log).getByRole("button", { name: "Called" }).getAttribute("aria-pressed")).toBe("true"));
   });
 });
 
@@ -152,7 +152,7 @@ describe("job-side history bits", () => {
     expect(within(screen.getByRole("button", { name: /Dev B/ })).getByText("APPLIED")).toBeTruthy();
   });
 
-  it("UNDO after a recruiter quick log DELETEs the interaction, and the log lists past entries", async () => {
+  it("recruiter quick-log buttons are toggles: on when logged, off removes it", async () => {
     vi.spyOn(api, "contacts").mockResolvedValue([CONTACT]);
     vi.spyOn(api, "contact").mockResolvedValue({
       ...CONTACT,
@@ -163,14 +163,18 @@ describe("job-side history bits", () => {
     vi.spyOn(api, "jobContactLog").mockResolvedValue({ id: 31, contact_id: 9, application_id: null, kind: "email", at: now, note: "", created_at: now });
     const del = vi.spyOn(api, "deleteInteraction").mockResolvedValue(undefined);
     wrap(<RecruiterQuickLog jobId={12} name="brayden mackay" company="ROBERT WALTERS" />);
-    expect(await screen.findByRole("button", { name: /Remove Called/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Emailed" }));
-    expect(await screen.findByText(/Logged · Emailed/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    const called = () => screen.getByRole("button", { name: "Called" });
+    const emailed = () => screen.getByRole("button", { name: "Emailed" });
+    await waitFor(() => expect(called().getAttribute("aria-pressed")).toBe("true"));
+    expect(emailed().getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(emailed());
+    await waitFor(() => expect(emailed().getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.click(emailed());
     await waitFor(() => expect(del).toHaveBeenCalledWith(31));
-    expect(await screen.findByText(/Removed · Emailed/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Remove Called/ }));
+    await waitFor(() => expect(emailed().getAttribute("aria-pressed")).toBe("false"));
+    fireEvent.click(called());
     await waitFor(() => expect(del).toHaveBeenCalledWith(2));
+    await waitFor(() => expect(called().getAttribute("aria-pressed")).toBe("false"));
   });
 });
 
