@@ -152,6 +152,20 @@ describe("job-side history bits", () => {
     expect(within(screen.getByRole("button", { name: /Dev B/ })).getByText("APPLIED")).toBeTruthy();
   });
 
+  it("shows logged recruiter activity in the list's status column", () => {
+    const j = {
+      source: "seek", location: "Adelaide SA", work_type: "contract", salary_label: null, listed_at: null, first_seen_at: now, url: "u",
+      status: "new", notes: "", force_include: false, excluded: false, reasons: [], snippets: {}, rule_score: 60, llm_score: null,
+      llm_note: null, final_score: 70, matched_skills: [], flags: [], contact_name: "Brayden", contact_phone: null, contact_email: null,
+      contact_linkedin: null, contact_search: { linkedin: "x" }, applicant_count: null, applicant_volume: null, resume_pct: null,
+      cover_letter_pct: null, insights_checked_at: null, application: null, prior_applications: [],
+      id: 1, title: "Dev A", company: "Robert Walters", contact_activity: ["call", "email", "linkedin_invite"],
+    } as unknown as Job;
+    wrap(<JobList jobs={[j]} view="active" selectedId={null} onSelect={() => {}} onArrowSelect={() => {}} />);
+    const row = screen.getByRole("button", { name: /Dev A/ });
+    expect(within(row).getByLabelText("Recruiter: Called, Emailed, Invited")).toBeTruthy();
+  });
+
   it("recruiter quick-log buttons are toggles: on when logged, off removes it", async () => {
     vi.spyOn(api, "contacts").mockResolvedValue([CONTACT]);
     vi.spyOn(api, "contact").mockResolvedValue({

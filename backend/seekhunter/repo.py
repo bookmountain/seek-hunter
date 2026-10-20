@@ -788,6 +788,24 @@ def prune_uncontacted_contacts(session: Session) -> int:
     return removed
 
 
+ACTIVITY_KINDS = ("call", "email", "linkedin_invite", "linkedin_accepted", "linkedin_message", "meeting")
+
+
+def contact_activity_by_job_ids(session: Session, job_ids: list[int]) -> dict[int, list[str]]:
+    """Interaction kinds logged with each job's linked contacts (notes excluded), in a fixed order."""
+    if not job_ids:
+        return {}
+    rows = session.exec(
+        select(ContactJob.job_id, Interaction.kind)
+        .join(Interaction, Interaction.contact_id == ContactJob.contact_id)
+        .where(col(ContactJob.job_id).in_(job_ids), col(Interaction.kind).in_(ACTIVITY_KINDS))
+        .distinct()).all()
+    kinds: dict[int, set[str]] = {}
+    for job_id, kind in rows:
+        kinds.setdefault(job_id, set()).add(kind)
+    return {jid: [k for k in ACTIVITY_KINDS if k in ks] for jid, ks in kinds.items()}
+
+
 def link_contact_job(session: Session, contact_id: int, job_id: int) -> None:
     existing = session.exec(
         select(ContactJob).where(ContactJob.contact_id == contact_id, ContactJob.job_id == job_id)

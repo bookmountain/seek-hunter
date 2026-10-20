@@ -100,6 +100,8 @@ class JobOut(BaseModel):
     insights_checked_at: datetime | None
     application: ApplicationSummaryOut | None
     prior_applications: list[PriorApplicationOut]
+    # Interaction kinds logged with this job's linked contacts (e.g. ["call", "email"]).
+    contact_activity: list[str] = []
 
 
 class JobDetailOut(JobOut):
@@ -567,7 +569,8 @@ def _interaction_out(i: Interaction) -> InteractionOut:
 
 
 def _job_out(job: Job, ev: JobEvaluation, application: Application | None = None,
-            priors: list[PriorApplicationOut] | None = None, detail: bool = False) -> JobOut:
+            priors: list[PriorApplicationOut] | None = None, detail: bool = False,
+            activity: list[str] | None = None) -> JobOut:
     base = dict(
         id=job.id, source=job.source, title=job.title, company=job.company, location=job.location,
         city=job.city or "other",
@@ -582,7 +585,7 @@ def _job_out(job: Job, ev: JobEvaluation, application: Application | None = None
         applicant_count=job.applicant_count, applicant_volume=job.applicant_volume,
         resume_pct=job.resume_pct, cover_letter_pct=job.cover_letter_pct,
         insights_checked_at=job.insights_checked_at, application=_application_summary(application),
-        prior_applications=priors or [],
+        prior_applications=priors or [], contact_activity=activity or [],
     )
     if detail:
         return JobDetailOut(**base, description_html=job.description_html, teaser=job.teaser)
@@ -824,8 +827,9 @@ def create_app(init: bool = True) -> FastAPI:
         apps_by_job = repo.applications_by_job_ids(session, job_ids)
         keys = {company_key(j.company) for j, _ in rows}
         apps_by_key = repo.applications_by_company_keys(session, keys)
+        activity = repo.contact_activity_by_job_ids(session, job_ids)
         return [
-            _job_out(j, e, application=apps_by_job.get(j.id),
+            _job_out(j, e, application=apps_by_job.get(j.id), activity=activity.get(j.id),
                     priors=_prior_applications(apps_by_key.get(company_key(j.company), []), j.id))
             for j, e in rows
         ]
@@ -838,7 +842,8 @@ def create_app(init: bool = True) -> FastAPI:
     def get_job(job_id: int, session: Session = Depends(get_session)):
         job, ev = _get_job(session, job_id)
         application, priors = _enrich_one(session, job)
-        return _job_out(job, ev, application=application, priors=priors, detail=True)
+        activity = repo.contact_activity_by_job_ids(session, [job.id]).get(job.id)
+        return _job_out(job, ev, application=application, priors=priors, detail=True, activity=activity)
 
     @app.patch("/api/jobs/{job_id}", response_model=JobOut, dependencies=write)
     def patch_job(job_id: int, body: JobPatch, session: Session = Depends(get_session)):

@@ -325,6 +325,28 @@ def test_job_contact_log_upserts_contact_and_logs_interaction(client, monkeypatc
     assert contacts[0]["interaction_count"] == 1
 
 
+def test_job_list_shows_contact_activity(client, monkeypatch):
+    job_id = _job_id(client)
+    from seekhunter import api as api_module
+
+    original = api_module._get_job
+
+    def patched(session, jid):
+        job, ev = original(session, jid)
+        job.contact_name = "Brayden Mackay"
+        session.add(job)
+        session.commit()
+        return job, ev
+
+    monkeypatch.setattr(api_module, "_get_job", patched)
+    assert client.get("/api/jobs").json()[0]["contact_activity"] == []
+    for kind in ("email", "call", "note", "call"):
+        client.post(f"/api/jobs/{job_id}/contact-log", json={"kind": kind}, headers=AUTH)
+    listed = next(j for j in client.get("/api/jobs").json() if j["id"] == job_id)
+    assert listed["contact_activity"] == ["call", "email"]  # fixed order, de-duplicated, no notes
+    assert client.get(f"/api/jobs/{job_id}").json()["contact_activity"] == ["call", "email"]
+
+
 def test_job_contact_log_without_recruiter_name_422(client):
     job_id = _job_id(client)
     r = client.post(f"/api/jobs/{job_id}/contact-log", json={"kind": "call"}, headers=AUTH)

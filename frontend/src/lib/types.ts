@@ -47,6 +47,8 @@ export interface Job {
   application: ApplicationSummary | null;
   /** Earlier applications to the same company (max 5). */
   prior_applications: PriorApplication[];
+  /** Interaction kinds logged with this job's recruiter, e.g. ["call", "email"]; older servers omit it. */
+  contact_activity?: string[];
 }
 
 export interface JobDetail extends Job {

@@ -14,6 +14,16 @@ const STATUS_CLASS: Record<JobStatus, string> = {
 
 const MAX_SKILLS = 3;
 
+/** Short past-tense labels for logged recruiter activity in the Status column. */
+const ACTIVITY_LABEL: Record<string, string> = {
+  call: "Called",
+  email: "Emailed",
+  linkedin_invite: "Invited",
+  linkedin_accepted: "Accepted",
+  linkedin_message: "Messaged",
+  meeting: "Met",
+};
+
 export type JobSort = "score" | "listed" | "seen";
 
 const DAY_MS = 86_400_000;
@@ -274,6 +284,19 @@ export function JobList({
                 <span className="flex flex-col items-end gap-1 pt-0.5 text-right">
                   <span className="num text-[12px] text-ink-muted @4xl:hidden">{since(j.first_seen_at)}</span>
                   <span className={cn("kicker text-[10.5px]", STATUS_CLASS[j.status])}>{j.status}</span>
+                  {!!j.contact_activity?.length && (
+                    <span
+                      className="flex flex-col items-end gap-0.5"
+                      aria-label={`Recruiter: ${j.contact_activity.map((k) => ACTIVITY_LABEL[k] ?? k).join(", ")}`}
+                    >
+                      {j.contact_activity.map((k) => (
+                        <span key={k} className="kicker inline-flex items-center gap-1 text-[10px] whitespace-nowrap text-blue">
+                          <span aria-hidden className="size-[5px] bg-blue" />
+                          {ACTIVITY_LABEL[k] ?? k}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </span>
               </button>
             </li>
