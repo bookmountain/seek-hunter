@@ -120,6 +120,15 @@ def test_check_closed_prefers_ads_missing_from_search_and_stops_on_block(session
     assert len(blocked.calls) == 1  # one block stops that source for the pass
 
 
+def test_excluded_jobs_are_not_rechecked(session):
+    job = _job(session, "ex")
+    repo.save_evaluation(session, job.id, excluded=True, reasons=["clearance"], snippets={}, rule_score=0,
+                         final_score=0, matched_skills=[], flags=[])
+    board = _Board(set())
+    check_closed(session, {"jora": board}, limit=5)
+    assert board.calls == []
+
+
 def test_search_hit_bumps_last_seen(session):
     job = _job(session, "x")
     job.last_seen_at = None

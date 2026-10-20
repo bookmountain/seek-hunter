@@ -368,10 +368,11 @@ def list_jobs(session: Session, view: str = "active", status: str | None = None,
 
 def jobs_to_check_open(session: Session, now: datetime, limit: int,
                        sources: list[str] | None = None) -> list[Job]:
-    """Listed jobs whose ad should be re-checked for closure: ones a search hasn't returned for a day
-    first, then the longest-unchecked. Ads seen for under 12h are skipped (they're clearly live)."""
-    stmt = select(Job).where(col(Job.canonical_job_id).is_(None), col(Job.closed_at).is_(None),
-                             Job.status != "hidden", Job.first_seen_at <= now - timedelta(hours=12))
+    """Listed (not excluded/hidden/closed) jobs whose ad should be re-checked for closure: ones a
+    search hasn't returned for a day first, then the longest-unchecked. Ads seen for under 12h are
+    skipped (they're clearly live)."""
+    stmt = (select(Job).join(JobEvaluation, JobEvaluation.job_id == Job.id)
+            .where(*_active_clause(), Job.first_seen_at <= now - timedelta(hours=12)))
     if sources is not None:
         stmt = stmt.where(col(Job.source).in_(sources))
     unseen = or_(col(Job.last_seen_at).is_(None), col(Job.last_seen_at) < now - timedelta(hours=24))
