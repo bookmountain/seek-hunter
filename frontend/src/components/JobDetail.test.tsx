@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { highlight } from "./JobDetail";
 
 describe("highlight", () => {
+  it("turns plain emails into mailto links and leaves existing links alone", () => {
+    const out = highlight('<p>Email jo.smith@acme.com.au or <a href="mailto:a@b.com">a@b.com</a></p>', []);
+    expect(out).toContain('<a href="mailto:jo.smith@acme.com.au">jo.smith@acme.com.au</a>');
+    expect(out.match(/<a /g)?.length).toBe(2);
+  });
+
+  it("explains masked Jora emails instead of linking them", () => {
+    const out = highlight("<p>Apply now or email **************@talentweb.com.au</p>", []);
+    expect(out).toContain('class="masked-email"');
+    expect(out).not.toContain("mailto:");
+  });
+
   it("sanitizes script tags and event handler attributes", () => {
     const dirty = '<p onerror="alert(1)">Hello</p><script>alert(2)</script>';
     const clean = highlight(dirty, []);

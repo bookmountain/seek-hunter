@@ -15,8 +15,45 @@ import { Score } from "./Score";
 import { TailorAction } from "./TailorAction";
 import { WorkTypeLabel } from "./WorkTypeLabel";
 
+const EMAIL = /[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
+const MASKED_EMAIL = /\*{3,}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
+
+/** Plain-text email addresses in the ad become mailto links; Jora's masked ones get an explanation. */
+function linkifyEmails(html: string): string {
+  const root = document.createElement("div");
+  root.innerHTML = html;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+    if (!n.parentElement?.closest("a") && n.data.includes("@")) nodes.push(n);
+  }
+  for (const node of nodes) {
+    const parts = node.data.split(new RegExp(`(${MASKED_EMAIL.source}|${EMAIL.source})`, "g"));
+    if (parts.length === 1) continue;
+    const frag = document.createDocumentFragment();
+    parts.forEach((part, i) => {
+      if (i % 2 === 0) {
+        if (part) frag.append(part);
+      } else if (part.startsWith("*")) {
+        const span = document.createElement("span");
+        span.title = "Jora hides this address; open the ad on Jora or check the Recruiter block";
+        span.className = "masked-email";
+        span.textContent = part;
+        frag.append(span);
+      } else {
+        const a = document.createElement("a");
+        a.href = `mailto:${part}`;
+        a.textContent = part;
+        frag.append(a);
+      }
+    });
+    node.replaceWith(frag);
+  }
+  return root.innerHTML;
+}
+
 export function highlight(html: string, skills: string[]): string {
-  const clean = DOMPurify.sanitize(html);
+  const clean = linkifyEmails(DOMPurify.sanitize(html));
   if (!skills.length) return clean;
   const escaped = skills.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const re = new RegExp(`(?<![\\w#+.])(${escaped.join("|")})(?![\\w#+])`, "gi");

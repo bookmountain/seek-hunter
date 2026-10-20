@@ -585,3 +585,31 @@ def test_save_and_scope_market_snapshots(session):
     assert len(rows) == 1
     assert rows[0].total == 11
     assert rows[0].skill_counts == {"Java": 3}
+
+
+def _ad(session, ext, source, body, company="Talentweb"):
+    from seekhunter.domain import JobData as JD
+
+    job, _ = repo.upsert_job(session, JD(source=source, external_id=ext, title="Senior Full Stack",
+                                         company=company, location="Sydney NSW", work_type="contract",
+                                         url=ext, description_html=body))
+    return job
+
+
+def test_masked_jora_email_is_restored_from_the_same_ad_on_seek(session):
+    seek = '<p>Apply now or email <a href="mailto:shauna.oreilly@talentweb.com.au">x</a></p>'
+    _ad(session, "s1", "seek", seek)
+    jora = _ad(session, "j1", "jora", "<p>Apply now or email **************@talentweb.com.au</p>")
+    assert repo.unmask_emails(session, jora) is True
+    assert "shauna.oreilly@talentweb.com.au" in jora.description_html and "*" not in jora.description_html
+    assert jora.contact_email == "shauna.oreilly@talentweb.com.au"
+
+
+def test_masked_email_kept_when_length_differs_or_ambiguous(session):
+    _ad(session, "s1", "seek", "<p>a.b@talentweb.com.au</p>")
+    jora = _ad(session, "j1", "jora", "<p>email **************@talentweb.com.au</p>")
+    assert repo.unmask_emails(session, jora) is False  # 3 chars != 14 stars
+    _ad(session, "s2", "seek", "<p>shauna.oreilly@talentweb.com.au</p>")
+    _ad(session, "s3", "seek", "<p>shaun.oreilly1@talentweb.com.au</p>")
+    assert repo.unmask_emails(session, jora) is False  # two 14-char candidates: don't guess
+    assert jora.contact_email is None

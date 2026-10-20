@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta
 
 from sqlalchemy import case, func, or_
@@ -64,6 +65,42 @@ def upsert_job(session: Session, data: JobData, profile_location: str | None = N
     return job, True
 
 
+_MASKED_EMAIL = re.compile(r"(\*{3,})@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})")
+_EMAIL = re.compile(r"[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+
+
+def unmask_emails(session: Session, job: Job) -> bool:
+    """Jora hides addresses in ad text ("**************@talentweb.com.au"). Restore each one when
+    exactly one address at that domain with the same local-part length is known from another ad
+    (typically the same ad on SEEK). Also fills an empty contact_email. Returns True on a change."""
+    html = job.description_html or ""
+    masks = _MASKED_EMAIL.findall(html)
+    if not masks:
+        return False
+    changed = False
+    for stars, domain in dict.fromkeys(masks):
+        known: set[str] = set()
+        others = session.exec(select(Job.contact_email, Job.description_html).where(
+            Job.id != job.id, or_(col(Job.contact_email).ilike(f"%@{domain}"),
+                                  col(Job.description_html).contains(f"@{domain}")))).all()
+        for email, body in others:
+            for e in ([email] if email else []) + _EMAIL.findall(body or ""):
+                local, _, dom = e.rpartition("@")
+                if dom.lower() == domain.lower() and len(local) == len(stars) and "*" not in local:
+                    known.add(e.lower())
+        if len(known) == 1:
+            found = known.pop()
+            html = html.replace(f"{stars}@{domain}", found)
+            if not job.contact_email:
+                job.contact_email = found
+            changed = True
+    if changed:
+        job.description_html = html
+        session.add(job)
+        session.commit()
+    return changed
+
+
 def update_job_details(session: Session, job: Job, data: JobData) -> None:
     job.description_html = data.description_html or job.description_html
     if job.work_type == "unknown" and data.work_type != "unknown":
@@ -74,6 +111,7 @@ def update_job_details(session: Session, job: Job, data: JobData) -> None:
     job.contact_email = job.contact_email or data.contact_email
     session.add(job)
     session.commit()
+    unmask_emails(session, job)
 
 
 def jobs_missing_details(session: Session, source: str, since: datetime, limit: int) -> list[Job]:
@@ -99,6 +137,7 @@ def backfill_job_fields(session: Session, job: Job) -> None:
     if changed:
         session.add(job)
         session.commit()
+    unmask_emails(session, job)
 
 
 def to_jobdata(job: Job) -> JobData:
