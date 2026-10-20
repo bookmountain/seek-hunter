@@ -4,17 +4,19 @@ import { cn } from "@/lib/utils";
 
 /**
  * Small-caps mono label. Flexible work (visa-friendly) is a blue outlined tag; full-time is plain ink.
- * Stated hours over the visa limit cancel the flexible styling; a police check gets its own tag.
+ * Stated hours over the visa limit cancel the flexible styling; police checks and banks get tags.
  */
 export function WorkTypeLabel({
   type,
   hours,
   policeCheck,
+  bank,
   className,
 }: {
   type: WorkType;
   hours?: boolean;
   policeCheck?: boolean;
+  bank?: boolean;
   className?: string;
 }) {
   const flexible = FLEXIBLE_TYPES.has(type) && !hours;
@@ -39,6 +41,14 @@ export function WorkTypeLabel({
       {policeCheck && (
         <span className="kicker bg-chip px-1.5 py-[3px] leading-none whitespace-nowrap text-ink" title="Requires a National Police Check before an offer">
           Police check
+        </span>
+      )}
+      {bank && (
+        <span
+          className="kicker bg-chip px-1.5 py-[3px] leading-none whitespace-nowrap text-ink"
+          title="Bank employer: most don't state a visa rule in the ad; check work-rights wording before applying"
+        >
+          Bank
         </span>
       )}
     </span>

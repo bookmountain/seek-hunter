@@ -47,6 +47,14 @@ class AppSettings(BaseModel):
             "Defense",
         ]
     )
+    # Banks are only tagged by default: most don't state a visa rule in the ad, and ad wording such as
+    # "citizens only" or "PR required" is already excluded via citizenship_patterns.
+    exclude_banks: bool = False
+    # Always excluded: Westpac Group states it "cannot directly hire" student visa holders.
+    bank_excluded_employers: list[str] = Field(
+        default_factory=lambda: ["Westpac", "BankSA", "St.George", "St George Bank", "Bank of Melbourne",
+                                 "BT Financial"]
+    )
     bank_employers: list[str] = Field(
         default_factory=lambda: [
             "Commonwealth Bank",

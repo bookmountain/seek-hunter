@@ -42,7 +42,6 @@ def job_html(title="Software Developer", company="Acme", html=""):
         (job(company="BAE Systems Australia"), "defence"),
         (job(text="Join a defence prime delivering naval programs."), "defence"),
         (job(company="Westpac Group"), "bank"),
-        (job(company="Talent International", text="Our client, a leading bank, seeks a React dev."), "bank"),
     ],
 )
 def test_excluded(j, reason):
@@ -114,10 +113,39 @@ def test_genuine_negation_still_suppresses_exclusion(j):
     assert not r.excluded, r.reasons
 
 
-def test_any_bank_employer_excluded_but_not_inside_words():
-    assert "bank" in evaluate_exclusions(job(company="People First Bank"), AppSettings()).reasons
-    assert "bank" in evaluate_exclusions(job(company="Some Regional Bank Ltd"), AppSettings()).reasons
-    assert not evaluate_exclusions(job(company="Peoplebank"), AppSettings()).excluded
+def test_banks_are_tagged_not_excluded_except_westpac_group():
+    from seekhunter.scoring import score_job
+
+    for company in ("Commonwealth Bank", "Bendigo Bank", "People First Bank", "Some Regional Bank Ltd"):
+        assert not evaluate_exclusions(job(company=company), AppSettings()).excluded, company
+        assert "bank" in score_job(job(company=company), set(), AppSettings()).flags, company
+    for company in ("BankSA", "St.George Bank", "Bank of Melbourne"):
+        r = evaluate_exclusions(job(company=company), AppSettings())
+        assert r.reasons == ["bank"] and "student visa" in r.snippets["bank"], company
+    ad = job(company="Talent International", text="Our client, a leading bank, seeks a React dev.")
+    assert not evaluate_exclusions(ad, AppSettings()).excluded
+    assert "bank" in score_job(ad, set(), AppSettings()).flags
+
+
+def test_exclude_banks_setting_restores_blanket_exclusion():
+    on = AppSettings(exclude_banks=True)
+    assert "bank" in evaluate_exclusions(job(company="People First Bank"), on).reasons
+    ad = job(company="Talent International", text="Our client, a leading bank, seeks a React dev.")
+    assert "bank" in evaluate_exclusions(ad, on).reasons
+    assert not evaluate_exclusions(job(company="Peoplebank"), on).excluded
+
+
+def test_short_bank_acronyms_only_match_at_the_start():
+    from seekhunter.scoring import score_job
+
+    assert "bank" in score_job(job(company="ANZ Banking Group"), set(), AppSettings()).flags
+    assert "bank" not in score_job(job(company="Allume ANZ"), set(), AppSettings()).flags
+    assert "bank" in score_job(job(company="CBA"), set(), AppSettings()).flags
+
+
+def test_citizenship_wording_still_excludes_bank_ads():
+    r = evaluate_exclusions(job(company="Commonwealth Bank", text="Australian citizens only."), AppSettings())
+    assert r.reasons == ["citizenship"]
 
 
 OFF_TOPIC = [

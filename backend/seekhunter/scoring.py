@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass, field
 
 from seekhunter.domain import FLEXIBLE_WORK_TYPES, JobData
+from seekhunter.filters import bank_hit
 from seekhunter.settings_model import AppSettings
 from seekhunter.skills import extract_skills
 
@@ -72,6 +73,8 @@ def score_job(job: JobData, profile_skills: set[str], settings: AppSettings) -> 
         work_pts = w.full_time
     if _POLICE_CHECK.search(text):
         flags.append("police_check")
+    if bank_hit(job, settings):
+        flags.append("bank")
 
     return ScoreResult(
         rule_score=min(100, work_pts + skill_pts + role_pts), matched_skills=matched, flags=flags

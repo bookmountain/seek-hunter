@@ -39,9 +39,19 @@ def _first_hit(patterns: list[str], text: str) -> str | None:
 
 def _employer_hit(names: list[str], company: str) -> str | None:
     for name in names:
-        if re.search(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])", company, re.IGNORECASE):
+        # Short acronyms (ANZ, CBA, NAB) only count at the start: "Allume ANZ" means Australia/NZ.
+        lead = r"^\s*" if name.isupper() and len(name) <= 4 else r"(?<![A-Za-z0-9])"
+        if re.search(lead + re.escape(name) + r"(?![A-Za-z0-9])", company, re.IGNORECASE):
             return company
     return None
+
+
+def bank_hit(job: JobData, settings: AppSettings) -> str | None:
+    """Snippet when the employer is a bank (by name) or the ad says it's for a bank, else None."""
+    if _employer_hit(settings.employer_allowlist, job.company):
+        return None
+    return _employer_hit(settings.bank_employers, job.company) or _first_hit(
+        settings.bank_keywords, f"{job.title}\n{job.filter_text}")
 
 
 def evaluate_exclusions(job: JobData, settings: AppSettings) -> FilterResult:
@@ -60,8 +70,11 @@ def evaluate_exclusions(job: JobData, settings: AppSettings) -> FilterResult:
     if not allowlisted:
         add("defence", _employer_hit(settings.defence_employers, job.company)
             or _first_hit(settings.defence_keywords, text))
-        add("bank", _employer_hit(settings.bank_employers, job.company)
-            or _first_hit(settings.bank_keywords, text))
+        if settings.exclude_banks:
+            add("bank", bank_hit(job, settings))
+        else:
+            hit = _employer_hit(settings.bank_excluded_employers, job.company)
+            add("bank", f"{hit} (Westpac Group can't directly hire student visa holders)" if hit else None)
         if settings.exclude_fintech:
             add("fintech", _first_hit(settings.fintech_keywords, text))
 

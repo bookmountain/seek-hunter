@@ -38,6 +38,7 @@ const TOGGLES: [keyof AppSettings, string][] = [
   ["notify_enabled", "Telegram notifications"],
   ["recap_enabled", "Daily 21:15 recap"],
   ["llm_enabled", "AI scoring"],
+  ["exclude_banks", "Exclude all banks"],
   ["exclude_fintech", "Exclude fintech"],
 ];
 

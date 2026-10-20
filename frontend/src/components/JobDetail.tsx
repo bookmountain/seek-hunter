@@ -143,7 +143,9 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
             <dd>{view.llm_score ?? <span className="text-ink-muted">not scored</span>}</dd>
             <dt className="kicker self-center text-ink-muted">Type</dt>
             <dd>
-              <WorkTypeLabel type={view.work_type} hours={view.flags.includes("hours")} policeCheck={view.flags.includes("police_check")} />
+              <WorkTypeLabel type={view.work_type} hours={view.flags.includes("hours")} policeCheck={view.flags.includes("police_check")}
+                bank={view.flags.includes("bank")}
+              />
             </dd>
           </dl>
         </div>

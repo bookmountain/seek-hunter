@@ -14,6 +14,7 @@ const SETTINGS: AppSettings = {
   defence_keywords: [],
   bank_keywords: [],
   exclude_fintech: false,
+  exclude_banks: false,
   fintech_keywords: [],
   role_boost_terms: [],
   role_penalty_terms: [],

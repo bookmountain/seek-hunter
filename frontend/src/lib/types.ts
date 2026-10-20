@@ -81,6 +81,8 @@ export interface AppSettings {
   defence_keywords: string[];
   bank_keywords: string[];
   exclude_fintech: boolean;
+  /** Off: banks are only tagged (Westpac Group stays excluded). */
+  exclude_banks: boolean;
   fintech_keywords: string[];
   role_boost_terms: string[];
   role_penalty_terms: string[];
