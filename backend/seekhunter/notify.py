@@ -96,7 +96,9 @@ def _meta_line(it: DigestItem) -> str:
         parts.append(loc)
     line = " · ".join(parts)
     if "hours" in it.flags:
-        line += " · hours?"
+        line += " · over 24h/wk"
+    if "police_check" in it.flags:
+        line += " · police check"
     if it.applicant_count is not None:
         line += f" · {it.applicant_count} applicants"
     return line

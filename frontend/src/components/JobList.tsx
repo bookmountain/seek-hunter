@@ -166,6 +166,7 @@ export function JobList({
         {jobs.map((j, i) => {
           const selected = j.id === selectedId;
           const hours = j.flags.includes("hours");
+          const policeCheck = j.flags.includes("police_check");
           const firstSnippet = view === "excluded" ? Object.values(j.snippets)[0] : undefined;
           return (
             <li
@@ -247,7 +248,7 @@ export function JobList({
                   )}
                   {/* folded layout (narrow column) */}
                   <span className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 @4xl:hidden">
-                    <WorkTypeLabel type={j.work_type} hours={hours} />
+                    <WorkTypeLabel type={j.work_type} hours={hours} policeCheck={policeCheck} />
                     {view === "excluded" ? <Reasons reasons={j.reasons} /> : <Skills skills={j.matched_skills} />}
                   </span>
                 </span>
@@ -258,7 +259,7 @@ export function JobList({
                   </span>
                 </span>
                 <span className="hidden pt-1 @4xl:block">
-                  <WorkTypeLabel type={j.work_type} hours={hours} className="flex-col items-start" />
+                  <WorkTypeLabel type={j.work_type} hours={hours} policeCheck={policeCheck} className="flex-col items-start" />
                 </span>
                 <span className="hidden pt-0.5 @4xl:block">
                   {view === "excluded" ? <Reasons reasons={j.reasons} /> : <Skills skills={j.matched_skills} />}

@@ -13,6 +13,9 @@ _FTE = re.compile(r"\b(0?\.\d+|1(?:\.0)?)\s*FTE\b", re.IGNORECASE)
 _DAYS = re.compile(r"\b([1-5])\s*days?\s*(?:per|a|/)\s*week", re.IGNORECASE)
 _FULL_TIME_HOURS = re.compile(r"full[\s-]time\s+hours", re.IGNORECASE)
 _YEARS_EXPERIENCE = re.compile(r"\b1\d\s*\+\s*(years|yrs)", re.IGNORECASE)
+_POLICE_CHECK = re.compile(r"(?i:\bpolice\s+(check|clearance)|\bcriminal\s+(history|record)\s+check)|\bNPC\b")
+# Student visa: 48 hours per fortnight during study.
+VISA_WEEKLY_HOURS = 24
 
 
 def _term_hit(terms: list[str], text: str) -> bool:
@@ -34,12 +37,6 @@ def score_job(job: JobData, profile_skills: set[str], settings: AppSettings) -> 
     text = job.text
     flags: list[str] = []
 
-    if job.work_type in FLEXIBLE_WORK_TYPES:
-        work_pts = w.flexible_work
-        flags.append("flexible")
-    else:
-        work_pts = w.full_time
-
     matched = sorted(extract_skills(f"{job.title} {text}") & profile_skills)
     skill_pts = round(min(len(matched), w.skill_saturation) / w.skill_saturation * w.skill_max)
 
@@ -60,12 +57,21 @@ def score_job(job: JobData, profile_skills: set[str], settings: AppSettings) -> 
     day_values = [int(d) for d in _DAYS.findall(text)]
 
     if (
-        (weekly_hours and max(weekly_hours) >= 24)
+        (weekly_hours and max(weekly_hours) > VISA_WEEKLY_HOURS)
         or (fte_values and max(fte_values) >= 0.65)
         or (day_values and max(day_values) >= 4)
         or (job.work_type != "full_time" and _FULL_TIME_HOURS.search(text))
     ):
         flags.append("hours")
+
+    # Stated hours over the visa limit make a contract/part-time ad effectively full-time.
+    if job.work_type in FLEXIBLE_WORK_TYPES and "hours" not in flags:
+        work_pts = w.flexible_work
+        flags.append("flexible")
+    else:
+        work_pts = w.full_time
+    if _POLICE_CHECK.search(text):
+        flags.append("police_check")
 
     return ScoreResult(
         rule_score=min(100, work_pts + skill_pts + role_pts), matched_skills=matched, flags=flags

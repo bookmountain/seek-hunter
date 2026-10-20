@@ -83,3 +83,26 @@ def test_it_support_roles_are_boosted_not_penalised():
     support = score_job(job(title="IT Support Officer"), PROFILE, AppSettings()).rule_score
     plain = score_job(job(title="Operations Analyst"), PROFILE, AppSettings()).rule_score
     assert support - plain == 10
+
+
+def test_contract_with_full_time_hours_scores_as_full_time():
+    ad = "React TypeScript Node.js. Opportunity up to June 2027. Full-time, 37.5 hours per week."
+    over = score_job(job(work_type="contract", text=ad), PROFILE, AppSettings())
+    full = score_job(job(work_type="full_time", text=ad), PROFILE, AppSettings())
+    assert "hours" in over.flags and "flexible" not in over.flags
+    assert over.rule_score == full.rule_score
+    ok = score_job(job(work_type="contract", text="React. 48 hours per fortnight."), PROFILE, AppSettings())
+    assert "hours" not in ok.flags and "flexible" in ok.flags  # exactly the visa limit is fine
+
+
+@pytest.mark.parametrize("text", [
+    "Successful applicant will be required to complete a National Police Check (NPC)",
+    "You must pass a police clearance", "A criminal history check applies", "Subject to an NPC.",
+])
+def test_police_check_flag(text):
+    assert "police_check" in score_job(job(text=text), PROFILE, AppSettings()).flags
+
+
+def test_no_police_check_flag_for_lowercase_npc():
+    assert "police_check" not in score_job(job(text="Build npc dialogue for our game"), PROFILE,
+                                           AppSettings()).flags

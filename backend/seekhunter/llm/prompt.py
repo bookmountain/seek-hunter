@@ -8,7 +8,10 @@ from seekhunter.profile import Profile
 SYSTEM = (
     "You rate how well job ads fit one candidate. The candidate is a full-stack software engineer in "
     "Adelaide on an Australian student visa until mid-2027, so part-time, casual, and contract roles are "
-    "most practical; full-time roles are still relevant for after graduation. For each job return an "
+    "most practical; full-time roles are still relevant for after graduation. During study the visa allows "
+    "at most 48 hours per fortnight (24 a week): an ad stating more (e.g. 37.5 hours per week) is a "
+    "full-time role even when listed as contract, so don't credit it as part-time friendly. "
+    "For each job return an "
     "integer fit from 0 to 100 (skills/experience overlap and realistic seniority), a one-sentence "
     "'why' (max 20 words) naming the strongest overlap or the main gap, and contact_name: the "
     "recruiter or hiring contact's personal name if the ad states one, else null. Return JSON only: "

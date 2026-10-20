@@ -45,7 +45,7 @@ def test_digest_format_and_split():
 def test_digest_mentions_degraded_sources_and_hours_flag():
     msgs = format_digest([item(1, flags=("flexible", "hours"))], datetime(2026, 10, 17, 9, 0), "https://sh",
                          ["jora"])
-    assert "hours?" in msgs[0]
+    assert "over 24h/wk" in msgs[0]
     assert "Jora unavailable this run" in msgs[0]
 
 
@@ -275,7 +275,7 @@ def test_digest_meta_line_orders_applicants_after_hours_flag():
     it = item(1, flags=("hours",))
     it.applicant_count = 10
     msgs = format_digest([it], datetime(2026, 10, 17, 9, 0), "https://sh", [])
-    assert "Acme · Contract · hours? · 10 applicants" in msgs[0]
+    assert "Acme · Contract · over 24h/wk · 10 applicants" in msgs[0]
 
 
 def test_digest_omits_contact_line_when_no_contact_info():
