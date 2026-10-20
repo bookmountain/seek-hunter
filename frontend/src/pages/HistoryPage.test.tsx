@@ -160,10 +160,12 @@ describe("job-side history bits", () => {
       contact_linkedin: null, contact_search: { linkedin: "x" }, applicant_count: null, applicant_volume: null, resume_pct: null,
       cover_letter_pct: null, insights_checked_at: null, application: null, prior_applications: [],
       id: 1, title: "Dev A", company: "Robert Walters", contact_activity: ["call", "email", "linkedin_invite"],
+      closed_at: now,
     } as unknown as Job;
     wrap(<JobList jobs={[j]} view="active" selectedId={null} onSelect={() => {}} onArrowSelect={() => {}} />);
     const row = screen.getByRole("button", { name: /Dev A/ });
     expect(within(row).getByLabelText("Recruiter: Called, Emailed, Invited")).toBeTruthy();
+    expect(within(row).getByText("Closed")).toBeTruthy();
   });
 
   it("recruiter quick-log buttons are toggles: on when logged, off removes it", async () => {

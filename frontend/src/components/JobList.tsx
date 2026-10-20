@@ -284,6 +284,11 @@ export function JobList({
                 <span className="flex flex-col items-end gap-1 pt-0.5 text-right">
                   <span className="num text-[12px] text-ink-muted @4xl:hidden">{since(j.first_seen_at)}</span>
                   <span className={cn("kicker text-[10.5px]", STATUS_CLASS[j.status])}>{j.status}</span>
+                  {j.closed_at && (
+                    <span className="kicker bg-ink px-1 py-[2px] text-[10px] leading-none text-white" title="The board says this ad has closed">
+                      Closed
+                    </span>
+                  )}
                   {!!j.contact_activity?.length && (
                     <span
                       className="flex flex-col items-end gap-0.5"

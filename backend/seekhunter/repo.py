@@ -51,6 +51,9 @@ def upsert_job(session: Session, data: JobData, profile_location: str | None = N
         select(Job).where(Job.source == data.source, Job.external_id == data.external_id)
     ).first()
     if existing:
+        existing.last_seen_at = utcnow()
+        session.add(existing)
+        session.commit()
         return existing, False
     job = Job(
         source=data.source, external_id=data.external_id, title=data.title, company=data.company,
@@ -58,6 +61,7 @@ def upsert_job(session: Session, data: JobData, profile_location: str | None = N
         work_type=data.work_type, salary_label=data.salary_label,
         listed_at=data.listed_at, url=data.url, teaser=data.teaser, description_html=data.description_html,
         dedupe_key=dedupe_key(data.title, data.company),
+        last_seen_at=utcnow(),
     )
     session.add(job)
     session.commit()
@@ -248,10 +252,16 @@ def delete_evaluation(session: Session, job_id: int) -> None:
         session.commit()
 
 
+def _open_or_kept():
+    """Closed ads drop out of the active list, except ones Book saved or applied to."""
+    return or_(col(Job.closed_at).is_(None), col(Job.status).in_(["saved", "applied"]))
+
+
 def _active_clause():
     return (
         col(Job.canonical_job_id).is_(None),
         Job.status != "hidden",
+        col(Job.closed_at).is_(None),
         or_(JobEvaluation.excluded == False, Job.force_include == True),  # noqa: E712
     )
 
@@ -331,7 +341,12 @@ def list_jobs(session: Session, view: str = "active", status: str | None = None,
     else:
         stmt = stmt.where(col(Job.canonical_job_id).is_(None),
                           or_(JobEvaluation.excluded == False, Job.force_include == True))  # noqa: E712
-        stmt = stmt.where(Job.status == status) if status else stmt.where(Job.status != "hidden")
+        if status == "closed":
+            stmt = stmt.where(col(Job.closed_at).is_not(None))
+        elif status:
+            stmt = stmt.where(Job.status == status, _open_or_kept())
+        else:
+            stmt = stmt.where(Job.status != "hidden", _open_or_kept())
         stmt = stmt.order_by(col(JobEvaluation.final_score).desc(), col(Job.first_seen_at).desc())
     if work_type:
         stmt = stmt.where(Job.work_type == work_type)
@@ -349,6 +364,20 @@ def list_jobs(session: Session, view: str = "active", status: str | None = None,
         stmt = stmt.where(or_(
             col(Job.title).ilike(like, escape="\\"), col(Job.company).ilike(like, escape="\\")))
     return list(session.exec(stmt.offset(offset).limit(limit)).all())
+
+
+def jobs_to_check_open(session: Session, now: datetime, limit: int,
+                       sources: list[str] | None = None) -> list[Job]:
+    """Listed jobs whose ad should be re-checked for closure: ones a search hasn't returned for a day
+    first, then the longest-unchecked. Ads seen for under 12h are skipped (they're clearly live)."""
+    stmt = select(Job).where(col(Job.canonical_job_id).is_(None), col(Job.closed_at).is_(None),
+                             Job.status != "hidden", Job.first_seen_at <= now - timedelta(hours=12))
+    if sources is not None:
+        stmt = stmt.where(col(Job.source).in_(sources))
+    unseen = or_(col(Job.last_seen_at).is_(None), col(Job.last_seen_at) < now - timedelta(hours=24))
+    stmt = stmt.order_by(case((unseen, 0), else_=1), col(Job.open_checked_at).is_not(None),
+                         col(Job.open_checked_at), col(Job.first_seen_at))
+    return list(session.exec(stmt.limit(limit)).all())
 
 
 def count_excluded_since(session: Session, since: datetime, cities: list[str] | None = None) -> int:

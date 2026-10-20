@@ -62,6 +62,15 @@ def parse_detail_html(html: str) -> tuple[str, str]:
     return (container.html if container else ""), work_type
 
 
+def parse_closed(html: str) -> bool | None:
+    """Jora keeps serving a closed ad with a "This job is no longer available" error banner."""
+    tree = LexborHTMLParser(html)
+    banner = tree.css_first(".flash-container.error")
+    if banner and "no longer available" in banner.text().lower():
+        return True
+    return False if tree.css_first("#job-description-container") else None
+
+
 class JoraSource:
     name = "jora"
 
@@ -83,6 +92,12 @@ class JoraSource:
             if not has_next:
                 break
         return jobs
+
+    def is_closed(self, job: JobData) -> bool | None:
+        resp = self.client.get(job.url)
+        if resp.status_code in (404, 410):
+            return True
+        return parse_closed(resp.text) if resp.status_code == 200 else None
 
     def details(self, job: JobData) -> JobData:
         desc, work_type = parse_detail_html(self.client.get(job.url).text)

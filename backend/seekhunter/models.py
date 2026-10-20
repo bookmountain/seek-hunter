@@ -43,6 +43,11 @@ class Job(SQLModel, table=True):
     resume_pct: int | None = None
     cover_letter_pct: int | None = None
     insights_checked_at: NaiveDatetime | None = None
+    # Listing lifecycle: last time a search returned this ad, last time its page was re-checked,
+    # and when the board said it's closed (expired/removed). Closed jobs leave the active list.
+    last_seen_at: NaiveDatetime | None = None
+    open_checked_at: NaiveDatetime | None = None
+    closed_at: NaiveDatetime | None = None
 
 
 class JobEvaluation(SQLModel, table=True):

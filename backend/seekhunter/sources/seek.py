@@ -22,6 +22,7 @@ DETAILS_QUERY = (
     "query jobDetails($jobId: ID!, $locale: Locale!) { jobDetails(id: $jobId) { "
     "job { id content(platform: WEB) contactMatches { type value } } " + _INSIGHTS_FIELDS + " } }"
 )
+CLOSED_QUERY = "query jobDetails($jobId: ID!) { jobDetails(id: $jobId) { job { id isExpired } } }"
 INSIGHTS_QUERY = (
     "query jobInsights($jobId: ID!, $locale: Locale!) { jobDetails(id: $jobId) { " + _INSIGHTS_FIELDS + " } }"
 )
@@ -131,6 +132,21 @@ class SeekSource:
             updates["contact_email"] = email
         updates.update(_parse_insights(job_details.get("insights") or []))
         return replace(job, **updates) if updates else job
+
+    def is_closed(self, job: JobData) -> bool | None:
+        """`isExpired` from SEEK's job API; a removed ad comes back as `jobDetails: null`."""
+        resp = self.client.post(
+            GRAPHQL_URL, json={"operationName": "jobDetails", "variables": {"jobId": job.external_id},
+                               "query": CLOSED_QUERY},
+            headers={"seek-request-brand": "seek", "seek-request-country": "AU"})
+        payload = _parse_json(resp)
+        if "errors" in payload or "data" not in payload:
+            return None
+        details = (payload.get("data") or {}).get("jobDetails")
+        if details is None:
+            return True
+        expired = (details.get("job") or {}).get("isExpired")
+        return expired if isinstance(expired, bool) else None
 
     def insights(self, external_id: str) -> dict | None:
         """Lighter-weight refresh query for insights only (applicant count, resume/cover-letter %),

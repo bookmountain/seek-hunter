@@ -100,6 +100,8 @@ class JobOut(BaseModel):
     insights_checked_at: datetime | None
     application: ApplicationSummaryOut | None
     prior_applications: list[PriorApplicationOut]
+    # When the board reported the ad closed (expired/removed); None while it's live.
+    closed_at: datetime | None = None
     # Interaction kinds logged with this job's linked contacts (e.g. ["call", "email"]).
     contact_activity: list[str] = []
 
@@ -585,7 +587,7 @@ def _job_out(job: Job, ev: JobEvaluation, application: Application | None = None
         applicant_count=job.applicant_count, applicant_volume=job.applicant_volume,
         resume_pct=job.resume_pct, cover_letter_pct=job.cover_letter_pct,
         insights_checked_at=job.insights_checked_at, application=_application_summary(application),
-        prior_applications=priors or [], contact_activity=activity or [],
+        prior_applications=priors or [], contact_activity=activity or [], closed_at=job.closed_at,
     )
     if detail:
         return JobDetailOut(**base, description_html=job.description_html, teaser=job.teaser)

@@ -95,6 +95,14 @@ def parse_detail_html(html: str) -> tuple[str, str, int | None]:
     return (container.html if container else ""), work_type, applicant_count
 
 
+def parse_closed(html: str) -> bool | None:
+    tree = LexborHTMLParser(html)
+    text = tree.body.text().lower() if tree.body else ""
+    if "no longer accepting applications" in text:
+        return True
+    return False if tree.css_first("div.show-more-less-html__markup") else None
+
+
 class LinkedInSource:
     name = "linkedin"
 
@@ -119,6 +127,12 @@ class LinkedInSource:
             jobs.extend(page_jobs)
             start += len(page_jobs)
         return jobs
+
+    def is_closed(self, job: JobData) -> bool | None:
+        resp = self.client.get(f"{DETAIL_URL}/{job.external_id}")
+        if resp.status_code in (404, 410):
+            return True
+        return parse_closed(resp.text) if resp.status_code == 200 else None
 
     def details(self, job: JobData) -> JobData:
         html = self.client.get(f"{DETAIL_URL}/{job.external_id}").text

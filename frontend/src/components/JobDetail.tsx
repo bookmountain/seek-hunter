@@ -149,6 +149,15 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
           )}
         </p>
 
+        {view.closed_at && (
+          <p role="status" className="mt-3 border-l-2 border-ink bg-chip px-3 py-2 text-[13.5px]">
+            <span className="font-semibold">This ad has closed.</span>{" "}
+            <span className="text-ink-muted">
+              {sourceName(view.source)} reported it no longer available {since(view.closed_at)} ago.
+            </span>
+          </p>
+        )}
+
         <h1
           id="job-title"
           className="display mt-3 text-[30px] leading-[1.04] text-balance sm:text-[38px]"

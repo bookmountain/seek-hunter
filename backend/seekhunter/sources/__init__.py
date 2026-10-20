@@ -13,6 +13,10 @@ class Source(Protocol):
 
     def details(self, job: JobData) -> JobData: ...
 
+    def is_closed(self, job: JobData) -> bool | None:
+        """True when the board says the ad is closed/removed, False when it's live, None when unsure."""
+        ...
+
 
 def build_sources() -> dict[str, Source]:
     from seekhunter.sources.jora import JoraSource

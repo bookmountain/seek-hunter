@@ -143,6 +143,8 @@ class AppSettings(BaseModel):
     # therapists, civil engineers, accountants). Off-topic = title matches none of
     # it_title_patterns AND the ad mentions fewer than off_topic_min_skills tech skills.
     details_retry_per_run: int = 15
+    # Ads re-checked per crawl for "no longer available"/expired (polite: one request each).
+    closed_checks_per_run: int = 30
     exclude_off_topic: bool = True
     off_topic_min_skills: int = 3
     it_title_patterns: list[str] = Field(

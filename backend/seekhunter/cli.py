@@ -31,6 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
     recap.add_argument("--dry-run", action="store_true")
     sub.add_parser("notify-test", help="send a test Telegram message")
     sub.add_parser("rescore", help="re-score recent jobs after a resume change (no LLM, no notifications)")
+    closed = sub.add_parser("check-closed", help="re-check listed ads and hide ones the board says closed")
+    closed.add_argument("--limit", type=int, default=500)
     sub.add_parser("prune-contacts", help="remove auto-added contacts with no interaction or application")
     contacts = sub.add_parser("contacts", help="backfill recruiter contacts for recently seen jobs")
     contacts.add_argument("--days", type=int, default=7)
@@ -171,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(report, indent=1))
                 return 0
 
-        blocking = args.command in ("rescore", "contacts", "insights")
+        blocking = args.command in ("rescore", "contacts", "insights", "check-closed")
         with run_lock(env.data_dir, blocking=blocking), Session(get_engine()) as session:
             repo.ensure_seed(session)
             if args.command == "insights-brief":
@@ -180,6 +182,15 @@ def main(argv: list[str] | None = None) -> int:
                 run_insights_brief(session, notifier, env.public_url, env.resume_dir, dry_run=args.dry_run)
                 return 0
 
+            if args.command == "check-closed":
+                from seekhunter.pipeline import check_closed
+                from seekhunter.sources import build_sources
+
+                settings = repo.load_settings(session)
+                sources = build_sources()
+                enabled = [n for n in sources if n != "linkedin" or settings.linkedin_enabled]
+                print(json.dumps(check_closed(session, sources, args.limit, enabled)))
+                return 0
             if args.command == "prune-contacts":
                 print(f"removed {repo.prune_uncontacted_contacts(session)} uncontacted contacts")
                 return 0

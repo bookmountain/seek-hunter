@@ -188,7 +188,7 @@ export function JobsPage({ view }: { view: "active" | "excluded" }) {
             {select(city || ALL, pick("city"), cityOptions, "Location")}
             {select(workType || ALL, pick("work_type"), [[ALL, "All types"], ["part_time", "Part time"], ["contract", "Contract"], ["casual", "Casual"], ["full_time", "Full time"]], "Work type")}
             {view === "active" &&
-              select(status || ALL, pick("status"), [[ALL, "Any status"], ["new", "New"], ["saved", "Saved"], ["applied", "Applied"], ["hidden", "Hidden"]], "Status")}
+              select(status || ALL, pick("status"), [[ALL, "Any status"], ["new", "New"], ["saved", "Saved"], ["applied", "Applied"], ["hidden", "Hidden"], ["closed", "Closed"]], "Status")}
             {select(source || ALL, pick("source"), [[ALL, "All sources"], ["seek", "SEEK"], ["jora", "Jora"], ["linkedin", "LinkedIn"]], "Source")}
           </div>
         </div>

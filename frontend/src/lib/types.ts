@@ -49,6 +49,8 @@ export interface Job {
   prior_applications: PriorApplication[];
   /** Interaction kinds logged with this job's recruiter, e.g. ["call", "email"]; older servers omit it. */
   contact_activity?: string[];
+  /** When the board reported the ad closed (expired/removed); null while live. */
+  closed_at?: string | null;
 }
 
 export interface JobDetail extends Job {

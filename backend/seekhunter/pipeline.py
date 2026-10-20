@@ -252,6 +252,35 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
     return new_jobs, status
 
 
+def check_closed(session: Session, sources: dict, limit: int,  # noqa: ANN001
+                 enabled: list[str] | None = None) -> dict[str, dict[str, int]]:
+    """Re-check up to `limit` listed ads and mark the ones the board reports closed. Returns
+    `{source: {"checked": n, "closed": n}}`. A blocked source is skipped for the rest of the pass."""
+    now = utcnow()
+    names = [n for n in sources if (enabled is None or n in enabled) and hasattr(sources[n], "is_closed")]
+    counts = {n: {"checked": 0, "closed": 0} for n in names}
+    blocked: set[str] = set()
+    for job in repo.jobs_to_check_open(session, now, limit, sources=names):
+        if job.source in blocked:
+            continue
+        try:
+            result = sources[job.source].is_closed(repo.to_jobdata(job))
+        except SourceBlocked:
+            blocked.add(job.source)
+            continue
+        except Exception as e:  # noqa: BLE001  one odd page mustn't stop the pass
+            log.warning("closed check failed for %s %s: %s", job.source, job.external_id, e)
+            continue
+        counts[job.source]["checked"] += 1
+        job.open_checked_at = utcnow()
+        if result is True:
+            job.closed_at = job.open_checked_at
+            counts[job.source]["closed"] += 1
+        session.add(job)
+        session.commit()
+    return counts
+
+
 def _evaluate(session: Session, jobs: list[Job], profile: Profile, settings, llm) -> str | None:  # noqa: ANN001
     pending: list[tuple[Job, object, object]] = []
     for job in jobs:
@@ -372,6 +401,10 @@ def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, 
             _lookup_linkedin(session, new_jobs + recovered, contact_lookup, LINKEDIN_LOOKUP_CAP)
 
         _refresh_insights(session, sources, status, settings)
+        enabled = [n for n in sources if n != "linkedin" or settings.linkedin_enabled]
+        for name, c in check_closed(session, sources, settings.closed_checks_per_run, enabled).items():
+            if name in status:
+                status[name]["closed_checked"], status[name]["closed"] = c["checked"], c["closed"]
         # `status` is mutated in place above; an autoflush earlier in this transaction may already
         # have persisted its pre-mutation content and left the JSON attribute looking "unchanged"
         # (same dict object, so a plain re-assignment is a no-op to SQLAlchemy's dirty tracking).
