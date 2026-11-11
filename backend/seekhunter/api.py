@@ -1,3 +1,4 @@
+import logging
 import subprocess
 import sys
 import time
@@ -793,6 +794,31 @@ def _notifications_payload(session: Session, now: datetime, limit: int) -> Notif
         items=combined + follow_up_items)
 
 
+log = logging.getLogger(__name__)
+INSIGHTS_STALE_AFTER = timedelta(hours=6)
+
+
+def _refresh_insights_if_stale(session: Session, job: Job) -> None:
+    """Opening a SEEK job re-checks its applicant numbers when they're older than 6 hours, so the
+    detail view never shows a two-week-old "6 applicants". One quick GraphQL call; any failure just
+    leaves the stored numbers in place."""
+    if job.source != "seek" or not get_env().refresh_insights_on_view:
+        return
+    checked = job.insights_checked_at
+    if checked is not None and utcnow() - checked < INSIGHTS_STALE_AFTER:
+        return
+    try:
+        from seekhunter.http import PoliteClient
+        from seekhunter.sources.seek import SeekSource
+
+        data = SeekSource(PoliteClient(min_delay=0, max_delay=0, backoffs=())).insights(job.external_id)
+    except Exception as e:  # noqa: BLE001  never break the detail view over a refresh
+        log.warning("on-view insights refresh failed for job %s: %s", job.id, e)
+        return
+    repo.set_insights(session, job, data, utcnow())
+    session.refresh(job)
+
+
 def create_app(init: bool = True) -> FastAPI:
     env = get_env()
     ensure_safe_write_token(env)
@@ -843,6 +869,7 @@ def create_app(init: bool = True) -> FastAPI:
     @app.get("/api/jobs/{job_id}", response_model=JobDetailOut)
     def get_job(job_id: int, session: Session = Depends(get_session)):
         job, ev = _get_job(session, job_id)
+        _refresh_insights_if_stale(session, job)
         application, priors = _enrich_one(session, job)
         activity = repo.contact_activity_by_job_ids(session, [job.id]).get(job.id)
         return _job_out(job, ev, application=application, priors=priors, detail=True, activity=activity)

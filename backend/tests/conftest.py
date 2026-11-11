@@ -16,6 +16,7 @@ def fixtures_dir() -> Path:
 def _dev_mode(monkeypatch):
     """Tests use short, predictable write tokens; opt in to dev mode so create_app doesn't reject them."""
     monkeypatch.setenv("SEEKHUNTER_DEV", "1")
+    monkeypatch.setenv("REFRESH_INSIGHTS_ON_VIEW", "0")
     get_env.cache_clear()
     yield
     get_env.cache_clear()

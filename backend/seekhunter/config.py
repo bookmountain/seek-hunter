@@ -35,6 +35,8 @@ class Env(BaseSettings):
     # The IP allowlist already limits who can reach the app; when False, writes from allowed
     # networks don't need the bearer token (the OpenClaw wrapper still sends it harmlessly).
     write_requires_token: bool = True
+    # Re-check SEEK applicant numbers when a job is opened (tests turn it off in conftest).
+    refresh_insights_on_view: bool = True
 
     @property
     def allowed_cidr_list(self) -> list[str]:

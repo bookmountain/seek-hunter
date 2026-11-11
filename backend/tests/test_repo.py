@@ -440,7 +440,7 @@ def test_jobs_needing_insights_only_seek_canonical_not_hidden_within_window(sess
     dup.canonical_job_id = seek_job.id
     session.add(dup)
     old, _ = repo.upsert_job(session, data(ext="s4", source="seek"))
-    old.first_seen_at = utcnow() - timedelta(days=8)
+    old.first_seen_at = utcnow() - timedelta(days=31)
     session.add(old)
     session.commit()
 
@@ -455,7 +455,7 @@ def test_jobs_needing_insights_skips_recently_checked(session):
     repo.set_insights(session, job, {}, utcnow())
     assert repo.jobs_needing_insights(session, utcnow(), limit=10) == []
 
-    stale_time = utcnow() - timedelta(hours=4)
+    stale_time = utcnow() - timedelta(hours=25)
     repo.set_insights(session, job, {}, stale_time)
     jobs = repo.jobs_needing_insights(session, utcnow(), limit=10)
     assert [j.id for j in jobs] == [job.id]
@@ -463,7 +463,7 @@ def test_jobs_needing_insights_skips_recently_checked(session):
 
 def test_jobs_needing_insights_orders_nulls_first_then_oldest_checked(session):
     checked, _ = repo.upsert_job(session, data(ext="s1", source="seek"))
-    repo.set_insights(session, checked, {}, utcnow() - timedelta(hours=5))
+    repo.set_insights(session, checked, {}, utcnow() - timedelta(hours=30))
     never_checked, _ = repo.upsert_job(session, data(ext="s2", source="seek"))
 
     jobs = repo.jobs_needing_insights(session, utcnow(), limit=10)

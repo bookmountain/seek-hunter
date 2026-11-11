@@ -28,17 +28,59 @@ def client(monkeypatch, tmp_path):
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
         repo.ensure_seed(s)
-        job, _ = repo.upsert_job(s, JobData(source="seek", external_id="1", title="React Dev", company="Acme",
-                                            location="Adelaide SA", work_type="contract", url="u",
-                                            description_html="<p>React</p>"))
-        repo.save_evaluation(s, job.id, excluded=False, reasons=[], snippets={}, rule_score=70,
-                             llm_score=None, llm_note=None, llm_provider=None, final_score=70,
-                             matched_skills=["React"], flags=[])
-        bad, _ = repo.upsert_job(s, JobData(source="seek", external_id="2", title="Dev", company="Westpac",
-                                            location="Adelaide SA", work_type="contract", url="u2"))
-        repo.save_evaluation(s, bad.id, excluded=True, reasons=["bank"], snippets={"bank": "Westpac"},
-                             rule_score=60, llm_score=None, llm_note=None, llm_provider=None, final_score=60,
-                             matched_skills=[], flags=[])
+        job, _ = repo.upsert_job(
+            s,
+            JobData(
+                source="seek",
+                external_id="1",
+                title="React Dev",
+                company="Acme",
+                location="Adelaide SA",
+                work_type="contract",
+                url="u",
+                description_html="<p>React</p>",
+            ),
+        )
+        repo.save_evaluation(
+            s,
+            job.id,
+            excluded=False,
+            reasons=[],
+            snippets={},
+            rule_score=70,
+            llm_score=None,
+            llm_note=None,
+            llm_provider=None,
+            final_score=70,
+            matched_skills=["React"],
+            flags=[],
+        )
+        bad, _ = repo.upsert_job(
+            s,
+            JobData(
+                source="seek",
+                external_id="2",
+                title="Dev",
+                company="Westpac",
+                location="Adelaide SA",
+                work_type="contract",
+                url="u2",
+            ),
+        )
+        repo.save_evaluation(
+            s,
+            bad.id,
+            excluded=True,
+            reasons=["bank"],
+            snippets={"bank": "Westpac"},
+            rule_score=60,
+            llm_score=None,
+            llm_note=None,
+            llm_provider=None,
+            final_score=60,
+            matched_skills=[],
+            flags=[],
+        )
 
     def override():
         with Session(engine) as s:
@@ -78,19 +120,60 @@ def multi_city_client(monkeypatch, tmp_path):
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
         repo.ensure_seed(s)
-        adelaide, _ = repo.upsert_job(s, JobData(source="seek", external_id="1", title="Adelaide Dev",
-                                                 company="Acme", location="Adelaide SA", work_type="contract",
-                                                 url="u1"), profile_location="All Adelaide SA")
-        repo.save_evaluation(s, adelaide.id, excluded=False, reasons=[], snippets={}, rule_score=50,
-                             llm_score=None, llm_note=None, llm_provider=None, final_score=50,
-                             matched_skills=[], flags=[])
-        melbourne, _ = repo.upsert_job(s, JobData(source="seek", external_id="2", title="Melbourne Dev",
-                                                  company="Acme", location="Melbourne VIC",
-                                                  work_type="contract", url="u2"),
-                                       profile_location="All Melbourne VIC")
-        repo.save_evaluation(s, melbourne.id, excluded=False, reasons=[], snippets={}, rule_score=50,
-                             llm_score=None, llm_note=None, llm_provider=None, final_score=50,
-                             matched_skills=[], flags=[])
+        adelaide, _ = repo.upsert_job(
+            s,
+            JobData(
+                source="seek",
+                external_id="1",
+                title="Adelaide Dev",
+                company="Acme",
+                location="Adelaide SA",
+                work_type="contract",
+                url="u1",
+            ),
+            profile_location="All Adelaide SA",
+        )
+        repo.save_evaluation(
+            s,
+            adelaide.id,
+            excluded=False,
+            reasons=[],
+            snippets={},
+            rule_score=50,
+            llm_score=None,
+            llm_note=None,
+            llm_provider=None,
+            final_score=50,
+            matched_skills=[],
+            flags=[],
+        )
+        melbourne, _ = repo.upsert_job(
+            s,
+            JobData(
+                source="seek",
+                external_id="2",
+                title="Melbourne Dev",
+                company="Acme",
+                location="Melbourne VIC",
+                work_type="contract",
+                url="u2",
+            ),
+            profile_location="All Melbourne VIC",
+        )
+        repo.save_evaluation(
+            s,
+            melbourne.id,
+            excluded=False,
+            reasons=[],
+            snippets={},
+            rule_score=50,
+            llm_score=None,
+            llm_note=None,
+            llm_provider=None,
+            final_score=50,
+            matched_skills=[],
+            flags=[],
+        )
 
     def override():
         with Session(engine) as s:
@@ -131,13 +214,23 @@ def test_unexclude_with_allowlist(client):
 
 
 def test_search_profile_crud_and_settings(client):
-    body = {"name": "Mel", "keywords": "react", "location": "All Melbourne VIC", "work_types": [],
-           "sources": ["seek"], "enabled": True}
+    body = {
+        "name": "Mel",
+        "keywords": "react",
+        "location": "All Melbourne VIC",
+        "work_types": [],
+        "sources": ["seek"],
+        "enabled": True,
+    }
     r = client.post("/api/search-profiles", json=body, headers=AUTH)
     pid = r.json()["id"]
     assert any(p["id"] == pid for p in client.get("/api/search-profiles").json())
-    assert client.put(f"/api/search-profiles/{pid}", json={**r.json(), "enabled": False},
-                      headers=AUTH).json()["enabled"] is False
+    assert (
+        client.put(f"/api/search-profiles/{pid}", json={**r.json(), "enabled": False}, headers=AUTH).json()[
+            "enabled"
+        ]
+        is False
+    )
     assert client.delete(f"/api/search-profiles/{pid}", headers=AUTH).status_code == 204
     s = client.get("/api/settings").json()
     s["weights"]["full_time"] = 5
@@ -186,8 +279,11 @@ def test_post_notifications_read_requires_write_token(client):
 
 def test_notifications_follow_up_items_always_listed_not_counted_unread(client):
     old_applied_at = (utcnow() - timedelta(days=10)).isoformat()
-    r = client.post("/api/applications", headers=AUTH, json={
-        "company": "Globex", "title": "Dev", "applied_at": old_applied_at})
+    r = client.post(
+        "/api/applications",
+        headers=AUTH,
+        json={"company": "Globex", "title": "Dev", "applied_at": old_applied_at},
+    )
     app_id = r.json()["id"]
     client.post("/api/notifications/read", headers=AUTH)  # clear the job/tailoring noise
 
@@ -209,12 +305,32 @@ def test_notifications_includes_finished_tailoring_items(monkeypatch, tmp_path):
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
         repo.ensure_seed(s)
-        job, _ = repo.upsert_job(s, JobData(source="seek", external_id="1", title="React Dev",
-                                            company="Acme", location="Adelaide SA", work_type="contract",
-                                            url="u"))
-        repo.save_evaluation(s, job.id, excluded=False, reasons=[], snippets={}, rule_score=70,
-                             llm_score=None, llm_note=None, llm_provider=None, final_score=70,
-                             matched_skills=[], flags=[])
+        job, _ = repo.upsert_job(
+            s,
+            JobData(
+                source="seek",
+                external_id="1",
+                title="React Dev",
+                company="Acme",
+                location="Adelaide SA",
+                work_type="contract",
+                url="u",
+            ),
+        )
+        repo.save_evaluation(
+            s,
+            job.id,
+            excluded=False,
+            reasons=[],
+            snippets={},
+            rule_score=70,
+            llm_score=None,
+            llm_note=None,
+            llm_provider=None,
+            final_score=70,
+            matched_skills=[],
+            flags=[],
+        )
         repo.mark_notifications_read(s, utcnow() - timedelta(minutes=5))
         t = repo.create_tailoring(s, job.id)
         t.status, t.finished_at = "done", utcnow()
@@ -354,7 +470,8 @@ def test_job_out_includes_contact_fields_and_search_urls(client):
     assert job["contact_email"] is None
     assert job["contact_linkedin"] is None
     assert job["contact_search"]["linkedin"].startswith(
-        "https://www.linkedin.com/search/results/people/?keywords=")
+        "https://www.linkedin.com/search/results/people/?keywords="
+    )
     assert "Acme" in job["contact_search"]["linkedin"]
 
     detail = client.get(f"/api/jobs/{job['id']}").json()
@@ -429,6 +546,7 @@ def test_unexclude_allowlist_is_case_insensitive_dedupe(client):
 
 def test_writes_allowed_without_token_when_not_required(client, monkeypatch):
     from seekhunter.config import get_env
+
     monkeypatch.setenv("WRITE_REQUIRES_TOKEN", "false")
     get_env.cache_clear()
     job_id = client.get("/api/jobs").json()[0]["id"]
@@ -448,3 +566,25 @@ def test_ui_prefs_roundtrip_and_survive_settings_put(client):
     s["ui_prefs"] = {}
     client.put("/api/settings", json=s, headers=AUTH)
     assert client.get("/api/ui-prefs").json()["jobs"] == {"city": "melbourne", "work_type": "contract"}
+
+
+def test_opening_a_stale_seek_job_refreshes_its_applicants(client, monkeypatch):
+    from seekhunter.config import get_env
+    from seekhunter.sources import seek as seek_mod
+
+    monkeypatch.setenv("REFRESH_INSIGHTS_ON_VIEW", "1")
+    get_env.cache_clear()
+    monkeypatch.setattr(
+        seek_mod.SeekSource,
+        "insights",
+        lambda self, ext: {
+            "applicant_count": 340,
+            "applicant_volume": "High application volume",
+            "resume_pct": 100,
+            "cover_letter_pct": 57,
+        },
+    )
+    job_id = client.get("/api/jobs").json()[0]["id"]
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["applicant_count"] == 340
+    get_env.cache_clear()

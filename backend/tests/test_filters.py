@@ -202,3 +202,8 @@ def test_vague_title_with_tech_heavy_ad_is_kept():
 def test_off_topic_can_be_disabled():
     s = AppSettings(exclude_off_topic=False)
     assert not evaluate_exclusions(job(title="Plant Operator", text="x"), s).excluded
+
+
+def test_intelligence_agencies_are_defence():
+    for company in ["Australian Signals Directorate", "ASIO", "Office of National Intelligence"]:
+        assert "defence" in evaluate_exclusions(job(company=company), AppSettings()).reasons, company

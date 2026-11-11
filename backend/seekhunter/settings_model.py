@@ -36,6 +36,18 @@ class AppSettings(BaseModel):
             "Hanwha Defence",
             "Rheinmetall",
             "Australian Submarine Agency",
+            "Australian Signals Directorate",
+            "ASD",
+            "ASIO",
+            "Australian Security Intelligence Organisation",
+            "ASIS",
+            "Australian Secret Intelligence Service",
+            "Office of National Intelligence",
+            "ONI",
+            "Defence Intelligence Organisation",
+            "DIO",
+            "Australian Geospatial-Intelligence Organisation",
+            "AGO",
             "CEA Technologies",
             "Ultra Maritime",
             "Penten",
@@ -52,8 +64,14 @@ class AppSettings(BaseModel):
     exclude_banks: bool = False
     # Always excluded: Westpac Group states it "cannot directly hire" student visa holders.
     bank_excluded_employers: list[str] = Field(
-        default_factory=lambda: ["Westpac", "BankSA", "St.George", "St George Bank", "Bank of Melbourne",
-                                 "BT Financial"]
+        default_factory=lambda: [
+            "Westpac",
+            "BankSA",
+            "St.George",
+            "St George Bank",
+            "Bank of Melbourne",
+            "BT Financial",
+        ]
     )
     bank_employers: list[str] = Field(
         default_factory=lambda: [
@@ -231,7 +249,7 @@ class AppSettings(BaseModel):
     recap_enabled: bool = True
     max_pages_per_search: int = 3
     max_notify_per_run: int = 20
-    max_insights_per_run: int = 30
+    max_insights_per_run: int = 60
     notify_cities: list[str] = Field(default_factory=lambda: ["adelaide"])
     other_city_max_pages: int = 2
     linkedin_enabled: bool = True
