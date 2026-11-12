@@ -147,3 +147,13 @@ class LinkedInSource:
         # LinkedIn's guest pages have no SEEK-style volume label; applicant_volume intentionally
         # stays at its default (None) rather than being set to anything LinkedIn-specific.
         return replace(job, **updates) if updates else job
+
+    def insights(self, external_id: str) -> dict | None:
+        """Re-reads just the applicant count from the guest job-detail page (the same page
+        `details()` uses). Returns `None` when the page isn't a normal 200 (e.g. the ad was
+        removed); an empty dict means the page shows no applicant count."""
+        resp = self.client.get(f"{DETAIL_URL}/{external_id}")
+        if getattr(resp, "status_code", 200) != 200:
+            return None
+        count = parse_detail_html(resp.text)[2]
+        return {} if count is None else {"applicant_count": count}

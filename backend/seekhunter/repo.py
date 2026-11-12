@@ -183,20 +183,23 @@ def set_insights(session: Session, job: Job, data: dict | None, checked_at: date
 
 
 def jobs_needing_insights(session: Session, now: datetime, limit: int,
-                          notify_cities: list[str] | None = None) -> list[Job]:
-    """SEEK jobs eligible for an insights refresh: canonical (not a duplicate), not hidden, first
-    seen within the last 30 days, and not checked within the last 24 hours. When `notify_cities` is
-    given, jobs in those cities sort first (they're the ones that actually reach Telegram); within
-    each group, never-checked jobs (`insights_checked_at IS NULL`) sort first, then the longest-
-    stale ones."""
+                          notify_cities: list[str] | None = None, source: str = "seek") -> list[Job]:
+    """`source` jobs eligible for an insights refresh: canonical (not a duplicate), not hidden, first
+    seen within the last 30 days, and not checked within the last 24 hours. LinkedIn jobs must also
+    be listed (evaluated, not excluded, not closed): each LinkedIn check is a full page fetch, so
+    none are spent on jobs that never show up. When `notify_cities` is given, jobs in those cities
+    sort first (they're the ones that actually reach Telegram); within each group, never-checked
+    jobs (`insights_checked_at IS NULL`) sort first, then the longest-stale ones."""
     cutoff = now - timedelta(hours=24)
     window = now - timedelta(days=30)
     stmt = (
         select(Job)
-        .where(Job.source == "seek", col(Job.canonical_job_id).is_(None), Job.status != "hidden",
+        .where(Job.source == source, col(Job.canonical_job_id).is_(None), Job.status != "hidden",
                Job.first_seen_at >= window,
                or_(col(Job.insights_checked_at).is_(None), Job.insights_checked_at < cutoff))
     )
+    if source == "linkedin":
+        stmt = stmt.join(JobEvaluation, JobEvaluation.job_id == Job.id).where(*_active_clause())
     order_cols = []
     if notify_cities:
         order_cols.append(case((col(Job.city).in_(notify_cities), 0), else_=1))

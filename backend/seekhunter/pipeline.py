@@ -168,9 +168,8 @@ _INSIGHTS_SOURCES = ("seek", "linkedin")
 
 def _apply_details(session: Session, name: str, source, job: Job, data: JobData) -> None:  # noqa: ANN001
     """Fetches and persists a job's detail page: description/contacts, and for SEEK and LinkedIn,
-    applicant insights too (both return applicant_count in the same details() call; SEEK's
-    insights refresh loop, `run_insights_refresh`, is SEEK-only — LinkedIn's count is only ever
-    picked up here, on first sight of the job)."""
+    applicant insights too (both return applicant_count in the same details() call; later
+    re-checks come from `run_insights_refresh`)."""
     details = source.details(data)
     repo.update_job_details(session, job, details)
     _apply_contacts(session, job)
@@ -365,26 +364,29 @@ def _evaluate(session: Session, jobs: list[Job], profile: Profile, settings, llm
 
 def run_insights_refresh(
     session: Session,
-    seek_source,
+    source,
     limit: int = 30,  # noqa: ANN001
     notify_cities: list[str] | None = None,
+    source_name: str = "seek",
 ) -> dict:
-    """Refreshes SEEK applicant insights for up to `limit` eligible jobs (see
-    `repo.jobs_needing_insights`). A `SourceBlocked` from the source stops the loop early (SEEK is
-    rate-limiting us this run); any other per-job error is logged and skipped so one bad job
-    doesn't block the rest. `notify_cities` prioritises jobs in those cities (see
+    """Refreshes applicant insights of `source_name` jobs for up to `limit` eligible jobs (see
+    `repo.jobs_needing_insights`). A `SourceBlocked` from the source stops the loop early (the
+    board is rate-limiting us this run); any other per-job error is logged and skipped so one bad
+    job doesn't block the rest. `notify_cities` prioritises jobs in those cities (see
     `repo.jobs_needing_insights`)."""
-    jobs = repo.jobs_needing_insights(session, utcnow(), limit, notify_cities=notify_cities)
+    jobs = repo.jobs_needing_insights(
+        session, utcnow(), limit, notify_cities=notify_cities, source=source_name
+    )
     refreshed = 0
     error = None
     for job in jobs:
         try:
-            data = seek_source.insights(job.external_id)
+            data = source.insights(job.external_id)
         except SourceBlocked as e:
             error = str(e)
             break
         except Exception as e:  # noqa: BLE001  one bad lookup must not abort the refresh
-            log.warning("insights refresh failed for seek %s: %s", job.external_id, e)
+            log.warning("insights refresh failed for %s %s: %s", source_name, job.external_id, e)
             continue
         repo.set_insights(session, job, data, utcnow())
         refreshed += 1
@@ -403,19 +405,22 @@ def _fast_insights_source(seek_source):  # noqa: ANN001, ANN202
 
 
 def _refresh_insights(session: Session, sources: dict, status: dict, settings) -> None:  # noqa: ANN001
-    seek_source = sources.get("seek")
-    if not seek_source:
-        return
-    report = run_insights_refresh(
-        session,
-        _fast_insights_source(seek_source),
-        settings.max_insights_per_run,
-        notify_cities=settings.notify_cities,
-    )
-    seek_status = status.setdefault("seek", {})
-    seek_status["insights_refreshed"] = report["refreshed"]
-    if report["error"]:
-        seek_status["insights_error"] = report["error"]
+    """Re-checks applicant counts: SEEK via its quick insights query, LinkedIn by re-reading the
+    job page (normal pacing, smaller cap; skipped when LinkedIn already failed this run)."""
+    plans = []
+    if sources.get("seek"):
+        plans.append(("seek", _fast_insights_source(sources["seek"]), settings.max_insights_per_run))
+    linkedin_ok = (status.get("linkedin") or {}).get("status", "ok") == "ok"
+    if sources.get("linkedin") and settings.linkedin_enabled and linkedin_ok:
+        plans.append(("linkedin", sources["linkedin"], settings.linkedin_insights_per_run))
+    for name, source, limit in plans:
+        report = run_insights_refresh(
+            session, source, limit, notify_cities=settings.notify_cities, source_name=name
+        )
+        st = status.setdefault(name, {})
+        st["insights_refreshed"] = report["refreshed"]
+        if report["error"]:
+            st["insights_error"] = report["error"]
 
 
 def _maybe_health_alert(session: Session, notifier, run: Run) -> None:  # noqa: ANN001

@@ -32,7 +32,7 @@ describe("CompetitionBlock", () => {
   it("shows a Jora-specific fallback when there is no applicant count", () => {
     render(<CompetitionBlock job={{ ...base, source: "jora", applicant_count: null, applicant_volume: null,
       resume_pct: null, cover_letter_pct: null, insights_checked_at: null }} />);
-    expect(screen.getByText("SEEK only — not available for Jora ads")).toBeTruthy();
+    expect(screen.getByText("Jora doesn't publish applicant numbers")).toBeTruthy();
     expect(screen.queryByText("applicants")).toBeNull();
   });
 
@@ -40,6 +40,12 @@ describe("CompetitionBlock", () => {
     render(<CompetitionBlock job={{ ...base, source: "seek", applicant_count: null, applicant_volume: null,
       resume_pct: null, cover_letter_pct: null, insights_checked_at: null }} />);
     expect(screen.getByText("SEEK hasn't published applicant numbers for this ad")).toBeTruthy();
+  });
+
+  it("names LinkedIn, not SEEK, when a LinkedIn ad has no applicant count", () => {
+    render(<CompetitionBlock job={{ ...base, source: "linkedin", applicant_count: null, applicant_volume: null,
+      resume_pct: null, cover_letter_pct: null, insights_checked_at: null }} />);
+    expect(screen.getByText("LinkedIn hasn't published applicant numbers for this ad")).toBeTruthy();
   });
 
   it("omits the bars section entirely when only the count is known", () => {

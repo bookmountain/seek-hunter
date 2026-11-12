@@ -257,6 +257,9 @@ class AppSettings(BaseModel):
     # tighter page cap (also subject to `other_city_max_pages` for non-notify cities, like every
     # other source — see pipeline._max_pages_for).
     linkedin_max_pages: int = 2
+    # Listed LinkedIn jobs whose applicant count is re-read per run (one detail page each, at the
+    # normal 2-5 s pacing). ~100 x 8 runs/day re-checks every listed LinkedIn job daily.
+    linkedin_insights_per_run: int = 100
     # Server-side "last read" marker for the in-app notification bell (GET/POST /api/notifications).
     # Deliberately excluded from PUT /api/settings overwrites — see api.put_settings.
     notifications_read_at: NaiveDatetime | None = None

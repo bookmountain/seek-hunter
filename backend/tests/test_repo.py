@@ -613,3 +613,24 @@ def test_masked_email_kept_when_length_differs_or_ambiguous(session):
     _ad(session, "s3", "seek", "<p>shaun.oreilly1@talentweb.com.au</p>")
     assert repo.unmask_emails(session, jora) is False  # two 14-char candidates: don't guess
     assert jora.contact_email is None
+
+
+def test_jobs_needing_insights_linkedin_only_listed_jobs(session):
+    def linkedin_job(ext, excluded=False):
+        job, _ = repo.upsert_job(session, data(ext=ext, source="linkedin", title=f"Dev {ext}"))
+        repo.save_evaluation(session, job.id, excluded=excluded, reasons=[], snippets={}, rule_score=50,
+                             llm_score=None, llm_note=None, llm_provider=None, final_score=50,
+                             matched_skills=[], flags=[])
+        return job
+
+    listed = linkedin_job("l1")
+    linkedin_job("l2", excluded=True)
+    closed = linkedin_job("l3")
+    closed.closed_at = utcnow()
+    session.add(closed)
+    repo.upsert_job(session, data(ext="l4", source="linkedin", title="Unevaluated"))
+    repo.upsert_job(session, data(ext="s1", source="seek"))
+    session.commit()
+
+    jobs = repo.jobs_needing_insights(session, utcnow(), limit=10, source="linkedin")
+    assert [j.id for j in jobs] == [listed.id]

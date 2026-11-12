@@ -799,19 +799,21 @@ INSIGHTS_STALE_AFTER = timedelta(hours=6)
 
 
 def _refresh_insights_if_stale(session: Session, job: Job) -> None:
-    """Opening a SEEK job re-checks its applicant numbers when they're older than 6 hours, so the
-    detail view never shows a two-week-old "6 applicants". One quick GraphQL call; any failure just
-    leaves the stored numbers in place."""
-    if job.source != "seek" or not get_env().refresh_insights_on_view:
+    """Opening a SEEK or LinkedIn job re-checks its applicant numbers when they're older than 6
+    hours, so the detail view never shows a two-week-old "6 applicants". One quick request (SEEK's
+    GraphQL insights / LinkedIn's guest job page); any failure just leaves the stored numbers."""
+    if job.source not in ("seek", "linkedin") or not get_env().refresh_insights_on_view:
         return
     checked = job.insights_checked_at
     if checked is not None and utcnow() - checked < INSIGHTS_STALE_AFTER:
         return
     try:
         from seekhunter.http import PoliteClient
+        from seekhunter.sources.linkedin import LinkedInSource
         from seekhunter.sources.seek import SeekSource
 
-        data = SeekSource(PoliteClient(min_delay=0, max_delay=0, backoffs=())).insights(job.external_id)
+        source_cls = SeekSource if job.source == "seek" else LinkedInSource
+        data = source_cls(PoliteClient(min_delay=0, max_delay=0, backoffs=())).insights(job.external_id)
     except Exception as e:  # noqa: BLE001  never break the detail view over a refresh
         log.warning("on-view insights refresh failed for job %s: %s", job.id, e)
         return

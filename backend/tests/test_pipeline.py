@@ -505,7 +505,7 @@ def test_new_linkedin_job_persists_applicant_count_from_details(session):
     assert job.insights_checked_at is not None
 
 
-def test_linkedin_jobs_are_not_touched_by_the_seek_only_insights_refresh_loop(session):
+def test_insights_refresh_loop_rechecks_listed_linkedin_jobs(session):
     seek = FakeSource("seek", [jd("seek", "1")])
     linkedin = FakeSource("linkedin", [jd("linkedin", "a", title="Backend Dev", company="Other",
                                           applicant_count=5)])
@@ -514,13 +514,28 @@ def test_linkedin_jobs_are_not_touched_by_the_seek_only_insights_refresh_loop(se
     linkedin_job = session.exec(select(Job).where(Job.source == "linkedin", Job.external_id == "a")).one()
     assert linkedin_job.applicant_count == 5
 
-    # Force both jobs to look overdue for an insights refresh, then run again: the refresh loop
-    # only ever looks at seek jobs (see repo.jobs_needing_insights), so linkedin's count and
-    # insights_calls must be untouched.
+    # The count grows on LinkedIn and the stored one goes stale: the next run re-reads it.
+    linkedin.jobs = [jd("linkedin", "a", title="Backend Dev", company="Other", applicant_count=61)]
+    linkedin_job.insights_checked_at = _utcnow() - timedelta(days=3)
+    session.add(linkedin_job)
+    session.commit()
+    report = run_crawl(session, {"seek": seek, "linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE,
+                       "https://sh")
+    session.refresh(linkedin_job)
+    assert linkedin_job.applicant_count == 61
+    assert report.source_status["linkedin"]["insights_refreshed"] == 1
+
+
+def test_linkedin_insights_refresh_skipped_when_linkedin_blocked_this_run(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    linkedin = FakeSource("linkedin", [jd("linkedin", "a", title="Backend Dev", company="Other")])
+    run_crawl(session, {"seek": seek, "linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE,
+             "https://sh")
     for job in session.exec(select(Job)).all():
         job.insights_checked_at = None
         session.add(job)
     session.commit()
+    linkedin.blocked = True
     run_crawl(session, {"seek": seek, "linkedin": linkedin}, FakeChain(), FakeNotifier(), PROFILE,
              "https://sh")
     assert linkedin.insights_calls == 0

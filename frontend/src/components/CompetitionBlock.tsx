@@ -18,8 +18,8 @@ function Bar({ label, pct }: { label: string; pct: number }) {
   );
 }
 
-/** SEEK's applicant-count/resume/cover-letter stats for this ad, when published. Jora never has
- * these; SEEK sometimes hasn't published them yet either. */
+/** Applicant stats for this ad, when the board publishes them: SEEK (count, volume, resume/cover-letter
+ * %) and LinkedIn (count only). Jora never has these. */
 export function CompetitionBlock({ job }: { job: Competition }) {
   const count = job.applicant_count;
   const volume = job.applicant_volume;
@@ -35,8 +35,8 @@ export function CompetitionBlock({ job }: { job: Competition }) {
       {count === null ? (
         <p className="mt-2 text-[15px] text-ink-muted">
           {job.source === "jora"
-            ? "SEEK only — not available for Jora ads"
-            : "SEEK hasn't published applicant numbers for this ad"}
+            ? "Jora doesn't publish applicant numbers"
+            : `${job.source === "linkedin" ? "LinkedIn" : "SEEK"} hasn't published applicant numbers for this ad`}
         </p>
       ) : (
         <>

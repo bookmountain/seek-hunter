@@ -588,3 +588,28 @@ def test_opening_a_stale_seek_job_refreshes_its_applicants(client, monkeypatch):
     detail = client.get(f"/api/jobs/{job_id}").json()
     assert detail["applicant_count"] == 340
     get_env.cache_clear()
+
+
+def test_opening_a_stale_linkedin_job_refreshes_its_applicants(client, monkeypatch):
+    from seekhunter import api as api_module
+    from seekhunter.config import get_env
+    from seekhunter.sources import linkedin as linkedin_mod
+
+    monkeypatch.setenv("REFRESH_INSIGHTS_ON_VIEW", "1")
+    get_env.cache_clear()
+    original = api_module._get_job
+
+    def as_linkedin(session, jid):
+        job, ev = original(session, jid)
+        job.source = "linkedin"
+        job.applicant_count = 53
+        job.insights_checked_at = utcnow() - timedelta(days=25)
+        return job, ev
+
+    monkeypatch.setattr(api_module, "_get_job", as_linkedin)
+    monkeypatch.setattr(linkedin_mod.LinkedInSource, "insights", lambda self, ext: {"applicant_count": 140})
+    job_id = client.get("/api/jobs").json()[0]["id"]
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["applicant_count"] == 140
+    assert detail["insights_checked_at"] > (utcnow() - timedelta(minutes=1)).isoformat()
+    get_env.cache_clear()

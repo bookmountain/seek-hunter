@@ -134,3 +134,21 @@ def test_details_fills_description_work_type_and_applicant_count(fixtures_dir):
     assert result.applicant_count == 200
     assert result.applicant_volume is None
     assert client.calls[0][0] == "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4468780007"
+
+
+def test_insights_rereads_applicant_count_from_detail_page(fixtures_dir):
+    client = FakeClient((fixtures_dir / "linkedin_detail.html").read_text())
+    assert LinkedInSource(client).insights("4468780007") == {"applicant_count": 200}
+    assert client.calls[0][0] == "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4468780007"
+
+
+def test_insights_without_a_count_is_empty_and_non_200_is_none():
+    assert LinkedInSource(FakeClient("<html><body></body></html>")).insights("1") == {}
+
+    class GoneClient(FakeClient):
+        def get(self, url, **kw):
+            resp = super().get(url, **kw)
+            resp.status_code = 404
+            return resp
+
+    assert LinkedInSource(GoneClient("")).insights("1") is None
