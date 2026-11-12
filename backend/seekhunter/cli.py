@@ -39,15 +39,20 @@ def build_parser() -> argparse.ArgumentParser:
     insights = sub.add_parser("insights", help="refresh SEEK applicant insights on demand")
     insights.add_argument("--limit", type=int, default=60)
     market = sub.add_parser("market", help="crawl SEEK for market insights data across cities")
-    market.add_argument("--cities", nargs="*", default=None,
-                        help="override settings.market_cities (e.g. adelaide perth)")
+    market.add_argument(
+        "--cities", nargs="*", default=None, help="override settings.market_cities (e.g. adelaide perth)"
+    )
     market.add_argument("--dry-run", action="store_true", help="search only, no database writes")
     brief = sub.add_parser("insights-brief", help="send the weekly market insights brief")
     brief.add_argument("--dry-run", action="store_true")
     tailor = sub.add_parser("tailor", help="tailor the resume + cover letter for one job")
     tailor.add_argument("job_id", type=int)
-    tailor.add_argument("--tailoring-id", type=int, default=None,
-                        help="run an existing queued tailoring row (the API creates one)")
+    tailor.add_argument(
+        "--tailoring-id",
+        type=int,
+        default=None,
+        help="run an existing queued tailoring row (the API creates one)",
+    )
     tailor.add_argument("--send", action="store_true", help="send both PDFs to Telegram when done")
     sub.add_parser("resume-preview", help="build/cache the PDF + PNG preview of the current resume")
     clp = sub.add_parser("cover-letter", help="regenerate only the cover letter of a finished tailoring")
@@ -81,14 +86,19 @@ def _tailor_commands(args: argparse.Namespace, env: Env, notifier: Notifier) -> 
 
         with run_lock(env.data_dir, blocking=True, name="tailor.lock"), Session(get_engine()) as session:
             try:
-                t = run_letter_regen(session, args.tailoring_id, env=env, llm=openclaw_llm(env),
-                                     compiler=compiler)
+                t = run_letter_regen(
+                    session, args.tailoring_id, env=env, llm=openclaw_llm(env), compiler=compiler
+                )
             except ValueError as e:
                 print(str(e), file=sys.stderr)
                 return 2
             regen = (t.result or {}).get("cover_letter_regen") or {}
-            print(json.dumps({"tailoring_id": t.id, "status": regen.get("status"),
-                              "error": regen.get("error")}, indent=1))
+            print(
+                json.dumps(
+                    {"tailoring_id": t.id, "status": regen.get("status"), "error": regen.get("error")},
+                    indent=1,
+                )
+            )
             return 0 if regen.get("status") == "done" else 1
 
     with Session(get_engine()) as session:
@@ -113,10 +123,21 @@ def _tailor_commands(args: argparse.Namespace, env: Env, notifier: Notifier) -> 
 
     rm_client = client_from_env(env)
     with run_lock(env.data_dir, blocking=True, name="tailor.lock"), Session(get_engine()) as session:
-        t = pipeline.run_tailoring(session, tailoring_id, env=env, llm=openclaw_llm(env), compiler=compiler,
-                                   notifier=notifier, resume_matcher=rm_client, defer_resume_matcher=True)
-        print(json.dumps({"tailoring_id": t.id, "status": t.status, "error": t.error,
-                          "warnings": t.warnings}, indent=1))
+        t = pipeline.run_tailoring(
+            session,
+            tailoring_id,
+            env=env,
+            llm=openclaw_llm(env),
+            compiler=compiler,
+            notifier=notifier,
+            resume_matcher=rm_client,
+            defer_resume_matcher=True,
+        )
+        print(
+            json.dumps(
+                {"tailoring_id": t.id, "status": t.status, "error": t.error, "warnings": t.warnings}, indent=1
+            )
+        )
         status = t.status
     if status == "done" and rm_client is not None:
         _resume_matcher(env, tailoring_id, rm_client)  # outside tailor.lock: RM's LLM calls are slow
@@ -138,8 +159,17 @@ def _resume_matcher(env: Env, tailoring_id: int, client=None) -> int:
             print(str(e), file=sys.stderr)
             return 2
         r = (t.result or {}).get("resume_matcher") or {}
-        print(json.dumps({"tailoring_id": t.id, "status": r.get("status"), "error": r.get("error"),
-                          "ats_score": r.get("ats_score")}, indent=1))
+        print(
+            json.dumps(
+                {
+                    "tailoring_id": t.id,
+                    "status": r.get("status"),
+                    "error": r.get("error"),
+                    "ats_score": r.get("ats_score"),
+                },
+                indent=1,
+            )
+        )
         return 0 if r.get("status") == "done" else 1
 
 
@@ -168,8 +198,9 @@ def main(argv: list[str] | None = None) -> int:
             with run_lock(env.data_dir, name="market.lock"), Session(get_engine()) as session:
                 repo.ensure_seed(session)
                 settings = repo.load_settings(session)
-                report = run_market_crawl(session, SeekSource(PoliteClient()), settings,
-                                          cities=args.cities, dry_run=args.dry_run)
+                report = run_market_crawl(
+                    session, SeekSource(PoliteClient()), settings, cities=args.cities, dry_run=args.dry_run
+                )
                 print(json.dumps(report, indent=1))
                 return 0
 
@@ -213,7 +244,8 @@ def main(argv: list[str] | None = None) -> int:
                 from seekhunter.sources.seek import SeekSource
 
                 report = run_contacts_backfill(
-                    session, SeekSource(PoliteClient()), _build_contact_lookup(env), days=args.days)
+                    session, SeekSource(PoliteClient()), _build_contact_lookup(env), days=args.days
+                )
                 print(json.dumps(report, default=str, indent=1))
                 return 0
 
@@ -223,8 +255,12 @@ def main(argv: list[str] | None = None) -> int:
                 from seekhunter.sources.seek import SeekSource
 
                 notify_cities = repo.load_settings(session).notify_cities
-                report = run_insights_refresh(session, SeekSource(PoliteClient()), limit=args.limit,
-                                              notify_cities=notify_cities)
+                report = run_insights_refresh(
+                    session,
+                    SeekSource(PoliteClient(min_delay=0.8, max_delay=1.6)),
+                    limit=args.limit,
+                    notify_cities=notify_cities,
+                )
                 print(json.dumps(report, indent=1))
                 return 0
 
@@ -235,8 +271,16 @@ def main(argv: list[str] | None = None) -> int:
 
             profile = load_profile(env.resume_dir)
             llm = build_chain(repo.load_settings(session), env)
-            report = run_crawl(session, build_sources(), llm, notifier, profile, env.public_url,
-                               dry_run=args.dry_run, contact_lookup=_build_contact_lookup(env))
+            report = run_crawl(
+                session,
+                build_sources(),
+                llm,
+                notifier,
+                profile,
+                env.public_url,
+                dry_run=args.dry_run,
+                contact_lookup=_build_contact_lookup(env),
+            )
             print(json.dumps(report.__dict__, default=str, indent=1))
             return 0
     except RunLocked:

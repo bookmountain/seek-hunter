@@ -249,7 +249,7 @@ class AppSettings(BaseModel):
     recap_enabled: bool = True
     max_pages_per_search: int = 3
     max_notify_per_run: int = 20
-    max_insights_per_run: int = 60
+    max_insights_per_run: int = 250
     notify_cities: list[str] = Field(default_factory=lambda: ["adelaide"])
     other_city_max_pages: int = 2
     linkedin_enabled: bool = True

@@ -12,7 +12,7 @@ from seekhunter import market, repo
 from seekhunter.contacts import extract_contacts, is_plausible_name, normalize_phone
 from seekhunter.domain import CITY_BY_PROFILE_LOCATION, JobData, company_key
 from seekhunter.filters import evaluate_exclusions
-from seekhunter.http import SourceBlocked
+from seekhunter.http import PoliteClient, SourceBlocked
 from seekhunter.llm.base import LLMJobInput
 from seekhunter.models import Application, Job, JobEvaluation, Outbox, Run, SearchProfile, utcnow
 from seekhunter.notify import DigestItem, NotifyError, format_digest, format_market_brief, format_recap
@@ -38,18 +38,31 @@ def _local(dt: datetime) -> datetime:
     return dt.replace(tzinfo=ZoneInfo("UTC")).astimezone(TZ)
 
 
-def digest_item(job: Job, ev: JobEvaluation, prior_application: Application | None = None,
-                now: datetime | None = None) -> DigestItem:
+def digest_item(
+    job: Job, ev: JobEvaluation, prior_application: Application | None = None, now: datetime | None = None
+) -> DigestItem:
     already_title = already_days = None
     if prior_application is not None:
         already_title = prior_application.title
         already_days = ((now or utcnow()) - prior_application.applied_at).days
-    return DigestItem(job_id=job.id, score=ev.final_score, title=job.title, company=job.company,
-                      location=job.location, work_type=job.work_type, matched=ev.matched_skills,
-                      why=ev.llm_note, url=job.url, flags=ev.flags, contact_name=job.contact_name,
-                      contact_phone=job.contact_phone, contact_email=job.contact_email,
-                      applicant_count=job.applicant_count, already_applied_title=already_title,
-                      already_applied_days_ago=already_days)
+    return DigestItem(
+        job_id=job.id,
+        score=ev.final_score,
+        title=job.title,
+        company=job.company,
+        location=job.location,
+        work_type=job.work_type,
+        matched=ev.matched_skills,
+        why=ev.llm_note,
+        url=job.url,
+        flags=ev.flags,
+        contact_name=job.contact_name,
+        contact_phone=job.contact_phone,
+        contact_email=job.contact_email,
+        applicant_count=job.applicant_count,
+        already_applied_title=already_title,
+        already_applied_days_ago=already_days,
+    )
 
 
 def _prior_application_for(apps_by_key: dict[str, list[Application]], job: Job) -> Application | None:
@@ -61,8 +74,7 @@ def _prior_application_for(apps_by_key: dict[str, list[Application]], job: Job) 
     return None
 
 
-def _digest_items(session: Session, rows: list[tuple[Job, JobEvaluation]],
-                  now: datetime) -> list[DigestItem]:
+def _digest_items(session: Session, rows: list[tuple[Job, JobEvaluation]], now: datetime) -> list[DigestItem]:
     keys = {company_key(j.company) for j, _ in rows}
     apps_by_key = repo.applications_by_company_keys(session, keys)
     return [digest_item(j, e, _prior_application_for(apps_by_key, j), now) for j, e in rows]
@@ -76,9 +88,15 @@ def _upsert_recruiter_contact(session: Session, job: Job) -> None:
         return
     if repo.find_contact(session, job.contact_name, job.company) is None:
         return
-    contact = repo.upsert_contact(session, name=job.contact_name, company=job.company, role="Recruiter",
-                                  phone=job.contact_phone, email=job.contact_email,
-                                  linkedin=job.contact_linkedin)
+    contact = repo.upsert_contact(
+        session,
+        name=job.contact_name,
+        company=job.company,
+        role="Recruiter",
+        phone=job.contact_phone,
+        email=job.contact_email,
+        linkedin=job.contact_linkedin,
+    )
     repo.link_contact_job(session, contact.id, job.id)
 
 
@@ -87,13 +105,19 @@ def _apply_contacts(session: Session, job: Job) -> None:
     (already on `job` via `update_job_details`) over regex extraction for phone/email."""
     extracted = extract_contacts(repo.to_jobdata(job).text)
     name = extracted.name if is_plausible_name(extracted.name, job.title, job.company) else None
-    repo.set_contacts(session, job, name=name, phone=normalize_phone(job.contact_phone or extracted.phone),
-                      email=job.contact_email or extracted.email)
+    repo.set_contacts(
+        session,
+        job,
+        name=name,
+        phone=normalize_phone(job.contact_phone or extracted.phone),
+        email=job.contact_email or extracted.email,
+    )
     _upsert_recruiter_contact(session, job)
 
 
-def _lookup_linkedin(session: Session, jobs: list[Job],
-                     contact_lookup: Callable[[str, str], str | None], cap: int) -> None:
+def _lookup_linkedin(
+    session: Session, jobs: list[Job], contact_lookup: Callable[[str, str], str | None], cap: int
+) -> None:
     done = 0
     for job in jobs:
         if done >= cap:
@@ -173,8 +197,9 @@ def _retry_missing_details(session: Session, name: str, source, settings) -> int
     evaluation is dropped so `_evaluate` re-scores them (incl. the LLM) as unevaluated jobs.
     A block stops the retries for this source; the next run continues."""
     done = 0
-    for job in repo.jobs_missing_details(session, name, utcnow() - timedelta(days=7),
-                                         settings.details_retry_per_run):
+    for job in repo.jobs_missing_details(
+        session, name, utcnow() - timedelta(days=7), settings.details_retry_per_run
+    ):
         try:
             _apply_details(session, name, source, job, repo.to_jobdata(job))
         except SourceBlocked:
@@ -252,8 +277,12 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
     return new_jobs, status
 
 
-def check_closed(session: Session, sources: dict, limit: int,  # noqa: ANN001
-                 enabled: list[str] | None = None) -> dict[str, dict[str, int]]:
+def check_closed(
+    session: Session,
+    sources: dict,
+    limit: int,  # noqa: ANN001
+    enabled: list[str] | None = None,
+) -> dict[str, dict[str, int]]:
     """Re-check up to `limit` listed ads and mark the ones the board reports closed. Returns
     `{source: {"checked": n, "closed": n}}`. A blocked source is skipped for the rest of the pass."""
     now = utcnow()
@@ -289,24 +318,43 @@ def _evaluate(session: Session, jobs: list[Job], profile: Profile, settings, llm
         data = repo.to_jobdata(job)
         fr = evaluate_exclusions(data, settings)
         sr = score_job(data, profile.skills, settings)
-        repo.save_evaluation(session, job.id, excluded=fr.excluded, reasons=fr.reasons, snippets=fr.snippets,
-                             rule_score=sr.rule_score, llm_score=None, llm_note=None, llm_provider=None,
-                             final_score=sr.rule_score, matched_skills=sr.matched_skills, flags=sr.flags)
+        repo.save_evaluation(
+            session,
+            job.id,
+            excluded=fr.excluded,
+            reasons=fr.reasons,
+            snippets=fr.snippets,
+            rule_score=sr.rule_score,
+            llm_score=None,
+            llm_note=None,
+            llm_provider=None,
+            final_score=sr.rule_score,
+            matched_skills=sr.matched_skills,
+            flags=sr.flags,
+        )
         if not fr.excluded:
             pending.append((job, data, sr))
 
     used = None
     for i in range(0, len(pending), LLM_BATCH):
         batch = pending[i : i + LLM_BATCH]
-        inputs = [LLMJobInput(key=str(j.id), title=d.title, company=d.company, work_type=d.work_type,
-                              text=d.text) for j, d, _ in batch]
+        inputs = [
+            LLMJobInput(key=str(j.id), title=d.title, company=d.company, work_type=d.work_type, text=d.text)
+            for j, d, _ in batch
+        ]
         scores, provider = llm.score_batch(profile, inputs)
         used = used or provider
         for job, d, sr in batch:
             s = scores.get(str(job.id))
             if s:
-                repo.save_evaluation(session, job.id, llm_score=s.fit, llm_note=s.why, llm_provider=provider,
-                                     final_score=blend(sr.rule_score, s.fit))
+                repo.save_evaluation(
+                    session,
+                    job.id,
+                    llm_score=s.fit,
+                    llm_note=s.why,
+                    llm_provider=provider,
+                    final_score=blend(sr.rule_score, s.fit),
+                )
                 # LLM-supplied name is only trusted when it appears verbatim in the ad text, to
                 # avoid storing a hallucinated name.
                 if not job.contact_name and s.contact_name and s.contact_name in d.text:
@@ -315,8 +363,12 @@ def _evaluate(session: Session, jobs: list[Job], profile: Profile, settings, llm
     return used
 
 
-def run_insights_refresh(session: Session, seek_source, limit: int = 30,  # noqa: ANN001
-                         notify_cities: list[str] | None = None) -> dict:
+def run_insights_refresh(
+    session: Session,
+    seek_source,
+    limit: int = 30,  # noqa: ANN001
+    notify_cities: list[str] | None = None,
+) -> dict:
     """Refreshes SEEK applicant insights for up to `limit` eligible jobs (see
     `repo.jobs_needing_insights`). A `SourceBlocked` from the source stops the loop early (SEEK is
     rate-limiting us this run); any other per-job error is logged and skipped so one bad job
@@ -339,12 +391,27 @@ def run_insights_refresh(session: Session, seek_source, limit: int = 30,  # noqa
     return {"checked": len(jobs), "refreshed": refreshed, "error": error}
 
 
+def _fast_insights_source(seek_source):  # noqa: ANN001, ANN202
+    """Applicant-insights lookups are one tiny GraphQL call each, so they get their own, quicker
+    client (~1 s apart) instead of the 2–5 s page-crawl pacing; that lets every active SEEK job be
+    re-checked daily (~250 per run x 8 runs). Fakes in tests are passed through unchanged."""
+    from seekhunter.sources.seek import SeekSource
+
+    if isinstance(seek_source, SeekSource):
+        return SeekSource(PoliteClient(min_delay=0.8, max_delay=1.6))
+    return seek_source
+
+
 def _refresh_insights(session: Session, sources: dict, status: dict, settings) -> None:  # noqa: ANN001
     seek_source = sources.get("seek")
     if not seek_source:
         return
-    report = run_insights_refresh(session, seek_source, settings.max_insights_per_run,
-                                  notify_cities=settings.notify_cities)
+    report = run_insights_refresh(
+        session,
+        _fast_insights_source(seek_source),
+        settings.max_insights_per_run,
+        notify_cities=settings.notify_cities,
+    )
     seek_status = status.setdefault("seek", {})
     seek_status["insights_refreshed"] = report["refreshed"]
     if report["error"]:
@@ -368,9 +435,16 @@ def _maybe_health_alert(session: Session, notifier, run: Run) -> None:  # noqa: 
     session.commit()
 
 
-def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, public_url: str,  # noqa: ANN001
-             dry_run: bool = False,
-             contact_lookup: Callable[[str, str], str | None] | None = None) -> RunReport:
+def run_crawl(
+    session: Session,
+    sources: dict,
+    llm,
+    notifier,
+    profile: Profile,
+    public_url: str,  # noqa: ANN001
+    dry_run: bool = False,
+    contact_lookup: Callable[[str, str], str | None] | None = None,
+) -> RunReport:
     """Crawl, evaluate, and notify.
 
     Notification is at-least-once, not exactly-once: digest messages are sent via the notifier
@@ -417,8 +491,13 @@ def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, 
         if candidates and settings.notify_enabled:
             top = candidates[: settings.max_notify_per_run]
             degraded = [k for k, v in status.items() if v["status"] != "ok"]
-            for text in format_digest(_digest_items(session, top, now), _local(now), public_url, degraded,
-                                      extra=len(candidates) - len(top)):
+            for text in format_digest(
+                _digest_items(session, top, now),
+                _local(now),
+                public_url,
+                degraded,
+                extra=len(candidates) - len(top),
+            ):
                 _send(session, notifier, text)
             run.notified = len(top)
         # Intentionally marks candidates notified even when notify_enabled is False, so that
@@ -436,8 +515,9 @@ def run_crawl(session: Session, sources: dict, llm, notifier, profile: Profile, 
         session.commit()
     if not dry_run:
         _maybe_health_alert(session, notifier, run)
-    return RunReport(run_id=run.id, new_jobs=run.new_jobs, notified=run.notified,
-                     source_status=run.source_status)
+    return RunReport(
+        run_id=run.id, new_jobs=run.new_jobs, notified=run.notified, source_status=run.source_status
+    )
 
 
 def run_recap(session: Session, notifier, public_url: str, dry_run: bool = False) -> None:  # noqa: ANN001
@@ -452,16 +532,26 @@ def run_recap(session: Session, notifier, public_url: str, dry_run: bool = False
     now = utcnow()
     due = repo.follow_ups_due(session, now)[:3]
     follow_ups = [{"company": a.company, "title": a.title, "days": (now - a.applied_at).days} for a in due]
-    for text in format_recap(_digest_items(session, rows, now), excluded, f"{local_now:%a %d %b}",
-                             public_url, follow_ups=follow_ups or None):
+    for text in format_recap(
+        _digest_items(session, rows, now),
+        excluded,
+        f"{local_now:%a %d %b}",
+        public_url,
+        follow_ups=follow_ups or None,
+    ):
         _send(session, notifier, text)
     if not dry_run:
         session.add(Run(kind="recap", finished_at=utcnow(), new_jobs=len(rows)))
         session.commit()
 
 
-def run_insights_brief(session: Session, notifier, public_url: str, resume_dir: Path,  # noqa: ANN001
-                       dry_run: bool = False) -> None:
+def run_insights_brief(
+    session: Session,
+    notifier,
+    public_url: str,
+    resume_dir: Path,  # noqa: ANN001
+    dry_run: bool = False,
+) -> None:
     """Weekly market-insights brief (plain text): per-city totals/flexible share, Adelaide's top
     skills, biggest gaps, a head-to-head line, and the best city for flexible roles."""
     overview_rows = market.overview(session, days=14)
@@ -477,8 +567,9 @@ def run_insights_brief(session: Session, notifier, public_url: str, resume_dir: 
     best = max(overview_rows, key=lambda r: r["flexible_share"], default=None)
     best_city = best["city"] if best else "adelaide"
     best_share = best["flexible_share"] if best else 0.0
-    h2h = market.head_to_head_lines(shares_by_city.get("adelaide", {}), best_city,
-                                    shares_by_city.get(best_city, {}))
+    h2h = market.head_to_head_lines(
+        shares_by_city.get("adelaide", {}), best_city, shares_by_city.get(best_city, {})
+    )
 
     text = format_market_brief(overview_rows, top_skills, top_gaps, h2h, best_city, best_share, public_url)
     _send(session, notifier, text)
@@ -497,17 +588,29 @@ def run_rescore(session: Session, profile: Profile, days: int = 7) -> int:
         sr = score_job(data, profile.skills, settings)
         existing = repo.get_evaluation(session, job.id)
         llm_score = existing.llm_score if existing else None
-        repo.save_evaluation(session, job.id, excluded=fr.excluded, reasons=fr.reasons, snippets=fr.snippets,
-                             rule_score=sr.rule_score, final_score=blend(sr.rule_score, llm_score),
-                             matched_skills=sr.matched_skills, flags=sr.flags)
+        repo.save_evaluation(
+            session,
+            job.id,
+            excluded=fr.excluded,
+            reasons=fr.reasons,
+            snippets=fr.snippets,
+            rule_score=sr.rule_score,
+            final_score=blend(sr.rule_score, llm_score),
+            matched_skills=sr.matched_skills,
+            flags=sr.flags,
+        )
         count += 1
     session.add(Run(kind="rescore", finished_at=utcnow(), new_jobs=count))
     session.commit()
     return count
 
 
-def run_contacts_backfill(session: Session, seek_source, contact_lookup=None,  # noqa: ANN001
-                          days: int = 7) -> dict:
+def run_contacts_backfill(
+    session: Session,
+    seek_source,
+    contact_lookup=None,  # noqa: ANN001
+    days: int = 7,
+) -> dict:
     """Backfill recruiter contacts for jobs first seen in the last `days` days.
 
     For every such job, re-runs `extract_contacts` on the stored ad text. SEEK jobs still missing a
@@ -563,5 +666,9 @@ def run_contacts_backfill(session: Session, seek_source, contact_lookup=None,  #
                 repo.set_contacts(session, job, linkedin=url)
                 _upsert_recruiter_contact(session, job)
 
-    return {"jobs_checked": len(jobs), "updated": updated, "linkedin_lookups": linkedin_lookups,
-           "linkedin_found": linkedin_found}
+    return {
+        "jobs_checked": len(jobs),
+        "updated": updated,
+        "linkedin_lookups": linkedin_lookups,
+        "linkedin_found": linkedin_found,
+    }
