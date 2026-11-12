@@ -345,6 +345,17 @@ def test_rescore_uses_new_profile_keeps_llm_and_sends_nothing(session):
     assert ev.final_score == round(0.6 * ev.rule_score + 0.4 * 50)
 
 
+def test_rescore_uses_the_rule_blend_setting(session):
+    seek = FakeSource("seek", [jd("seek", "1", desc="React TypeScript")])
+    run_crawl(session, {"seek": seek}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    settings = repo.load_settings(session)
+    settings.rule_blend = 0.25
+    repo.save_settings(session, settings)
+    assert run_rescore(session, PROFILE) == 1
+    ev = session.exec(select(JobEvaluation)).one()
+    assert ev.final_score == round(0.25 * ev.rule_score + 0.75 * ev.llm_score)
+
+
 def _hold_lock_for(data_dir, seconds, held_event):  # noqa: ANN001  module-level: picklable for spawn
     import time
 

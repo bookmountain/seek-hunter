@@ -81,7 +81,9 @@ def score_job(job: JobData, profile_skills: set[str], settings: AppSettings) -> 
     )
 
 
-def blend(rule_score: int, llm_score: int | None) -> int:
+def blend(rule_score: int, llm_score: int | None, rule_share: float = 0.6) -> int:
+    """Mixes the rule and AI scores; `rule_share` is `AppSettings.rule_blend`."""
     if llm_score is None:
         return rule_score
-    return round(0.6 * rule_score + 0.4 * llm_score)
+    rule_share = min(1.0, max(0.0, rule_share))
+    return round(rule_share * rule_score + (1 - rule_share) * llm_score)

@@ -44,6 +44,14 @@ def test_blend():
     assert blend(80, 50) == 68
 
 
+def test_blend_uses_rule_share():
+    assert blend(80, 50, 0.6) == 68  # the old hard-coded mix is the default
+    assert blend(80, 50, 1.0) == 80
+    assert blend(80, 50, 0.0) == 50
+    assert blend(80, 50, 0.5) == 65
+    assert blend(80, None, 0.0) == 80  # no AI score: rules alone, whatever the mix
+
+
 @pytest.mark.parametrize("text", [
     "37.5 hours per week",
     "76 hours per fortnight",

@@ -4,11 +4,40 @@ from pydantic import BaseModel, Field, NaiveDatetime, field_validator
 
 
 class Weights(BaseModel):
+    """Points of the 100-point rule score (see scoring.score_job). Three components add up:
+    work type (the better of `flexible_work` / `full_time`, so the work-type component is worth
+    max(flexible_work, full_time)), skill match (`skill_max`, reached at `skill_saturation`
+    matched skills) and role fit (`role_max`; a neutral title earns a third of it).
+
+    Stored settings from before the "must add up to 100" rule are still loaded as-is (scoring
+    caps the sum at 100); only PUT /api/settings enforces `rule_total() == 100`, and the Settings
+    page offers to rebalance old values proportionally."""
+
     flexible_work: int = 35
     full_time: int = 10
     skill_max: int = 50
     role_max: int = 15
     skill_saturation: int = 8
+
+    def work_max(self) -> int:
+        return max(self.flexible_work, self.full_time)
+
+    def rule_total(self) -> int:
+        return self.work_max() + self.skill_max + self.role_max
+
+    def problems(self) -> list[str]:
+        """Why these weights can't be saved (empty when they're fine)."""
+        points = ("flexible_work", "full_time", "skill_max", "role_max")
+        out = [f"weights.{k} must not be negative" for k in points if getattr(self, k) < 0]
+        if self.skill_saturation < 1:
+            out.append("weights.skill_saturation must be at least 1")
+        total = self.rule_total()
+        if total != 100:
+            out.append(
+                f"score weights must add up to 100 (work type {self.work_max()} + skill match "
+                f"{self.skill_max} + role fit {self.role_max} = {total})"
+            )
+        return out
 
 
 class AppSettings(BaseModel):
@@ -243,6 +272,9 @@ class AppSettings(BaseModel):
         ]
     )
     weights: Weights = Field(default_factory=Weights)
+    # Final score = rule_blend x rule score + (1 - rule_blend) x AI score, when the AI scored the job
+    # (otherwise the rule score alone). 0.6 was the hard-coded mix before this became a setting.
+    rule_blend: float = Field(default=0.6, ge=0.0, le=1.0)
     llm_enabled: bool = True
     llm_providers: list[str] = Field(default_factory=lambda: ["anthropic", "openclaw"])
     notify_enabled: bool = True

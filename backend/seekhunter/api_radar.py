@@ -15,7 +15,8 @@ from seekhunter import radar, repo
 from seekhunter.db import get_session
 from seekhunter.models import RadarCompany
 from seekhunter.security import require_write
-from seekhunter.sources.ats import ATS_KINDS, build_ats_clients, radar_http_client
+from seekhunter.sources.ats import ATS_KINDS, POLLED_ATS, build_ats_clients, radar_http_client
+from seekhunter.sources.ats.detect import Detection
 from seekhunter.sources.ats.workday import parse_token
 
 log = logging.getLogger(__name__)
@@ -45,6 +46,9 @@ class RadarCompanyIn(BaseModel):
     name: str
     careers_url: str | None = None
     city: str | None = None
+    # Set to skip detection (e.g. ats="greenhouse", ats_token="canva").
+    ats: str | None = None
+    ats_token: str | None = None
 
 
 class RadarCompanyPatch(BaseModel):
@@ -89,23 +93,35 @@ def add_company(body: RadarCompanyIn, session: Session = Depends(get_session)): 
     url = (body.careers_url or "").strip() or None
     if url and not url.startswith(("http://", "https://")):
         raise HTTPException(422, "careers_url must be an http(s) URL")
+    city = (body.city or "").strip() or None
+    if body.ats:
+        token = (body.ats_token or "").strip() or None
+        _check_ats(body.ats, token)
+        if body.ats in POLLED_ATS and not token:
+            raise HTTPException(422, f"{body.ats} needs a board slug / token")
+        if body.ats not in POLLED_ATS and not url:
+            raise HTTPException(422, f"{body.ats} careers pages need a careers URL")
+        detection = Detection(ats=body.ats, token=token, careers_url=url)
+        return _out(radar.upsert_company(session, name, detection, source="manual", city=city, enabled=True))
     http = _radar_http()
-    return _out(radar.add_company(session, name, url, http, build_ats_clients(http), city=body.city))
+    return _out(radar.add_company(session, name, url, http, build_ats_clients(http), city=city))
+
+
+def _check_ats(ats: str, token: str | None) -> None:
+    if ats not in ATS_KINDS:
+        raise HTTPException(422, f"ats must be one of {', '.join(ATS_KINDS)}")
+    if ats == "workday" and token:
+        try:
+            parse_token(token)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(422, str(e)) from e
 
 
 @router.patch("/companies/{cid}", response_model=RadarCompanyOut, dependencies=write)
 def patch_company(cid: int, body: RadarCompanyPatch, session: Session = Depends(get_session)):  # noqa: B008
     c = _get(session, cid)
     fields = body.model_dump(exclude_unset=True)
-    if "ats" in fields and fields["ats"] not in ATS_KINDS:
-        raise HTTPException(422, f"ats must be one of {', '.join(ATS_KINDS)}")
-    ats = fields.get("ats", c.ats)
-    token = fields.get("ats_token", c.ats_token)
-    if ats == "workday" and token:
-        try:
-            parse_token(token)
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(422, str(e)) from e
+    _check_ats(fields.get("ats", c.ats), fields.get("ats_token", c.ats_token))
     for key, value in fields.items():
         setattr(c, key, value.strip() if isinstance(value, str) else value)
     if "name" in fields:
@@ -135,6 +151,13 @@ def check_company(cid: int, session: Session = Depends(get_session)) -> dict:  #
         raise HTTPException(409, f"{c.ats} careers pages are watched by changedetection.io, not polled")
     _spawn_cli("radar", "--company", str(c.id))
     return {"started": True, "company_id": c.id}
+
+
+@router.post("/poll", status_code=202, dependencies=write)
+def poll() -> dict:
+    """Polls every enabled company now (skipped if a radar run is already in progress)."""
+    _spawn_cli("radar")
+    return {"started": True}
 
 
 @router.post("/seed", status_code=202, dependencies=write)

@@ -3,7 +3,7 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from seekhunter.settings_model import AppSettings
+from seekhunter.settings_model import AppSettings, Weights
 
 CITIZENSHIP_PHRASES = [
     "Applicants must be Australian citizens.",
@@ -85,3 +85,31 @@ def test_citizenship_patterns_match_additional_real_world_phrasings():
     s = AppSettings()
     for phrase in NEW_CITIZENSHIP_PHRASES:
         assert any(re.search(p, phrase, re.I) for p in s.citizenship_patterns), phrase
+
+
+def test_default_weights_add_up_to_100_and_blend_defaults_to_old_mix():
+    s = AppSettings()
+    assert s.weights.rule_total() == 100 and s.weights.problems() == []
+    assert s.rule_blend == 0.6
+
+
+def test_stored_settings_without_rule_blend_or_with_odd_weights_still_load():
+    stored = AppSettings().model_dump(mode="json")
+    del stored["rule_blend"]
+    stored["weights"] = {"flexible_work": 40, "full_time": 10, "skill_max": 50, "role_max": 30,
+                         "skill_saturation": 8}
+    s = AppSettings.model_validate(stored)
+    assert s.rule_blend == 0.6
+    assert s.weights.rule_total() == 120
+    assert any("add up to 100" in p for p in s.weights.problems())
+
+
+def test_weight_problems():
+    assert Weights(flexible_work=10, full_time=35).problems() == []  # work type = the better of the two
+    assert "weights.skill_saturation must be at least 1" in Weights(skill_saturation=0).problems()
+    assert any("negative" in p for p in Weights(full_time=-5).problems())
+
+
+def test_rule_blend_bounds():
+    with pytest.raises(ValidationError):
+        AppSettings(rule_blend=1.5)

@@ -106,6 +106,9 @@ class JobOut(BaseModel):
     closed_at: datetime | None = None
     # Interaction kinds logged with this job's linked contacts (e.g. ["call", "email"]).
     contact_activity: list[str] = []
+    # When the employer's own careers feed (Company Radar) first showed this ad; None if the radar
+    # never saw it. Earlier than `first_seen_at` on a board job = how far ahead the radar was.
+    radar_first_seen_at: datetime | None = None
 
 
 class JobDetailOut(JobOut):
@@ -590,6 +593,7 @@ def _job_out(job: Job, ev: JobEvaluation, application: Application | None = None
         resume_pct=job.resume_pct, cover_letter_pct=job.cover_letter_pct,
         insights_checked_at=job.insights_checked_at, application=_application_summary(application),
         prior_applications=priors or [], contact_activity=activity or [], closed_at=job.closed_at,
+        radar_first_seen_at=job.radar_first_seen_at,
     )
     if detail:
         return JobDetailOut(**base, description_html=job.description_html, teaser=job.teaser)
@@ -1120,6 +1124,9 @@ def create_app(init: bool = True) -> FastAPI:
     def put_settings(body: AppSettings, session: Session = Depends(get_session)):
         # The notification-bell "last read" marker is server-owned; never let a UI PUT (which
         # round-trips whatever GET /api/settings returned earlier) clobber it with a stale value.
+        problems = body.weights.problems()
+        if problems:
+            raise HTTPException(422, "; ".join(problems))
         stored = repo.load_settings(session)
         body.notifications_read_at = stored.notifications_read_at
         body.ui_prefs = stored.ui_prefs
@@ -1158,6 +1165,13 @@ def create_app(init: bool = True) -> FastAPI:
     @app.post("/api/runs", status_code=202, dependencies=write)
     def trigger_run() -> dict:
         subprocess.Popen([sys.executable, "-m", "seekhunter.cli", "run"], start_new_session=True)
+        return {"started": True}
+
+    @app.post("/api/rescore", status_code=202, dependencies=write)
+    def trigger_rescore() -> dict:
+        """Re-scores the last 7 days of jobs with the current weights/blend (`seekhunter rescore`:
+        rules only, keeps each job's stored AI score, sends nothing)."""
+        subprocess.Popen([sys.executable, "-m", "seekhunter.cli", "rescore"], start_new_session=True)
         return {"started": True}
 
     @app.post("/api/notify/test", dependencies=write)

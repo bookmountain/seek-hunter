@@ -375,7 +375,7 @@ def _evaluate(session: Session, jobs: list[Job], profile: Profile, settings, llm
                     llm_score=s.fit,
                     llm_note=s.why,
                     llm_provider=provider,
-                    final_score=blend(sr.rule_score, s.fit),
+                    final_score=blend(sr.rule_score, s.fit, settings.rule_blend),
                 )
                 # LLM-supplied name is only trusted when it appears verbatim in the ad text, to
                 # avoid storing a hallucinated name.
@@ -675,7 +675,7 @@ def run_rescore(session: Session, profile: Profile, days: int = 7) -> int:
             reasons=fr.reasons,
             snippets=fr.snippets,
             rule_score=sr.rule_score,
-            final_score=blend(sr.rule_score, llm_score),
+            final_score=blend(sr.rule_score, llm_score, settings.rule_blend),
             matched_skills=sr.matched_skills,
             flags=sr.flags,
         )

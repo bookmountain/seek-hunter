@@ -102,6 +102,28 @@ def test_check_and_seed_spawn_the_cli(ctx):
     assert spawned == [("radar", "--company", str(cid)), ("radar", "--seed")]
 
 
+def test_poll_all_spawns_a_full_radar_run(ctx):
+    client, _, spawned, _ = ctx
+    assert client.post("/api/radar/poll").status_code == 401
+    assert client.post("/api/radar/poll", headers=AUTH).status_code == 202
+    assert spawned == [("radar",)]
+
+
+def test_manual_add_with_explicit_ats_skips_detection(ctx):
+    client, _, _, http = ctx
+    payload = {"name": "Canva", "ats": "greenhouse", "ats_token": " canva ", "city": "sydney"}
+    r = client.post("/api/radar/companies", json=payload, headers=AUTH)
+    assert r.status_code == 201
+    body = r.json()
+    got = (body["ats"], body["ats_token"], body["city"], body["last_error"])
+    assert got == ("greenhouse", "canva", "sydney", None)
+    assert http.calls == []
+    bad = [{"name": "X", "ats": "nope", "ats_token": "x"}, {"name": "X", "ats": "lever"},
+           {"name": "X", "ats": "pageup"}, {"name": "X", "ats": "workday", "ats_token": "garbage"}]
+    for payload in bad:
+        assert client.post("/api/radar/companies", json=payload, headers=AUTH).status_code == 422, payload
+
+
 def _watch(engine):
     return _add(engine, ats="other", ats_token=None, careers_url="https://acme.example/careers",
                 city="adelaide")

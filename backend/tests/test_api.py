@@ -237,6 +237,51 @@ def test_search_profile_crud_and_settings(client):
     assert client.put("/api/settings", json=s, headers=AUTH).json()["weights"]["full_time"] == 5
 
 
+def test_put_settings_rejects_weights_not_adding_up_to_100(client):
+    s = client.get("/api/settings").json()
+    assert s["rule_blend"] == 0.6
+    s["weights"]["skill_max"] = 60  # 35 + 60 + 15 = 110
+    r = client.put("/api/settings", json=s, headers=AUTH)
+    assert r.status_code == 422
+    assert "must add up to 100" in r.json()["detail"] and "= 110" in r.json()["detail"]
+    assert client.get("/api/settings").json()["weights"]["skill_max"] == 50  # nothing saved
+
+    s["weights"].update(skill_max=40, role_max=25)  # 35 + 40 + 25
+    s["rule_blend"] = 0.75
+    r = client.put("/api/settings", json=s, headers=AUTH)
+    assert r.status_code == 200
+    assert client.get("/api/settings").json()["rule_blend"] == 0.75
+
+    s["rule_blend"] = 2
+    assert client.put("/api/settings", json=s, headers=AUTH).status_code == 422
+
+
+def test_stored_settings_with_odd_weights_still_load(client):
+    from seekhunter.db import get_session as dep
+
+    gen = client.app.dependency_overrides[dep]()
+    session = next(gen)
+    settings = repo.load_settings(session)
+    settings.weights.role_max = 40  # 125 total: legacy data, only PUT enforces 100
+    repo.save_settings(session, settings)
+    assert client.get("/api/settings").json()["weights"]["role_max"] == 40
+
+
+def test_rescore_endpoint_spawns_cli(client, monkeypatch):
+    import subprocess
+
+    calls = []
+    monkeypatch.setattr(subprocess, "Popen", lambda args, **kw: calls.append(args))
+    assert client.post("/api/rescore").status_code == 401
+    assert client.post("/api/rescore", headers=AUTH).status_code == 202
+    assert calls and calls[0][-1] == "rescore"
+
+
+def test_job_out_exposes_radar_first_seen_at(client):
+    job = client.get("/api/jobs").json()[0]
+    assert job["radar_first_seen_at"] is None
+
+
 def test_put_settings_does_not_clobber_notifications_read_at(client):
     read_at = client.post("/api/notifications/read", headers=AUTH).json()["read_at"]
 
