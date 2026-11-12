@@ -1,0 +1,541 @@
+{
+ "offset": 0,
+ "limit": 100,
+ "totalFound": 4,
+ "content": [
+  {
+   "id": "6000000001554836",
+   "name": "Enterprise Security Manager ",
+   "uuid": "0d5f2cee-86be-4556-a2a2-2f23d9809fca",
+   "jobAdId": "09b749ab-5f00-4d80-a73f-7727cb59b64d",
+   "defaultJobAd": false,
+   "refNumber": "R102297",
+   "company": {
+    "identifier": "Canva",
+    "name": "Canva"
+   },
+   "releasedDate": "2026-11-05T23:50:44.137Z",
+   "location": {
+    "city": "Brisbane",
+    "region": "QLD",
+    "country": "au",
+    "remote": true,
+    "hybrid": false,
+    "latitude": "-27.4704528",
+    "longitude": "153.0260341",
+    "fullLocation": "Brisbane, QLD, Australia"
+   },
+   "industry": {
+    "id": "computer_software",
+    "label": "Computer Software"
+   },
+   "department": {},
+   "function": {
+    "id": "information_technology",
+    "label": "Information Technology"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "not_applicable",
+    "label": "Not Applicable"
+   },
+   "customField": [
+    {
+     "fieldId": "651ba0114967807d2e86fe5a",
+     "fieldLabel": "Team",
+     "valueId": "8e0f56d9b6da01013abf911bcbcc0000",
+     "valueLabel": "Internal Systems Security"
+    },
+    {
+     "fieldId": "651ba508aac0da4b9cbd91cb",
+     "fieldLabel": "Worker type",
+     "valueId": "d588c41a446c11de98360015c5e6daf6",
+     "valueLabel": "Employee"
+    },
+    {
+     "fieldId": "67db425d21ec03315da962cb",
+     "fieldLabel": "Org",
+     "valueId": "d7055559fd68100169cce9e25c3d0000",
+     "valueLabel": "Security, Trust & IT"
+    },
+    {
+     "fieldId": "651b8b8aaac0da4b9cbd91c9",
+     "fieldLabel": "Recruitment type",
+     "valueId": "2c2d396a-3d34-4286-8196-61a215221fd5",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "651ba0b93066d20abe11145b",
+     "fieldLabel": "Specialty",
+     "valueId": "220b5c7e743d0198d58fd8a7b8007b13",
+     "valueLabel": "Technology"
+    },
+    {
+     "fieldId": "651b8bc23066d20abe111459",
+     "fieldLabel": "Supergroup",
+     "valueId": "560e41ade9330100d7e173192cd60000",
+     "valueLabel": "Security & Trust"
+    },
+    {
+     "fieldId": "651ba1c7aac0da4b9cbd91ca",
+     "fieldLabel": "Role level",
+     "valueId": "C1",
+     "valueLabel": "C1"
+    },
+    {
+     "fieldId": "651b99e25ddc3c31d9224321",
+     "fieldLabel": "Group",
+     "valueId": "6076a7ba6b8a01966939b232ce001c03",
+     "valueLabel": "Security"
+    },
+    {
+     "fieldId": "651ba171eec5b66729429433",
+     "fieldLabel": "Subspecialty",
+     "valueId": "220b5c7e743d01c6441f02f4b700b712",
+     "valueLabel": "Security Engineering"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "au",
+     "valueLabel": "Australia"
+    },
+    {
+     "fieldId": "6514d94a9c140e09b2e649f5",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "Canva"
+    },
+    {
+     "fieldId": "651b8a7b58759b40ab8abd45",
+     "fieldLabel": "Employment type",
+     "valueId": "01ca83be4eaa01d34208432ca5005301",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "651b8e51da1ddb62f488492c",
+     "fieldLabel": "Subgroup",
+     "valueId": "ba609a0bf9ed10018ef5eb0b1fc80000",
+     "valueLabel": "Enterprise Security"
+    },
+    {
+     "fieldId": "651ba22058759b40ab8abd46",
+     "fieldLabel": "Time type",
+     "valueId": "2ca83e80de45013371c1658ff3029500",
+     "valueLabel": "Full time"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/canva/postings/6000000001554836",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "6000000001554834",
+   "name": "Enterprise Security Manager ",
+   "uuid": "89cfae8d-c17f-4551-a798-920beedfef26",
+   "jobAdId": "423b1bba-edf9-431c-bdb6-2839cf3ff79d",
+   "defaultJobAd": false,
+   "refNumber": "R102297",
+   "company": {
+    "identifier": "Canva",
+    "name": "Canva"
+   },
+   "releasedDate": "2026-11-05T23:50:38.953Z",
+   "location": {
+    "city": "Canberra",
+    "region": "ACT",
+    "country": "au",
+    "remote": false,
+    "hybrid": true,
+    "hybridDescription": "Sydney, Melbourne or Remote",
+    "latitude": "-35.2801846",
+    "longitude": "149.1310324",
+    "fullLocation": "Canberra, ACT, Australia"
+   },
+   "industry": {
+    "id": "computer_software",
+    "label": "Computer Software"
+   },
+   "department": {},
+   "function": {
+    "id": "information_technology",
+    "label": "Information Technology"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "not_applicable",
+    "label": "Not Applicable"
+   },
+   "customField": [
+    {
+     "fieldId": "651ba0114967807d2e86fe5a",
+     "fieldLabel": "Team",
+     "valueId": "8e0f56d9b6da01013abf911bcbcc0000",
+     "valueLabel": "Internal Systems Security"
+    },
+    {
+     "fieldId": "651ba508aac0da4b9cbd91cb",
+     "fieldLabel": "Worker type",
+     "valueId": "d588c41a446c11de98360015c5e6daf6",
+     "valueLabel": "Employee"
+    },
+    {
+     "fieldId": "67db425d21ec03315da962cb",
+     "fieldLabel": "Org",
+     "valueId": "d7055559fd68100169cce9e25c3d0000",
+     "valueLabel": "Security, Trust & IT"
+    },
+    {
+     "fieldId": "651b8b8aaac0da4b9cbd91c9",
+     "fieldLabel": "Recruitment type",
+     "valueId": "2c2d396a-3d34-4286-8196-61a215221fd5",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "651ba0b93066d20abe11145b",
+     "fieldLabel": "Specialty",
+     "valueId": "220b5c7e743d0198d58fd8a7b8007b13",
+     "valueLabel": "Technology"
+    },
+    {
+     "fieldId": "651b8bc23066d20abe111459",
+     "fieldLabel": "Supergroup",
+     "valueId": "560e41ade9330100d7e173192cd60000",
+     "valueLabel": "Security & Trust"
+    },
+    {
+     "fieldId": "651ba1c7aac0da4b9cbd91ca",
+     "fieldLabel": "Role level",
+     "valueId": "C1",
+     "valueLabel": "C1"
+    },
+    {
+     "fieldId": "651b99e25ddc3c31d9224321",
+     "fieldLabel": "Group",
+     "valueId": "6076a7ba6b8a01966939b232ce001c03",
+     "valueLabel": "Security"
+    },
+    {
+     "fieldId": "651ba171eec5b66729429433",
+     "fieldLabel": "Subspecialty",
+     "valueId": "220b5c7e743d01c6441f02f4b700b712",
+     "valueLabel": "Security Engineering"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "au",
+     "valueLabel": "Australia"
+    },
+    {
+     "fieldId": "6514d94a9c140e09b2e649f5",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "Canva"
+    },
+    {
+     "fieldId": "651b8a7b58759b40ab8abd45",
+     "fieldLabel": "Employment type",
+     "valueId": "01ca83be4eaa01d34208432ca5005301",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "651b8e51da1ddb62f488492c",
+     "fieldLabel": "Subgroup",
+     "valueId": "ba609a0bf9ed10018ef5eb0b1fc80000",
+     "valueLabel": "Enterprise Security"
+    },
+    {
+     "fieldId": "651ba22058759b40ab8abd46",
+     "fieldLabel": "Time type",
+     "valueId": "2ca83e80de45013371c1658ff3029500",
+     "valueLabel": "Full time"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/canva/postings/6000000001554834",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "6000000001554832",
+   "name": "Enterprise Security Manager ",
+   "uuid": "487ee7ec-3cb5-469b-a0d0-66d218c53de2",
+   "jobAdId": "344c0b2e-c9c8-41ba-bd0e-6556427ffce8",
+   "defaultJobAd": false,
+   "refNumber": "R102297",
+   "company": {
+    "identifier": "Canva",
+    "name": "Canva"
+   },
+   "releasedDate": "2026-11-05T23:50:33.423Z",
+   "location": {
+    "city": "Perth",
+    "region": "WA",
+    "country": "au",
+    "remote": true,
+    "hybrid": false,
+    "latitude": "-31.9513993",
+    "longitude": "115.8616783",
+    "fullLocation": "Perth, WA, Australia"
+   },
+   "industry": {
+    "id": "computer_software",
+    "label": "Computer Software"
+   },
+   "department": {},
+   "function": {
+    "id": "information_technology",
+    "label": "Information Technology"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "not_applicable",
+    "label": "Not Applicable"
+   },
+   "customField": [
+    {
+     "fieldId": "651ba0114967807d2e86fe5a",
+     "fieldLabel": "Team",
+     "valueId": "8e0f56d9b6da01013abf911bcbcc0000",
+     "valueLabel": "Internal Systems Security"
+    },
+    {
+     "fieldId": "651ba508aac0da4b9cbd91cb",
+     "fieldLabel": "Worker type",
+     "valueId": "d588c41a446c11de98360015c5e6daf6",
+     "valueLabel": "Employee"
+    },
+    {
+     "fieldId": "67db425d21ec03315da962cb",
+     "fieldLabel": "Org",
+     "valueId": "d7055559fd68100169cce9e25c3d0000",
+     "valueLabel": "Security, Trust & IT"
+    },
+    {
+     "fieldId": "651b8b8aaac0da4b9cbd91c9",
+     "fieldLabel": "Recruitment type",
+     "valueId": "2c2d396a-3d34-4286-8196-61a215221fd5",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "651ba0b93066d20abe11145b",
+     "fieldLabel": "Specialty",
+     "valueId": "220b5c7e743d0198d58fd8a7b8007b13",
+     "valueLabel": "Technology"
+    },
+    {
+     "fieldId": "651b8bc23066d20abe111459",
+     "fieldLabel": "Supergroup",
+     "valueId": "560e41ade9330100d7e173192cd60000",
+     "valueLabel": "Security & Trust"
+    },
+    {
+     "fieldId": "651ba1c7aac0da4b9cbd91ca",
+     "fieldLabel": "Role level",
+     "valueId": "C1",
+     "valueLabel": "C1"
+    },
+    {
+     "fieldId": "651b99e25ddc3c31d9224321",
+     "fieldLabel": "Group",
+     "valueId": "6076a7ba6b8a01966939b232ce001c03",
+     "valueLabel": "Security"
+    },
+    {
+     "fieldId": "651ba171eec5b66729429433",
+     "fieldLabel": "Subspecialty",
+     "valueId": "220b5c7e743d01c6441f02f4b700b712",
+     "valueLabel": "Security Engineering"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "au",
+     "valueLabel": "Australia"
+    },
+    {
+     "fieldId": "6514d94a9c140e09b2e649f5",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "Canva"
+    },
+    {
+     "fieldId": "651b8a7b58759b40ab8abd45",
+     "fieldLabel": "Employment type",
+     "valueId": "01ca83be4eaa01d34208432ca5005301",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "651b8e51da1ddb62f488492c",
+     "fieldLabel": "Subgroup",
+     "valueId": "ba609a0bf9ed10018ef5eb0b1fc80000",
+     "valueLabel": "Enterprise Security"
+    },
+    {
+     "fieldId": "651ba22058759b40ab8abd46",
+     "fieldLabel": "Time type",
+     "valueId": "2ca83e80de45013371c1658ff3029500",
+     "valueLabel": "Full time"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/canva/postings/6000000001554832",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "6000000001554825",
+   "name": "Enterprise Security Manager ",
+   "uuid": "cd650485-baef-4ad5-89ce-62ac8edc8ab9",
+   "jobAdId": "d8b95cea-7b33-4522-ad9a-1939ba614d8e",
+   "defaultJobAd": false,
+   "refNumber": "R102297",
+   "company": {
+    "identifier": "Canva",
+    "name": "Canva"
+   },
+   "releasedDate": "2026-11-05T23:49:56.579Z",
+   "location": {
+    "city": "Melbourne",
+    "region": "VIC",
+    "country": "au",
+    "remote": false,
+    "hybrid": true,
+    "hybridDescription": "Sydney, Melbourne or Remote",
+    "latitude": "-37.8136276",
+    "longitude": "144.9630576",
+    "fullLocation": "Melbourne, VIC, Australia"
+   },
+   "industry": {
+    "id": "computer_software",
+    "label": "Computer Software"
+   },
+   "department": {},
+   "function": {
+    "id": "information_technology",
+    "label": "Information Technology"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "not_applicable",
+    "label": "Not Applicable"
+   },
+   "customField": [
+    {
+     "fieldId": "651ba0114967807d2e86fe5a",
+     "fieldLabel": "Team",
+     "valueId": "8e0f56d9b6da01013abf911bcbcc0000",
+     "valueLabel": "Internal Systems Security"
+    },
+    {
+     "fieldId": "651ba508aac0da4b9cbd91cb",
+     "fieldLabel": "Worker type",
+     "valueId": "d588c41a446c11de98360015c5e6daf6",
+     "valueLabel": "Employee"
+    },
+    {
+     "fieldId": "67db425d21ec03315da962cb",
+     "fieldLabel": "Org",
+     "valueId": "d7055559fd68100169cce9e25c3d0000",
+     "valueLabel": "Security, Trust & IT"
+    },
+    {
+     "fieldId": "651b8b8aaac0da4b9cbd91c9",
+     "fieldLabel": "Recruitment type",
+     "valueId": "2c2d396a-3d34-4286-8196-61a215221fd5",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "651ba0b93066d20abe11145b",
+     "fieldLabel": "Specialty",
+     "valueId": "220b5c7e743d0198d58fd8a7b8007b13",
+     "valueLabel": "Technology"
+    },
+    {
+     "fieldId": "651b8bc23066d20abe111459",
+     "fieldLabel": "Supergroup",
+     "valueId": "560e41ade9330100d7e173192cd60000",
+     "valueLabel": "Security & Trust"
+    },
+    {
+     "fieldId": "651ba1c7aac0da4b9cbd91ca",
+     "fieldLabel": "Role level",
+     "valueId": "C1",
+     "valueLabel": "C1"
+    },
+    {
+     "fieldId": "651b99e25ddc3c31d9224321",
+     "fieldLabel": "Group",
+     "valueId": "6076a7ba6b8a01966939b232ce001c03",
+     "valueLabel": "Security"
+    },
+    {
+     "fieldId": "651ba171eec5b66729429433",
+     "fieldLabel": "Subspecialty",
+     "valueId": "220b5c7e743d01c6441f02f4b700b712",
+     "valueLabel": "Security Engineering"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "au",
+     "valueLabel": "Australia"
+    },
+    {
+     "fieldId": "6514d94a9c140e09b2e649f5",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "Canva"
+    },
+    {
+     "fieldId": "651b8a7b58759b40ab8abd45",
+     "fieldLabel": "Employment type",
+     "valueId": "01ca83be4eaa01d34208432ca5005301",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "651b8e51da1ddb62f488492c",
+     "fieldLabel": "Subgroup",
+     "valueId": "ba609a0bf9ed10018ef5eb0b1fc80000",
+     "valueLabel": "Enterprise Security"
+    },
+    {
+     "fieldId": "651ba22058759b40ab8abd46",
+     "fieldLabel": "Time type",
+     "valueId": "2ca83e80de45013371c1658ff3029500",
+     "valueLabel": "Full time"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/canva/postings/6000000001554825",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  }
+ ]
+}

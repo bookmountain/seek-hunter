@@ -10,7 +10,7 @@ from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
 
-from seekhunter.domain import JobData, normalize_location
+from seekhunter.domain import JobData, seek_location
 from seekhunter.http import SourceBlocked
 from seekhunter.models import SearchProfile
 
@@ -44,15 +44,6 @@ def _clean(value: Any) -> Any:
     if isinstance(value, str) and not value.strip():
         return None
     return value
-
-
-def _location(raw: str | None) -> str:
-    """'Gepps Cross, SA, Australia' -> 'Gepps Cross SA' (SEEK style)."""
-    loc = normalize_location(raw or "")
-    parts = [p.strip() for p in loc.split(",") if p.strip()]
-    if len(parts) >= 2 and parts[-1].upper() in _STATES:
-        return f"{', '.join(parts[:-1])} {parts[-1].upper()}"
-    return ", ".join(parts)
 
 
 def _work_type(raw: str | None) -> str:
@@ -101,7 +92,7 @@ def parse_row(row: dict) -> JobData:
         external_id=external_id,
         title=_clean(row.get("title")) or "",
         company=_clean(row.get("company")) or "",
-        location=_location(_clean(row.get("location"))),
+        location=seek_location(_clean(row.get("location")) or ""),
         work_type=_work_type(_clean(row.get("job_type"))),
         url=url,
         salary_label=salary_label(row.get("min_amount"), row.get("max_amount"), row.get("interval")),

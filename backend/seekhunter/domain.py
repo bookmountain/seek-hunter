@@ -132,6 +132,19 @@ def normalize_location(location: str) -> str:
     return loc
 
 
+_STATE_CODES = set(_STATE_ABBR.values())
+
+
+def seek_location(location: str) -> str:
+    """Like `normalize_location`, but also folds a trailing state code into SEEK style:
+    'Gepps Cross, SA, Australia' -> 'Gepps Cross SA', 'Brisbane, QLD' -> 'Brisbane QLD'."""
+    loc = normalize_location(location or "")
+    parts = [p.strip() for p in loc.split(",") if p.strip()]
+    if len(parts) >= 2 and parts[-1].upper() in _STATE_CODES:
+        return f"{', '.join(parts[:-1])} {parts[-1].upper()}"
+    return ", ".join(parts)
+
+
 def html_to_text(html: str) -> str:
     if not html:
         return ""

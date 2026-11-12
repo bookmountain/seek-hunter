@@ -1,0 +1,336 @@
+{
+ "nextPage": "WzE3ODE1NjgwMDAwMDAsNTg5NDkzMV0=",
+ "results": [
+  {
+   "id": 6252941,
+   "shortcode": "6D9BD8CE22",
+   "title": "AI Operations - Rokt Residency",
+   "remote": false,
+   "location": {
+    "city": "New York",
+    "country": "United States",
+    "countryCode": "US",
+    "region": "New York"
+   },
+   "locations": [
+    {
+     "city": "New York",
+     "country": "United States",
+     "countryCode": "US",
+     "hidden": false,
+     "region": "New York"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "4",
+   "published": "2026-11-06T00:00:00.000Z",
+   "type": "contract",
+   "language": "en",
+   "department": [
+    "Operations"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  },
+  {
+   "id": 6218199,
+   "shortcode": "616F2D0286",
+   "title": "Junior Software Engineer - Rokt Residency",
+   "remote": false,
+   "location": {
+    "city": "New York",
+    "country": "United States",
+    "countryCode": "US",
+    "region": "New York"
+   },
+   "locations": [
+    {
+     "city": "New York",
+     "country": "United States",
+     "countryCode": "US",
+     "hidden": false,
+     "region": "New York"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "5",
+   "published": "2026-10-22T00:00:00.000Z",
+   "type": "contract",
+   "language": "en",
+   "department": [
+    "Engineering"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  },
+  {
+   "id": 5954468,
+   "shortcode": "B17D213BA6",
+   "title": "Technical Operation Manager",
+   "remote": false,
+   "location": {
+    "city": "Tokyo",
+    "country": "Japan",
+    "countryCode": "JP",
+    "region": "Tokyo"
+   },
+   "locations": [
+    {
+     "city": "Tokyo",
+     "country": "Japan",
+     "countryCode": "JP",
+     "hidden": false,
+     "region": "Tokyo"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "1",
+   "published": "2026-10-01T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "Operations"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  },
+  {
+   "id": 6109235,
+   "shortcode": "78589A4D7B",
+   "title": "Enterprise Account Manager - Strategic Key Accounts",
+   "remote": false,
+   "location": {
+    "city": "Sydney",
+    "country": "Australia",
+    "countryCode": "AU",
+    "region": "New South Wales"
+   },
+   "locations": [
+    {
+     "city": "Sydney",
+     "country": "Australia",
+     "countryCode": "AU",
+     "hidden": false,
+     "region": "New South Wales"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "1",
+   "published": "2026-09-17T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "Customer Success"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  },
+  {
+   "id": 6067756,
+   "shortcode": "6172DB985A",
+   "title": "Senior Customer Success Manager, Rokt Ads",
+   "remote": false,
+   "location": {
+    "city": "Sydney",
+    "country": "Australia",
+    "countryCode": "AU",
+    "region": "New South Wales"
+   },
+   "locations": [
+    {
+     "city": "Sydney",
+     "country": "Australia",
+     "countryCode": "AU",
+     "hidden": false,
+     "region": "New South Wales"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "0",
+   "published": "2026-08-31T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "Customer Success"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  },
+  {
+   "id": 6067838,
+   "shortcode": "470376CA23",
+   "title": "Enterprise Account Manager - Rokt Ads",
+   "remote": false,
+   "location": {
+    "city": "Sydney",
+    "country": "Australia",
+    "countryCode": "AU",
+    "region": "New South Wales"
+   },
+   "locations": [
+    {
+     "city": "Sydney",
+     "country": "Australia",
+     "countryCode": "AU",
+     "hidden": false,
+     "region": "New South Wales"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "0",
+   "published": "2026-08-31T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "Business Development"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  },
+  {
+   "id": 6059471,
+   "shortcode": "011BF9FA87",
+   "title": "Business Development Manager, Rokt Ads Japan",
+   "remote": false,
+   "location": {
+    "city": "Tokyo",
+    "country": "Japan",
+    "countryCode": "JP",
+    "region": "Tokyo"
+   },
+   "locations": [
+    {
+     "city": "Tokyo",
+     "country": "Japan",
+     "countryCode": "JP",
+     "hidden": false,
+     "region": "Tokyo"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "1",
+   "published": "2026-08-27T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "Business Development"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  },
+  {
+   "id": 6035978,
+   "shortcode": "8C792C8AC9",
+   "title": "Strategic Account Manager, EMEA",
+   "remote": false,
+   "location": {
+    "city": "London",
+    "country": "United Kingdom",
+    "countryCode": "GB",
+    "region": "England"
+   },
+   "locations": [
+    {
+     "city": "London",
+     "country": "United Kingdom",
+     "countryCode": "GB",
+     "hidden": false,
+     "region": "England"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "1",
+   "published": "2026-08-18T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "Customer Success"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  },
+  {
+   "id": 6031681,
+   "shortcode": "72725EC857",
+   "title": "Senior Independent Sales Consultant - Rokt Ads, Germany (Independent Contractor)",
+   "remote": true,
+   "location": {
+    "city": "Berlin",
+    "country": "Germany",
+    "countryCode": "DE",
+    "region": "Berlin"
+   },
+   "locations": [
+    {
+     "city": "Berlin",
+     "country": "Germany",
+     "countryCode": "DE",
+     "hidden": false,
+     "region": "Berlin"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "1",
+   "published": "2026-08-14T00:00:00.000Z",
+   "type": "contract",
+   "language": "en",
+   "department": [
+    "Business Development"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "remote"
+  },
+  {
+   "id": 5894931,
+   "shortcode": "361B100E01",
+   "title": "Account Manager, Rokt Ads Japan",
+   "remote": false,
+   "location": {
+    "city": "Tokyo",
+    "country": "Japan",
+    "countryCode": "JP",
+    "region": "Tokyo"
+   },
+   "locations": [
+    {
+     "city": "Tokyo",
+     "country": "Japan",
+     "countryCode": "JP",
+     "hidden": false,
+     "region": "Tokyo"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "1",
+   "published": "2026-06-16T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "Customer Success"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  }
+ ],
+ "total": 11
+}

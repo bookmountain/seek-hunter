@@ -1,0 +1,230 @@
+{
+ "apiVersion": "1",
+ "jobs": [
+  {
+   "id": "6cc722d6-175e-424a-a46e-11cb2e9bbf6b",
+   "title": "Staff Corporate Security Engineer",
+   "department": "Engineering",
+   "team": "Information Security",
+   "employmentType": "FullTime",
+   "location": "AU - Melbourne",
+   "shouldDisplayCompensationOnJobPostings": false,
+   "secondaryLocations": [
+    {
+     "location": "AU - Sydney",
+     "address": {
+      "postalAddress": {
+       "addressRegion": "New South Wales",
+       "addressCountry": "Australia",
+       "addressLocality": "Sydney"
+      }
+     }
+    }
+   ],
+   "publishedAt": "2026-03-07T04:51:22.452+00:00",
+   "isListed": true,
+   "isRemote": null,
+   "workplaceType": null,
+   "address": {
+    "postalAddress": {
+     "addressRegion": "Victoria",
+     "addressCountry": "Australia",
+     "addressLocality": "Melbourne"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/airwallex/6cc722d6-175e-424a-a46e-11cb2e9bbf6b",
+   "applyUrl": "https://jobs.ashbyhq.com/airwallex/6cc722d6-175e-424a-a46e-11cb2e9bbf6b/application",
+   "descriptionHtml": "<h2><strong>About Airwallex</strong></h2><p style=\"min-height:1.5em\">Airwallex is the AI-native financial operating system for a real-time, intelligent economy. More than 675,000 businesses, including McLaren Racing, Qantas, SHEIN, and TikTok, use us, directly or through our platform partners, to run their financial operations or build and monetize financial products of their own.</p><p style=\"min-height:1.5em\">We started in Melbourne in 2015 to build the infrastructure global commerce runs on. We're the regulated backbone behind global payments: not by accident, but by design. A decade plus, 85+ licenses, and a financial infrastructure spanning North America, Europe, the Middle East, and Asia-Pacific.</p><p style=\"min-height:1.5em\">We're co-headquartered in San Francisco and Singapore, with more than 2,700 people across 27 offices. We hire builders with founder-level energy, people who ",
+   "descriptionPlain": "ABOUT AIRWALLEX\n\nAirwallex is the AI-native financial operating system for a real-time, intelligent economy. More than 675,000 businesses, including McLaren Racing, Qantas, SHEIN, and TikTok, use us, directly or through our platform partners, to run their financial operations or build and monetize financial products of their own.\n\nWe started in Melbourne in 2015 to build the infrastructure global commerce runs on. We're the regulated backbone behind global payments: not by accident, but by design. A decade plus, 85+ licenses, and a financial infrastructure spanning North America, Europe, the M",
+   "compensation": {
+    "compensationTierSummary": null,
+    "scrapeableCompensationSalarySummary": null,
+    "compensationTiers": [],
+    "summaryComponents": []
+   }
+  },
+  {
+   "id": "b0628876-8e67-4e58-974e-a17558798daa",
+   "title": "Engineering Lead / Manager, KYC (Relocation to Singapore)",
+   "department": "Engineering",
+   "team": "Risk Platform",
+   "employmentType": "FullTime",
+   "location": "AU - Sydney",
+   "shouldDisplayCompensationOnJobPostings": false,
+   "secondaryLocations": [
+    {
+     "location": "AU - Melbourne",
+     "address": {
+      "postalAddress": {
+       "addressRegion": "Victoria",
+       "addressCountry": "Australia",
+       "addressLocality": "Melbourne"
+      }
+     }
+    }
+   ],
+   "publishedAt": "2026-03-30T03:04:31.198+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Hybrid",
+   "address": {
+    "postalAddress": {
+     "addressRegion": "New South Wales",
+     "addressCountry": "Australia",
+     "addressLocality": "Sydney"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/airwallex/b0628876-8e67-4e58-974e-a17558798daa",
+   "applyUrl": "https://jobs.ashbyhq.com/airwallex/b0628876-8e67-4e58-974e-a17558798daa/application",
+   "descriptionHtml": "<h2><strong>About Airwallex</strong></h2><p style=\"min-height:1.5em\">Airwallex is the AI-native financial operating system for a real-time, intelligent economy. More than 675,000 businesses, including McLaren Racing, Qantas, SHEIN, and TikTok, use us, directly or through our platform partners, to run their financial operations or build and monetize financial products of their own.</p><p style=\"min-height:1.5em\">We started in Melbourne in 2015 to build the infrastructure global commerce runs on. We're the regulated backbone behind global payments: not by accident, but by design. A decade plus, 85+ licenses, and a financial infrastructure spanning North America, Europe, the Middle East, and Asia-Pacific.</p><p style=\"min-height:1.5em\">We're co-headquartered in San Francisco and Singapore, with more than 2,700 people across 27 offices. We hire builders with founder-level energy, people who ",
+   "descriptionPlain": "ABOUT AIRWALLEX\n\nAirwallex is the AI-native financial operating system for a real-time, intelligent economy. More than 675,000 businesses, including McLaren Racing, Qantas, SHEIN, and TikTok, use us, directly or through our platform partners, to run their financial operations or build and monetize financial products of their own.\n\nWe started in Melbourne in 2015 to build the infrastructure global commerce runs on. We're the regulated backbone behind global payments: not by accident, but by design. A decade plus, 85+ licenses, and a financial infrastructure spanning North America, Europe, the M",
+   "compensation": {
+    "compensationTierSummary": null,
+    "scrapeableCompensationSalarySummary": null,
+    "compensationTiers": [],
+    "summaryComponents": []
+   }
+  },
+  {
+   "id": "5c2b3a16-52d3-4c3e-b3b1-c6deab07911f",
+   "title": "Staff Product Designer, Design Systems",
+   "department": "Design",
+   "team": "Product Design",
+   "employmentType": "FullTime",
+   "location": "AU - Melbourne",
+   "shouldDisplayCompensationOnJobPostings": false,
+   "secondaryLocations": [
+    {
+     "location": "SG - Singapore",
+     "address": {
+      "postalAddress": {
+       "addressRegion": "Singapore",
+       "addressCountry": "Singapore",
+       "addressLocality": "Singapore"
+      }
+     }
+    },
+    {
+     "location": "AU - Sydney",
+     "address": {
+      "postalAddress": {
+       "addressRegion": "New South Wales",
+       "addressCountry": "Australia",
+       "addressLocality": "Sydney"
+      }
+     }
+    }
+   ],
+   "publishedAt": "2026-10-08T04:01:58.847+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Hybrid",
+   "address": {
+    "postalAddress": {
+     "addressRegion": "Victoria",
+     "addressCountry": "Australia",
+     "addressLocality": "Melbourne"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/airwallex/5c2b3a16-52d3-4c3e-b3b1-c6deab07911f",
+   "applyUrl": "https://jobs.ashbyhq.com/airwallex/5c2b3a16-52d3-4c3e-b3b1-c6deab07911f/application",
+   "descriptionHtml": "<h2><strong>About Airwallex</strong></h2><p style=\"min-height:1.5em\">Airwallex is the AI-native financial operating system for a real-time, intelligent economy. More than 675,000 businesses, including McLaren Racing, Qantas, SHEIN, and TikTok, use us, directly or through our platform partners, to run their financial operations or build and monetize financial products of their own.</p><p style=\"min-height:1.5em\">We started in Melbourne in 2015 to build the infrastructure global commerce runs on. We're the regulated backbone behind global payments: not by accident, but by design. A decade plus, 85+ licenses, and a financial infrastructure spanning North America, Europe, the Middle East, and Asia-Pacific.</p><p style=\"min-height:1.5em\">We're co-headquartered in San Francisco and Singapore, with more than 2,700 people across 27 offices. We hire builders with founder-level energy, people who ",
+   "descriptionPlain": "ABOUT AIRWALLEX\n\nAirwallex is the AI-native financial operating system for a real-time, intelligent economy. More than 675,000 businesses, including McLaren Racing, Qantas, SHEIN, and TikTok, use us, directly or through our platform partners, to run their financial operations or build and monetize financial products of their own.\n\nWe started in Melbourne in 2015 to build the infrastructure global commerce runs on. We're the regulated backbone behind global payments: not by accident, but by design. A decade plus, 85+ licenses, and a financial infrastructure spanning North America, Europe, the M",
+   "compensation": {
+    "compensationTierSummary": null,
+    "scrapeableCompensationSalarySummary": null,
+    "compensationTiers": [],
+    "summaryComponents": []
+   }
+  },
+  {
+   "id": "46586b3a-ab75-4f41-b51a-5cf34a7d598b",
+   "title": "Head of SME & Growth, Canada",
+   "department": "SME & Growth Business",
+   "team": "SME & Growth Business",
+   "employmentType": "FullTime",
+   "location": "CA - Toronto",
+   "shouldDisplayCompensationOnJobPostings": true,
+   "secondaryLocations": [],
+   "publishedAt": "2026-10-27T14:40:16.076+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Hybrid",
+   "address": {
+    "postalAddress": {
+     "addressRegion": "Ontario",
+     "addressCountry": "Canada",
+     "addressLocality": "Toronto"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/airwallex/46586b3a-ab75-4f41-b51a-5cf34a7d598b",
+   "applyUrl": "https://jobs.ashbyhq.com/airwallex/46586b3a-ab75-4f41-b51a-5cf34a7d598b/application",
+   "descriptionHtml": "<h2><strong>About Airwallex</strong></h2><p style=\"min-height:1.5em\">Airwallex is the AI-native financial operating system for a real-time, intelligent economy. More than 675,000 businesses, including McLaren Racing, Qantas, SHEIN, and TikTok, use us, directly or through our platform partners, to run their financial operations or build and monetize financial products of their own.</p><p style=\"min-height:1.5em\">We started in Melbourne in 2015 to build the infrastructure global commerce runs on. We're the regulated backbone behind global payments: not by accident, but by design. A decade plus, 85+ licenses, and a financial infrastructure spanning North America, Europe, the Middle East, and Asia-Pacific.</p><p style=\"min-height:1.5em\">We're co-headquartered in San Francisco and Singapore, with more than 2,700 people across 27 offices. We hire builders with founder-level energy, people who ",
+   "descriptionPlain": "ABOUT AIRWALLEX\n\nAirwallex is the AI-native financial operating system for a real-time, intelligent economy. More than 675,000 businesses, including McLaren Racing, Qantas, SHEIN, and TikTok, use us, directly or through our platform partners, to run their financial operations or build and monetize financial products of their own.\n\nWe started in Melbourne in 2015 to build the infrastructure global commerce runs on. We're the regulated backbone behind global payments: not by accident, but by design. A decade plus, 85+ licenses, and a financial infrastructure spanning North America, Europe, the M",
+   "compensation": {
+    "compensationTierSummary": "CA$400K \u2013 CA$500K \u2022 Offers Equity \u2022 Offers Commission",
+    "scrapeableCompensationSalarySummary": "CA$400K - CA$500K",
+    "compensationTiers": [
+     {
+      "id": "f244c616-6107-4683-a822-b080fde311ad",
+      "tierSummary": "OTE CA$400K \u2013 CA$500K \u2022 Offers Equity \u2022 Offers Commission",
+      "title": null,
+      "additionalInformation": null,
+      "components": [
+       {
+        "id": "ea2a6234-d1bb-41f6-a0f4-c5dbe7bdb72d",
+        "summary": "OTE CA$400K \u2013 CA$500K",
+        "compensationType": "Salary",
+        "interval": "1 YEAR",
+        "currencyCode": "CAD",
+        "minValue": 400000,
+        "maxValue": 500000
+       },
+       {
+        "id": "37f4e561-e127-4d59-b198-70369b548f32",
+        "summary": "Offers Equity",
+        "compensationType": "EquityPercentage",
+        "interval": "NONE",
+        "currencyCode": null,
+        "minValue": null,
+        "maxValue": null
+       },
+       {
+        "id": "e349752b-3205-401b-bf15-f1ecac1e06b7",
+        "summary": "Offers Commission",
+        "compensationType": "Commission",
+        "interval": "1 YEAR",
+        "currencyCode": "CAD",
+        "minValue": null,
+        "maxValue": null
+       }
+      ]
+     }
+    ],
+    "summaryComponents": [
+     {
+      "compensationType": "Salary",
+      "interval": "1 YEAR",
+      "currencyCode": "CAD",
+      "minValue": 400000,
+      "maxValue": 500000
+     },
+     {
+      "compensationType": "EquityPercentage",
+      "interval": "NONE",
+      "currencyCode": null,
+      "minValue": null,
+      "maxValue": null
+     },
+     {
+      "compensationType": "Commission",
+      "interval": "1 YEAR",
+      "currencyCode": "CAD",
+      "minValue": null,
+      "maxValue": null
+     }
+    ]
+   }
+  }
+ ]
+}

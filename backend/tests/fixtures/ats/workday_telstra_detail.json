@@ -1,0 +1,43 @@
+{
+ "jobPostingInfo": {
+  "id": "fbaf9279f44d100123feda343b630000",
+  "title": "SRE Engineer",
+  "jobDescription": "<h2>Employment Type</h2>Permanent<p style=\"text-align:inherit\"></p><p style=\"text-align:inherit\"></p><h2>Closing Date</h2>13 Nov 2026 11:59pm<p style=\"text-align:inherit\"></p><p style=\"text-align:inherit\"></p><h2>Job Title</h2>SRE Engineer<p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b>Job Summary</b></p><h2>Job Description</h2><br /><p><b>What You&#39;ll Do: </b></p><br /><ul><li><span style=\"color:#242424\">Provide SRE leadership across Telstra Inventory platforms (TNI, Cramer-LI and TPD), ensuring reliable, resilient and efficient production services.</span></li><li><span style=\"color:#242424\">Lead multi-location engineering and operations teams, setting priorities, support coverage and effective ways of working.</span></li><li><span style=\"color:#242424\">Drive service reliability and continuous improvement, reducing customer-impacting incidents, improving recovery and strengthening resilience.</span></li><li><span style=\"color:#242424\">Lead complex incident troubleshooting and response, including blameless post-incident reviews and permanent remediation of recurring issues.</span></li><li><span style=\"color:#242424\">Partner with business, architecture, engineering, DevOps and operations teams to manage priorities, risks and dependencies.</span></li><li><span style=\"color:#242424\">Identify and drive automation opportunities across operational tasks, reporting, remediation and support processes to reduce manual effort.</span></li><li><span style=\"color:#24242",
+  "location": "Australia (Flexible)",
+  "postedOn": "Posted Today",
+  "startDate": "2026-11-11",
+  "timeType": "Full time",
+  "jobReqId": "JR-10176306",
+  "jobPostingId": "SRE-Engineer_JR-10176306",
+  "jobPostingSiteId": "Telstra_Careers",
+  "country": {
+   "descriptor": "Australia",
+   "id": "d903bb3fedad45039383f6de334ad4db"
+  },
+  "logoImage": {
+   "src": "/wday/cxs/telstra/Telstra_Careers/sidebarimage/b78e16dcf2d21001c33807c5c0370000",
+   "alt": "Telstra logo"
+  },
+  "canApply": true,
+  "posted": true,
+  "includeResumeParsing": true,
+  "jobRequisitionLocation": {
+   "descriptor": "242 Exhibition St",
+   "country": {
+    "descriptor": "Australia",
+    "id": "d903bb3fedad45039383f6de334ad4db",
+    "alpha2Code": "AU"
+   }
+  },
+  "externalUrl": "https://telstra.wd3.myworkdayjobs.com/Telstra_Careers/job/Australia-Flexible/SRE-Engineer_JR-10176306",
+  "questionnaireId": "f57c9118a3001000dcb0953271fe0000",
+  "timeLeftToApply": "1 day left to apply",
+  "endDate": "2026-11-14",
+  "jobPostingEndDateAsText": "End Date: November 14, 2026"
+ },
+ "hiringOrganization": {
+  "name": "Telstra Limited",
+  "url": ""
+ },
+ "userAuthenticated": false
+}

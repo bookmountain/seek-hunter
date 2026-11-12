@@ -1,0 +1,38 @@
+{
+ "results": [
+  {
+   "id": 5832059,
+   "shortcode": "465765951E",
+   "title": "Strategic Customer Success Manager, Customer Data Platform (CDP)",
+   "remote": false,
+   "location": {
+    "city": "New York",
+    "country": "United States",
+    "countryCode": "US",
+    "region": "New York"
+   },
+   "locations": [
+    {
+     "city": "New York",
+     "country": "United States",
+     "countryCode": "US",
+     "hidden": false,
+     "region": "New York"
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "1",
+   "published": "2026-05-20T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "Customer Success"
+   ],
+   "accountUid": "92a15014-0636-4bb3-9914-facca560500f",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  }
+ ],
+ "total": 11
+}
