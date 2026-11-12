@@ -72,6 +72,7 @@ def add_company(session: Session, name: str, careers_url: str | None, http, clie
         row.last_error = "no ATS found; add a careers URL"
         session.add(row)
         session.commit()
+        session.refresh(row)
     return row
 
 

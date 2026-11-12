@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from sqlmodel import Session
 
-from seekhunter import repo
+from seekhunter import radar_cli, repo
 from seekhunter.config import Env, get_env
 from seekhunter.db import get_engine, init_db
 from seekhunter.lock import RunLocked, run_lock
@@ -79,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     clp.add_argument("tailoring_id", type=int)
     rmp = sub.add_parser("resume-matcher", help="(re)run the Resume-Matcher analysis of a finished tailoring")
     rmp.add_argument("tailoring_id", type=int)
+    radar_cli.add_parser(sub)
     return parser
 
 
@@ -210,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
         return _tailor_commands(args, env, notifier)
     if args.command == "resume-matcher":
         return _resume_matcher(env, args.tailoring_id)
+    if args.command == "radar":
+        return radar_cli.main(args, env, notifier)
 
     try:
         if args.command == "market":

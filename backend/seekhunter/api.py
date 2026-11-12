@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, col, select
 
 from seekhunter import auth, market, repo
+from seekhunter.api_radar import router as radar_router
 from seekhunter.config import get_env
 from seekhunter.contacts import linkedin_search_urls
 from seekhunter.db import get_session, init_db
@@ -1431,6 +1432,8 @@ def create_app(init: bool = True) -> FastAPI:
         if n < 1:
             raise HTTPException(404)
         return _current_file(hash, f"resume-{n}.png")
+
+    app.include_router(radar_router)  # before the SPA catch-all below
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):

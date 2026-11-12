@@ -193,3 +193,27 @@ def test_resume_matcher_command_disabled_without_url(monkeypatch):
     monkeypatch.setenv("RM_BASE_URL", "")
     monkeypatch.setattr(cli, "init_db", lambda: None)
     assert cli.main(["resume-matcher", "1"]) == 2
+
+
+def test_parser_radar():
+    args = cli.build_parser().parse_args(["radar"])
+    assert (args.command, args.company, args.seed, args.pending) == ("radar", None, False, False)
+    args = cli.build_parser().parse_args(["radar", "--company", "3", "--company", "4"])
+    assert args.company == [3, 4]
+    assert cli.build_parser().parse_args(["radar", "--seed"]).seed is True
+    assert cli.build_parser().parse_args(["radar", "--pending"]).pending is True
+
+
+def test_radar_command_seeds_with_a_temp_db(monkeypatch, tmp_path, capsys):
+    import json
+
+    from seekhunter.db import get_engine
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'db.sqlite'}")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    get_engine.cache_clear()
+    try:
+        assert cli.main(["radar", "--seed"]) == 0
+    finally:
+        get_engine.cache_clear()
+    assert json.loads(capsys.readouterr().out) == {"probed": 0, "found": 0, "missed": 0, "added": []}
