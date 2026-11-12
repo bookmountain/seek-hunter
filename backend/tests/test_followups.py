@@ -118,6 +118,14 @@ def test_long_silence_suggests_no_response(session):
     assert "No response" in followups.due(session)[0].hint
 
 
+def test_no_contact_hint_and_spoken_title_in_message(session):
+    _applied(session, 6, company="Atlassian", title="Java Developer - 6 month contract")
+    item = followups.due(session)[0]
+    assert item.hint.startswith("No contact saved")
+    assert "the Java Developer role at Atlassian" in item.message
+    assert item.subject == "Following up: Java Developer"
+
+
 # ---------------------------------------------------------------------------------------- linkedin
 
 

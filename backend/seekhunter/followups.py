@@ -13,11 +13,13 @@ dismissing or marking done hides only that occurrence; new activity starts a new
 """
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, col, select
 
 from seekhunter import repo
+from seekhunter.call_script import spoken_title
 from seekhunter.domain import is_agency
 from seekhunter.models import (
     Application,
@@ -37,6 +39,7 @@ LINKEDIN_STATUS = {"linkedin_invite": "sent", "linkedin_accepted": "accepted",
                    "linkedin_message": "messaged", "linkedin_reply": "replied"}
 REPLY_KINDS = ("linkedin_reply", "meeting")
 STALE_DAYS = 30
+ADELAIDE = ZoneInfo("Australia/Adelaide")
 DIGEST_MAX_ITEMS = 12
 SIGN_OFF = "Thanks,\nBook Sam"
 INVITE_HINT_OTHER = "Invite not accepted yet. Reach them another way, or withdraw and resend with a note."
@@ -159,6 +162,7 @@ def _greeting(contact: Contact | None) -> str:
 
 
 def _role_phrase(title: str, company: str, agency: bool) -> str:
+    title = spoken_title(title) if title else ""
     if not title:
         return f"roles at {company}" if company else "the role"
     if agency or not company:
@@ -179,12 +183,13 @@ def _channel(contact: Contact | None, linkedin_connected: bool) -> str:
 def nudge_message(*, contact: Contact | None, title: str, company: str, applied_at: datetime,
                   agency: bool) -> tuple[str, str]:
     """(subject, body) for a polite application follow-up. States only facts SeekHunter knows."""
-    when = f"{applied_at.day} {applied_at:%B}"
+    local = applied_at.replace(tzinfo=UTC).astimezone(ADELAIDE)
+    when = f"{local.day} {local:%B}"
     role = _role_phrase(title, company, agency)
     body = (f"{_greeting(contact)}\n\nI applied for {role} on {when} and wanted to follow up. I'm still "
             "keen on it and happy to send anything else that would help, or to have a quick chat this "
             f"week.\n\n{SIGN_OFF}")
-    return f"Following up: {title or 'my application'}", body
+    return f"Following up: {spoken_title(title) if title else 'my application'}", body
 
 
 def invite_pending_message(contact: Contact, title: str, company: str, agency: bool) -> str:
@@ -238,6 +243,14 @@ def _primary_contact(contacts: list[Contact]) -> Contact | None:
     return contacts[0] if contacts else None
 
 
+def _nudge_hint(age: int, contact: Contact | None) -> str | None:
+    if age >= STALE_DAYS:
+        return f"No reply in {age} days: consider marking it No response."
+    if contact is None:
+        return "No contact saved: find the hiring manager or recruiter on LinkedIn or the company site."
+    return None
+
+
 def _app_nudges(idx: Index, now: datetime, days: int, agency_keywords: list[str]) -> list[FollowUp]:
     out = []
     cutoff = now - timedelta(days=days)
@@ -258,7 +271,7 @@ def _app_nudges(idx: Index, now: datetime, days: int, agency_keywords: list[str]
             key=f"application_nudge-{app.id}-{_stamp(last)}", kind="application_nudge",
             days=(now - last).days, since=last, company=app.company, title=app.title,
             channel=_channel(contact, connected), subject=subject, message=body,
-            hint=(f"No reply in {age} days: consider marking it No response." if age >= STALE_DAYS else None),
+            hint=_nudge_hint(age, contact),
             application_id=app.id, job_id=app.job_id, **_contact_fields(contact),
             link=f"/?job={app.job_id}" if app.job_id else "/history?tab=followups"))
     return out
