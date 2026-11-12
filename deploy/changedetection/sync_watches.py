@@ -63,7 +63,7 @@ def watch_body(company: dict, notify_url: str, fetch_backend: str, hours: int) -
         "notification_urls": [notify_url],
         "notification_title": NOTIFICATION_TITLE,
         "notification_body": NOTIFICATION_BODY,
-        "notification_format": "Text",
+        "notification_format": "text",
     }
 
 
