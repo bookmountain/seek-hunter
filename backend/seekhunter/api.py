@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 from sqlmodel import Session, col, select
 
-from seekhunter import market, repo
+from seekhunter import auth, market, repo
 from seekhunter.config import get_env
 from seekhunter.contacts import linkedin_search_urls
 from seekhunter.db import get_session, init_db
@@ -30,7 +30,7 @@ from seekhunter.notify import Notifier, NotifyError, format_brief
 from seekhunter.profile import load_profile
 from seekhunter.resume_doc import ResumeDoc
 from seekhunter.resume_matcher import RMError, client_from_env
-from seekhunter.security import ensure_safe_write_token, ip_allowlist_middleware, require_write
+from seekhunter.security import access_middleware, ensure_safe_write_token, require_write
 from seekhunter.settings_model import AppSettings
 from seekhunter.skills import extract_skills
 from seekhunter.tailor import letter as letter_step
@@ -824,6 +824,7 @@ def _refresh_insights_if_stale(session: Session, job: Job) -> None:
 def create_app(init: bool = True) -> FastAPI:
     env = get_env()
     ensure_safe_write_token(env)
+    auth.ensure_auth_config(env)
     if init:
         init_db()
         from seekhunter.db import get_engine
@@ -833,7 +834,8 @@ def create_app(init: bool = True) -> FastAPI:
 
     docs_kwargs = {} if env.seekhunter_dev else {"docs_url": None, "redoc_url": None, "openapi_url": None}
     app = FastAPI(title="SeekHunter", **docs_kwargs)
-    app.middleware("http")(ip_allowlist_middleware)
+    app.middleware("http")(access_middleware)
+    auth.install(app)
     write = [Depends(require_write)]
 
     @app.get("/api/health")

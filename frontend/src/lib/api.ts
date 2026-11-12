@@ -33,6 +33,8 @@ import type {
 
 const TOKEN_KEY = "seekhunter.token";
 
+// Legacy bearer token: the UI no longer asks for it (browsers sign in with a session cookie), but a
+// token already in localStorage is still sent on writes, which is harmless.
 export const getToken = () => localStorage.getItem(TOKEN_KEY) ?? "";
 export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
 
@@ -44,10 +46,26 @@ export class ApiError extends Error {
   }
 }
 
+export interface AuthMe {
+  authenticated: boolean;
+  username: string | null;
+  login_required: boolean;
+}
+
+const unauthorizedListeners = new Set<() => void>();
+
+/** Called whenever an API request comes back 401 (session missing or expired). */
+export function onUnauthorized(fn: () => void): () => void {
+  unauthorizedListeners.add(fn);
+  return () => {
+    unauthorizedListeners.delete(fn);
+  };
+}
+
 /** Turns a thrown error into a readable message for toasts. */
 export function errMsg(e: unknown): string {
   if (e instanceof ApiError) {
-    if (e.status === 401) return "Set the write token first";
+    if (e.status === 401) return "Not signed in. Sign in again";
     try {
       const data = JSON.parse(e.message) as { detail?: unknown };
       if (Array.isArray(data.detail)) {
@@ -64,12 +82,21 @@ export function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, opts: { quiet401?: boolean } = {}): Promise<T> {
   const headers: Record<string, string> = {};
-  if (method !== "GET") headers.Authorization = `Bearer ${getToken()}`;
+  const token = getToken();
+  if (method !== "GET" && token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  if (!res.ok) throw new ApiError(res.status, await res.text());
+  const res = await fetch(path, {
+    method,
+    headers,
+    credentials: "same-origin",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    if (res.status === 401 && !opts.quiet401) unauthorizedListeners.forEach((fn) => fn());
+    throw new ApiError(res.status, await res.text());
+  }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
@@ -80,6 +107,10 @@ const qs = (params: Record<string, string | undefined>) => {
 };
 
 export const api = {
+  me: () => request<AuthMe>("GET", "/api/auth/me", undefined, { quiet401: true }),
+  login: (username: string, password: string) =>
+    request<void>("POST", "/api/auth/login", { username, password }, { quiet401: true }),
+  logout: () => request<void>("POST", "/api/auth/logout", undefined, { quiet401: true }),
   meta: () => request<{ write_requires_token: boolean }>("GET", "/api/meta"),
   jobs: (p: { view?: string; status?: string; work_type?: string; source?: string; q?: string; city?: string; limit?: string }) =>
     request<Job[]>("GET", `/api/jobs${qs(p)}`),

@@ -22,6 +22,25 @@ def _build_contact_lookup(env: Env) -> Callable[[str, str], str | None] | None:
     return lambda name, company: find_linkedin_profile(name, company, env.brave_api_key)
 
 
+def _hash_password() -> int:
+    import getpass
+
+    from seekhunter import auth
+
+    if sys.stdin.isatty():
+        password = getpass.getpass("Password: ")
+        if getpass.getpass("Repeat: ") != password:
+            print("passwords do not match", file=sys.stderr)
+            return 1
+    else:
+        password = sys.stdin.readline().rstrip("\r\n")
+    if len(password) < 12:
+        print("use at least 12 characters", file=sys.stderr)
+        return 1
+    print(auth.hash_password(password))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="seekhunter")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -30,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     recap = sub.add_parser("recap", help="send today's recap")
     recap.add_argument("--dry-run", action="store_true")
     sub.add_parser("notify-test", help="send a test Telegram message")
+    sub.add_parser("hash-password", help="print an AUTH_PASSWORD_HASH line (stdin or prompt)")
     sub.add_parser("rescore", help="re-score recent jobs after a resume change (no LLM, no notifications)")
     closed = sub.add_parser("check-closed", help="re-check listed ads and hide ones the board says closed")
     closed.add_argument("--limit", type=int, default=500)
@@ -176,6 +196,8 @@ def _resume_matcher(env: Env, tailoring_id: int, client=None) -> int:
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     args = build_parser().parse_args(argv)
+    if args.command == "hash-password":
+        return _hash_password()
     env = get_env()
     init_db()
     notifier = Notifier(env.openclaw_bin, env.telegram_target, dry_run=getattr(args, "dry_run", False))

@@ -35,6 +35,18 @@ class Env(BaseSettings):
     # The IP allowlist already limits who can reach the app; when False, writes from allowed
     # networks don't need the bearer token (the OpenClaw wrapper still sends it harmlessly).
     write_requires_token: bool = True
+    # Login for traffic arriving through the Cloudflare tunnel. Unset AUTH_USERNAME = login disabled
+    # (dev/tests); the tunnel then falls back to the ALLOWED_PUBLIC_IPS allowlist.
+    auth_username: str | None = None
+    # `seekhunter hash-password` output: scrypt$n$r$p$salt_b64$hash_b64
+    auth_password_hash: str = ""
+    # Hex, >= 32 random bytes (`openssl rand -hex 32`). Rotating it logs everyone out.
+    session_secret: str = ""
+
+    @property
+    def login_enabled(self) -> bool:
+        return bool((self.auth_username or "").strip())
+
     # Re-check SEEK applicant numbers when a job is opened (tests turn it off in conftest).
     refresh_insights_on_view: bool = True
 

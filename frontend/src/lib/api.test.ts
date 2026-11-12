@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, api, errMsg, getToken, setToken } from "./api";
+import { ApiError, api, errMsg, getToken, onUnauthorized, setToken } from "./api";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -24,6 +24,27 @@ describe("api", () => {
     expect(getToken()).toBe("abc");
   });
 
+  it("sends cookies same-origin and no bearer header without a stored token", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
+    await api.patchJob(1, { status: "saved" });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init?.credentials).toBe("same-origin");
+    expect(((init?.headers ?? {}) as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  it("notifies listeners on 401, except for the login call itself", async () => {
+    const listener = vi.fn();
+    const off = onUnauthorized(listener);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("no", { status: 401 }));
+    await expect(api.login("book", "bad")).rejects.toMatchObject({ status: 401 });
+    expect(listener).not.toHaveBeenCalled();
+    await expect(api.jobs({})).rejects.toMatchObject({ status: 401 });
+    expect(listener).toHaveBeenCalledTimes(1);
+    off();
+    await expect(api.jobs({})).rejects.toMatchObject({ status: 401 });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it("throws ApiError with status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 401 }));
     await expect(api.patchJob(1, { status: "saved" })).rejects.toMatchObject({ status: 401 });
@@ -31,9 +52,9 @@ describe("api", () => {
 });
 
 describe("errMsg", () => {
-  it("tells the user to set the write token on 401", () => {
-    expect(errMsg(new ApiError(401, '{"detail":"write token required"}'))).toBe("Set the write token first");
-    expect(errMsg(new ApiError(401, "unauthorized"))).toBe("Set the write token first");
+  it("tells the user to sign in again on 401", () => {
+    expect(errMsg(new ApiError(401, '{"detail":"authentication required"}'))).toBe("Not signed in. Sign in again");
+    expect(errMsg(new ApiError(401, "unauthorized"))).toBe("Not signed in. Sign in again");
   });
 
   it("joins a 422 validation detail list into readable text", () => {

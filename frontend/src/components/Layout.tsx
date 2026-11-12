@@ -1,10 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
-import { TokenDialog } from "./TokenDialog";
+import { SignOutButton } from "./AuthGate";
+import { Wordmark } from "./Wordmark";
 
 const links = [
   { to: "/", label: "Jobs" },
@@ -25,20 +24,8 @@ const dateline = new Intl.DateTimeFormat("en-AU", {
   timeZone: "Australia/Adelaide",
 }).format(new Date());
 
-export function Wordmark() {
-  return (
-    <span className="inline-flex items-center gap-2.5 text-ink select-none">
-      <span aria-hidden className="size-[12px] bg-blue" />
-      <span className="display text-[21px] leading-none font-[900] tracking-[-0.04em] uppercase [font-stretch:80%]">
-        SeekHunter
-      </span>
-    </span>
-  );
-}
-
 export function Layout() {
   const { pathname } = useLocation();
-  const { data: meta } = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
       <a
@@ -55,7 +42,7 @@ export function Layout() {
           <div className="ml-auto flex items-center gap-3 sm:gap-5 lg:order-last">
             <span className="kicker hidden text-ink-muted xl:inline">Adelaide · {dateline}</span>
             <NotificationBell />
-            {meta?.write_requires_token !== false && <TokenDialog />}
+            <SignOutButton />
           </div>
           <nav
             aria-label="Main"

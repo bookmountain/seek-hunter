@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { AuthGate } from "@/components/AuthGate";
 import { Layout } from "@/components/Layout";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { InsightsPage } from "@/pages/InsightsPage";
@@ -12,19 +13,21 @@ import { TailorPage } from "@/pages/TailorPage";
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<JobsPage key="active" view="active" />} />
-          <Route path="excluded" element={<JobsPage key="excluded" view="excluded" />} />
-          <Route path="history" element={<HistoryPage />} />
-          <Route path="resumes" element={<ResumesPage />} />
-          <Route path="searches" element={<SearchesPage />} />
-          <Route path="insights" element={<InsightsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="runs" element={<RunsPage />} />
-          <Route path="jobs/:id/tailor" element={<TailorPage />} />
-        </Route>
-      </Routes>
+      <AuthGate>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<JobsPage key="active" view="active" />} />
+            <Route path="excluded" element={<JobsPage key="excluded" view="excluded" />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="resumes" element={<ResumesPage />} />
+            <Route path="searches" element={<SearchesPage />} />
+            <Route path="insights" element={<InsightsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="runs" element={<RunsPage />} />
+            <Route path="jobs/:id/tailor" element={<TailorPage />} />
+          </Route>
+        </Routes>
+      </AuthGate>
     </BrowserRouter>
   );
 }
