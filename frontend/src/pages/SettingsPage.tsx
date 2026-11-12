@@ -3,15 +3,17 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Page, PageHead, SectionHead } from "@/components/PageHead";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { CrawlLimits } from "@/components/settings/CrawlLimits";
+import { ScoringSection } from "@/components/settings/ScoringSection";
 import { api, errMsg } from "@/lib/api";
-import type { AppSettings, Weights } from "@/lib/types";
+import { DEFAULT_RULE_BLEND, type ScoringValue, sameWeights, scoringFrom, weightProblems, workMaxOf } from "@/lib/scoring";
+import type { AppSettings } from "@/lib/types";
 
 type ListKey = {
-  [K in keyof AppSettings]: AppSettings[K] extends string[] ? K : never;
+  [K in keyof AppSettings]-?: AppSettings[K] extends string[] ? K : never;
 }[keyof AppSettings];
 
 const LISTS: [ListKey, string][] = [
@@ -26,13 +28,6 @@ const LISTS: [ListKey, string][] = [
   ["role_boost_terms", "Role boost terms"],
   ["role_penalty_terms", "Role penalty terms"],
   ["llm_providers", "LLM provider order (anthropic, openclaw)"],
-];
-const WEIGHTS: [keyof Weights, string][] = [
-  ["flexible_work", "Part-time/contract/casual points"],
-  ["full_time", "Full-time points"],
-  ["skill_max", "Skill match max"],
-  ["role_max", "Role fit max"],
-  ["skill_saturation", "Skills to reach max"],
 ];
 const TOGGLES: [keyof AppSettings, string][] = [
   ["notify_enabled", "Telegram notifications"],
@@ -56,41 +51,58 @@ const parseList = (text: string): string[] =>
     .map((x) => x.trim())
     .filter(Boolean);
 
-const parseInt0 = (v: string): number => Math.trunc(Number(v) || 0);
+/** Scoring differs from what the server has stored. */
+const scoringChanged = (v: ScoringValue, saved: AppSettings) =>
+  !sameWeights(v.weights, saved.weights) ||
+  v.workMax !== workMaxOf(saved.weights) ||
+  v.ruleBlend !== (saved.rule_blend ?? DEFAULT_RULE_BLEND);
 
 export function SettingsPage() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const [s, setS] = useState<AppSettings | null>(null);
+  const [scoring, setScoring] = useState<ScoringValue | null>(null);
+  // Set after a save that changed scoring: stored jobs still carry the old scores.
+  const [pendingRescore, setPendingRescore] = useState(false);
   // Raw textarea text, kept separate from `s` so each keystroke (including spaces and
   // newlines) is preserved as typed; it's only split/trimmed/filtered when saving.
   const [listText, setListText] = useState<Partial<Record<ListKey, string>>>({});
   useEffect(() => {
     if (!data) return;
     setS(data);
+    setScoring(scoringFrom(data.weights, data.rule_blend));
     setListText(Object.fromEntries(LISTS.map(([k]) => [k, data[k].join("\n")])) as Record<ListKey, string>);
   }, [data]);
   const fail = (e: Error) => toast.error(errMsg(e));
   const save = useMutation({
     mutationFn: () => {
       const lists = Object.fromEntries(LISTS.map(([k]) => [k, parseList(listText[k] ?? "")])) as Record<ListKey, string[]>;
-      return api.saveSettings({ ...s!, ...lists });
+      return api.saveSettings({ ...s!, ...lists, weights: scoring!.weights, rule_blend: scoring!.ruleBlend });
     },
     onSuccess: () => {
       toast.success("Settings saved");
+      if (data && scoring && scoringChanged(scoring, data)) setPendingRescore(true);
       qc.invalidateQueries({ queryKey: ["settings"] });
     },
     onError: fail,
   });
   const run = useMutation({ mutationFn: api.triggerRun, onSuccess: () => toast.success("Run started"), onError: fail });
   const test = useMutation({ mutationFn: api.notifyTest, onSuccess: () => toast.success("Test sent"), onError: fail });
-  if (!s) return <Page><p className="kicker text-ink-muted">Loading settings…</p></Page>;
+  const rescore = useMutation({
+    mutationFn: api.rescore,
+    onSuccess: () => {
+      setPendingRescore(false);
+      toast.success("Rescoring the last 7 days. Scores update in a minute or two");
+    },
+    onError: fail,
+  });
+  if (!s || !scoring || !data) return <Page><p className="kicker text-ink-muted">Loading settings…</p></Page>;
 
-  const numberField = (id: string, label: string, value: number, onChange: (n: number) => void) => (
-    <div key={id} className="grid content-end gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Input id={id} type="number" step={1} min={0} className="num w-32" value={value} onChange={(e) => onChange(parseInt0(e.target.value))} />
-    </div>
+  const blocked = weightProblems(scoring.weights, scoring.workMax).length > 0;
+  const saveButton = (
+    <Button onClick={() => save.mutate()} disabled={blocked || save.isPending} title={blocked ? "Fix the scoring weights first" : undefined}>
+      Save settings
+    </Button>
   );
 
   return (
@@ -101,7 +113,7 @@ export function SettingsPage() {
         dek="How jobs are filtered, scored and announced. Changes apply from the next run."
         actions={
           <>
-            <Button onClick={() => save.mutate()}>Save settings</Button>
+            {saveButton}
             <Button variant="outline" onClick={() => run.mutate()}>
               Run now
             </Button>
@@ -156,17 +168,17 @@ export function SettingsPage() {
         </fieldset>
       </section>
 
-      <section className="mt-10">
-        <SectionHead>Weights &amp; limits</SectionHead>
-        <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
-          {WEIGHTS.map(([k, label]) =>
-            numberField(`w-${k}`, label, s.weights[k], (n) => setS({ ...s, weights: { ...s.weights, [k]: n } })),
-          )}
-          {numberField("max-notify", "Max notified per run", s.max_notify_per_run, (n) => setS({ ...s, max_notify_per_run: n }))}
-          {numberField("max-pages", "Max pages per search", s.max_pages_per_search, (n) => setS({ ...s, max_pages_per_search: n }))}
-          {numberField("other-pages", "Max pages, other cities", s.other_city_max_pages ?? 2, (n) => setS({ ...s, other_city_max_pages: n }))}
-        </div>
-      </section>
+      <ScoringSection
+        value={scoring}
+        onChange={setScoring}
+        llmEnabled={s.llm_enabled}
+        dirty={scoringChanged(scoring, data)}
+        pendingRescore={pendingRescore}
+        onRescore={() => rescore.mutate()}
+        rescoring={rescore.isPending}
+      />
+
+      <CrawlLimits s={s} onChange={(patch) => setS({ ...s, ...patch })} />
 
       <section className="mt-12">
         <SectionHead>Lists, one entry per line</SectionHead>
@@ -186,8 +198,9 @@ export function SettingsPage() {
         </div>
       </section>
 
-      <div className="mt-10 flex justify-end border-t border-ink pt-5">
-        <Button onClick={() => save.mutate()}>Save settings</Button>
+      <div className="mt-10 flex flex-wrap items-center justify-end gap-4 border-t border-ink pt-5">
+        {blocked && <p className="text-[13.5px] text-ink-muted">Scoring weights must add up to 100% before saving.</p>}
+        {saveButton}
       </div>
     </Page>
   );

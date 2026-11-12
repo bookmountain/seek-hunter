@@ -11,6 +11,7 @@ const links = [
   { to: "/resumes", label: "Resumes" },
   { to: "/excluded", label: "Excluded" },
   { to: "/searches", label: "Searches" },
+  { to: "/radar", label: "Radar" },
   { to: "/insights", label: "Insights" },
   { to: "/settings", label: "Settings" },
   { to: "/runs", label: "Runs" },

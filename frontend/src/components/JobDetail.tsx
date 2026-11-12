@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errMsg } from "@/lib/api";
-import { cityName, since, sourceName } from "@/lib/format";
+import { cityName, radarNote, since, sourceName } from "@/lib/format";
 import type { Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CompetitionBlock } from "./CompetitionBlock";
@@ -148,6 +148,13 @@ export function JobDetail({ id, row, onClose }: { id: number; row?: Job; onClose
             </>
           )}
         </p>
+
+        {radarNote(view) && (
+          <p className="mt-3 flex items-baseline gap-2 text-[13.5px]">
+            <span className="kicker text-[10.5px] text-blue">Radar</span>
+            <span>{radarNote(view)}</span>
+          </p>
+        )}
 
         {view.closed_at && (
           <p role="status" className="mt-3 border-l-2 border-ink bg-chip px-3 py-2 text-[13.5px]">

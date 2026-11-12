@@ -4,7 +4,7 @@ export type JobCity = "adelaide" | "melbourne" | "sydney" | "perth" | "brisbane"
 
 export interface Job {
   id: number;
-  source: "seek" | "jora" | "linkedin";
+  source: "seek" | "jora" | "linkedin" | "indeed" | "radar";
   title: string;
   company: string;
   location: string;
@@ -51,6 +51,9 @@ export interface Job {
   contact_activity?: string[];
   /** When the board reported the ad closed (expired/removed); null while live. */
   closed_at?: string | null;
+  /** When the employer's own careers feed (Company Radar) first showed this ad; null/absent if the
+   * radar never saw it. Earlier than `first_seen_at` on a board job = the radar's head start. */
+  radar_first_seen_at?: string | null;
 }
 
 export interface JobDetail extends Job {
@@ -91,6 +94,9 @@ export interface AppSettings {
   role_boost_terms: string[];
   role_penalty_terms: string[];
   weights: Weights;
+  /** Share of the final score taken from the rule score when the AI scored the job (0-1); the
+   * rest comes from the AI score. Older servers omit it (0.6). */
+  rule_blend?: number;
   llm_enabled: boolean;
   llm_providers: string[];
   notify_enabled: boolean;
@@ -103,7 +109,53 @@ export interface AppSettings {
   other_city_max_pages: number;
   /** Server-owned bell marker; preserved by the server on PUT. */
   notifications_read_at: string | null;
+  // Crawl limits; optional because older servers (and test fixtures) may omit them.
+  details_retry_per_run?: number;
+  closed_checks_per_run?: number;
+  linkedin_max_pages?: number;
+  linkedin_insights_per_run?: number;
+  market_details_per_city?: number;
+  radar_seed_days?: number;
+  radar_seed_max_probe?: number;
 }
+
+export type RadarAts =
+  | "greenhouse"
+  | "lever"
+  | "ashby"
+  | "workable"
+  | "smartrecruiters"
+  | "workday"
+  | "pageup"
+  | "other";
+
+export interface RadarCompany {
+  id: number;
+  name: string;
+  company_key: string;
+  ats: RadarAts;
+  /** Board token / account / company id; Workday: "<tenant>.wd<N>/<site>". */
+  ats_token: string | null;
+  careers_url: string | null;
+  city: string | null;
+  enabled: boolean;
+  source: "auto" | "manual";
+  last_checked_at: string | null;
+  last_error: string | null;
+  last_job_count: number | null;
+  created_at: string;
+}
+
+export interface RadarCompanyIn {
+  name: string;
+  careers_url?: string | null;
+  city?: string | null;
+  /** Set with `ats_token` to skip detection. */
+  ats?: RadarAts | null;
+  ats_token?: string | null;
+}
+
+export type RadarCompanyPatch = Partial<Pick<RadarCompany, "name" | "enabled" | "ats" | "ats_token" | "careers_url" | "city">>;
 
 export interface SourceStatus {
   status: "ok" | "degraded";

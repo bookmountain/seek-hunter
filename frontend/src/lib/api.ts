@@ -24,6 +24,9 @@ import type {
   JobStatus,
   ResumeCurrent,
   ResumeMatcherHealth,
+  RadarCompany,
+  RadarCompanyIn,
+  RadarCompanyPatch,
   Run,
   SearchProfile,
   TailorStart,
@@ -132,6 +135,16 @@ export const api = {
   runs: () => request<Run[]>("GET", "/api/runs"),
   triggerRun: () => request<{ started: boolean }>("POST", "/api/runs"),
   notifyTest: () => request<{ sent: boolean }>("POST", "/api/notify/test"),
+  rescore: () => request<{ started: boolean }>("POST", "/api/rescore"),
+  radarCompanies: () => request<RadarCompany[]>("GET", "/api/radar/companies"),
+  addRadarCompany: (body: RadarCompanyIn) => request<RadarCompany>("POST", "/api/radar/companies", body),
+  patchRadarCompany: (id: number, body: RadarCompanyPatch) =>
+    request<RadarCompany>("PATCH", `/api/radar/companies/${id}`, body),
+  deleteRadarCompany: (id: number) => request<{ deleted: boolean }>("DELETE", `/api/radar/companies/${id}`),
+  checkRadarCompany: (id: number) =>
+    request<{ started: boolean; company_id: number }>("POST", `/api/radar/companies/${id}/check`),
+  radarPoll: () => request<{ started: boolean }>("POST", "/api/radar/poll"),
+  radarSeed: () => request<{ started: boolean }>("POST", "/api/radar/seed"),
   tailor: (jobId: number, send = false) =>
     request<TailorStart>("POST", `/api/jobs/${jobId}/tailor?send=${send ? 1 : 0}`),
   tailorings: (jobId: number) => request<TailoringSummary[]>("GET", `/api/jobs/${jobId}/tailorings`),

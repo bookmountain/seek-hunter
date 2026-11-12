@@ -225,6 +225,43 @@
     padding: 0 2px;
   }
 
+  /* Hairline slider: blue fill up to the thumb (set --fill), square ink thumb. */
+  .range {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 18px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 2px;
+    background: linear-gradient(to right, var(--ink) var(--fill, 50%), var(--blue) var(--fill, 50%));
+  }
+  .range::-moz-range-track {
+    height: 2px;
+    background: linear-gradient(to right, var(--ink) var(--fill, 50%), var(--blue) var(--fill, 50%));
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 18px;
+    margin-top: -8px;
+    border: 2px solid var(--ink);
+    border-radius: 0;
+    background: var(--paper);
+  }
+  .range::-moz-range-thumb {
+    width: 8px;
+    height: 14px;
+    border: 2px solid var(--ink);
+    border-radius: 0;
+    background: var(--paper);
+  }
+  .range:focus-visible {
+    outline-offset: 4px;
+  }
+
   /* Single page-load reveal for list rows. */
   .reveal {
     animation: reveal 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;

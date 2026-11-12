@@ -30,9 +30,36 @@ export const CITY_NAME: Record<string, string> = {
 
 export const cityName = (c: string | null | undefined) => (c ? (CITY_NAME[c] ?? c) : "");
 
-const SOURCE_NAME: Record<Job["source"], string> = { seek: "SEEK", jora: "Jora", linkedin: "LinkedIn" };
+const SOURCE_NAME: Record<Job["source"], string> = {
+  seek: "SEEK",
+  jora: "Jora",
+  linkedin: "LinkedIn",
+  indeed: "Indeed",
+  radar: "Employer site",
+};
 
 export const sourceName = (s: Job["source"]) => SOURCE_NAME[s] ?? s;
+
+/** "45 min", "6 h", "3 days". */
+export function span(ms: number): string {
+  const m = Math.max(1, Math.round(ms / 60_000));
+  if (m < 60) return `${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h} h`;
+  return `${Math.round(h / 24)} days`;
+}
+
+/** What the Company Radar contributed to this job, or null if it never saw it:
+ *  - a radar-only job: "Found by radar on the employer's careers site"
+ *  - a board job the radar saw first: "Seen on the employer's site 6 h before job boards"
+ *  - otherwise: "Also on the employer's careers site" */
+export function radarNote(j: Pick<Job, "source" | "first_seen_at" | "radar_first_seen_at">): string | null {
+  if (!j.radar_first_seen_at) return null;
+  if (j.source === "radar") return "Found by radar on the employer's careers site";
+  const lead = parseIsoUtc(j.first_seen_at).getTime() - parseIsoUtc(j.radar_first_seen_at).getTime();
+  if (lead >= 60_000) return `Seen on the employer's site ${span(lead)} before job boards`;
+  return "Also on the employer's careers site";
+}
 
 /** Relative age for status lines, e.g. "just now", "12m ago", "2h ago", "3d ago". */
 export function ago(iso: string, now = Date.now()): string {
