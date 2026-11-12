@@ -17,14 +17,14 @@ const base = (over: Partial<Job>): Job =>
 describe("APPS tag freshness", () => {
   it("marks counts older than 48h as possibly stale", () => {
     const old = new Date(Date.now() - 13 * 86_400_000).toISOString();
-    render(<MemoryRouter><JobList jobs={[base({ insights_checked_at: old })]} view="active" selectedId={null} onSelect={() => {}} /></MemoryRouter>);
+    render(<MemoryRouter><JobList jobs={[base({ insights_checked_at: old })]} view="active" selectedId={null} onSelect={() => {}} onArrowSelect={() => {}} /></MemoryRouter>);
     const tag = screen.getByTestId("apps-tag");
     expect(tag.textContent).toBe("11 APPS?");
     expect(tag.getAttribute("title")).toContain("13d ago");
   });
   it("shows fresh counts plainly", () => {
     const fresh = new Date(Date.now() - 2 * 3_600_000).toISOString();
-    render(<MemoryRouter><JobList jobs={[base({ insights_checked_at: fresh })]} view="active" selectedId={null} onSelect={() => {}} /></MemoryRouter>);
+    render(<MemoryRouter><JobList jobs={[base({ insights_checked_at: fresh })]} view="active" selectedId={null} onSelect={() => {}} onArrowSelect={() => {}} /></MemoryRouter>);
     expect(screen.getByTestId("apps-tag").textContent).toBe("11 APPS");
   });
 });
