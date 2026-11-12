@@ -12,14 +12,14 @@ metadata:
 
 # SeekHunter
 
-SeekHunter crawls SEEK and Jora every 2 hours (07:00–21:00 Adelaide). It drops jobs needing security clearance, citizenship/PR, defence, or banks, scores the rest against Book's resume (part-time/contract/casual first because of his student visa), and posts digests to this Telegram chat. Each digest line looks like `#7 · 88 · Title` (job id · score · title), e.g. `#142 · 82 · Full Stack (Java) Developer`.
+SeekHunter crawls SEEK, Jora, LinkedIn and Indeed every 2 hours (07:00–21:00 Adelaide). It drops jobs needing security clearance, citizenship/PR, defence, or banks, scores the rest against Book's resume (part-time/contract/casual first because of his student visa), and posts digests to this Telegram chat. Each digest line looks like `#7 · 88 · Title` (job id · score · title), e.g. `#142 · 82 · Full Stack (Java) Developer`.
 
 All access goes through the `seekhunter-api METHOD PATH [JSON]` command (localhost API; auth is handled). Never invent job data; read it from the API. Keep replies short.
 
 ## Read
 - What's new: `seekhunter-api GET "/api/summary?hours=24"` (plain text, one job per line)
 - One job in detail (fit, matched/missing skills, AI note, recruiter contact, competition, description): `seekhunter-api GET /api/jobs/142/brief`. The brief includes a `Recruiter: Name · phone · email` line when known and a `LinkedIn: <url>` line — a real profile URL when one was found, otherwise a LinkedIn search URL for that name/company. For SEEK ads with published applicant stats, it also includes a `Competition: N applicants (volume label) · resume % · cover letter % · checked <time>` line — SEEK's own "how many people applied" numbers. Jora ads and SEEK ads that haven't published stats yet have no `Competition:` line.
-- List as JSON: `seekhunter-api GET "/api/jobs?view=active&status=saved"` (`view=excluded` for excluded; filters: `work_type=part_time|contract|casual|full_time`, `source=seek|jora|linkedin`, `q=text`, `city=adelaide|melbourne|sydney|perth|other`, e.g. `seekhunter-api GET "/api/jobs?city=melbourne"`). Counts per city for the same view: `seekhunter-api GET "/api/jobs/cities?view=active"` → `[{"city":"adelaide","count":12}, ...]`.
+- List as JSON: `seekhunter-api GET "/api/jobs?view=active&status=saved"` (`view=excluded` for excluded; filters: `work_type=part_time|contract|casual|full_time`, `source=seek|jora|linkedin|indeed|radar`, `q=text`, `city=adelaide|melbourne|sydney|perth|other`, e.g. `seekhunter-api GET "/api/jobs?city=melbourne"`). Counts per city for the same view: `seekhunter-api GET "/api/jobs/cities?view=active"` → `[{"city":"adelaide","count":12}, ...]`.
 - Searches: `seekhunter-api GET /api/search-profiles`
 - Settings: `seekhunter-api GET /api/settings`
 - Recent runs/health: `seekhunter-api GET /api/runs`
@@ -32,6 +32,14 @@ All access goes through the `seekhunter-api METHOD PATH [JSON]` command (localho
 - Settings (blocklists, weights, toggles): GET `/api/settings`, modify the field, then `PUT /api/settings` with the **full** JSON (never send a partial object)
 - "enable Melbourne notifications" / "send me Sydney jobs too": SeekHunter already crawls, scores, and evaluates Melbourne/Sydney/Perth jobs (search profiles exist for all four cities) — only Telegram delivery is gated by `notify_cities` (default `["adelaide"]`). `seekhunter-api GET /api/settings`, add the city (lowercase, e.g. `"melbourne"`) to `notify_cities`, then `PUT /api/settings` with the full JSON. Only jobs first seen in the last 48h get notified once a city is enabled — it never floods the chat with a backlog. "stop Melbourne notifications" is the same flow, removing the city instead.
 - Run a crawl now: `seekhunter-api POST /api/runs`
+
+## Company Radar ("radar companies", "add <company> to radar")
+Besides SEEK, Jora, LinkedIn and Indeed, SeekHunter polls employers' own job feeds (Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Workday) every 30 minutes, 07:00–22:00 Adelaide, so their ads are often seen before the boards. Strong new jobs (score 70+, 20 or fewer applicants, posted in the last 24 h, Adelaide) arrive as single "Just posted · #id · score · title — company · type · source" messages; jobs with source `radar` came from the employer's own careers feed.
+- "radar companies" / "what's on the radar?": `seekhunter-api GET /api/radar/companies` → `[{id, name, ats, ats_token, careers_url, enabled, last_checked_at, last_error, last_job_count}]`. Summarise: how many enabled, by ATS, and any with `last_error`.
+- "add <Company> to radar": `seekhunter-api POST /api/radar/companies '{"name":"<Company>","careers_url":"<careers page URL if Book gave one>"}'`. SeekHunter detects the ATS itself. Report the result's `ats` and `ats_token`; `ats` "other" or "pageup" means there is no feed to poll, so it is watched through changedetection.io instead (Book runs the watch sync). If `last_error` says no ATS was found and there's no careers URL, ask Book for the careers page link.
+- "remove <Company> from radar" / "pause <Company>": find its id in the list, then `seekhunter-api DELETE /api/radar/companies/{id}` or `seekhunter-api PATCH /api/radar/companies/{id} '{"enabled":false}'`.
+- "check <Company> now": `seekhunter-api POST /api/radar/companies/{id}/check` (runs in the background; any new matches arrive as normal alerts).
+- "fill the radar" / "seed the radar": `seekhunter-api POST /api/radar/seed` — probes direct employers (recruitment agencies are skipped) from the last 60 days of jobs; takes a few minutes.
 
 ## Application history (applications, contacts, companies)
 SeekHunter tracks what Book has applied to, the recruiter/HR contacts he's dealt with, and which companies already have his resume — so he never double-applies through the same agency and can follow up on time.

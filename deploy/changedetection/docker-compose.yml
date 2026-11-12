@@ -1,0 +1,36 @@
+# changedetection.io for SeekHunter's Company Radar, on vm100 (192.168.4.106).
+# Watches careers pages that have no public ATS API (radar companies with ats "other"/"pageup")
+# and POSTs diffs to SeekHunter's /api/radar/webhook/changedetection. See sync_watches.py.
+#
+#   cd /opt/changedetection && docker compose up -d
+#   open http://192.168.4.106:5000 -> Settings -> API: copy the API key for sync_watches.py
+#
+# Bound to the LAN address only (no 0.0.0.0, no tunnel): this UI has no login by default.
+services:
+  changedetection:
+    image: ghcr.io/dgtlmoon/changedetection.io:latest
+    container_name: changedetection
+    restart: unless-stopped
+    ports:
+      - "192.168.4.106:5000:5000"  # LAN-only
+    volumes:
+      - ./datastore:/datastore
+    environment:
+      - BASE_URL=http://192.168.4.106:5000
+      - TZ=Australia/Adelaide
+      # JS-rendered careers pages: watches created with --fetch-backend html_webdriver use this.
+      - PLAYWRIGHT_DRIVER_URL=ws://browser:3000
+    depends_on:
+      - browser
+
+  browser:
+    image: dgtlmoon/sockpuppetbrowser:latest
+    container_name: changedetection-browser
+    restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN
+    environment:
+      - SCREEN_WIDTH=1920
+      - SCREEN_HEIGHT=1024
+      - SCREEN_DEPTH=16
+      - MAX_CONCURRENT_CHROME_PROCESSES=4

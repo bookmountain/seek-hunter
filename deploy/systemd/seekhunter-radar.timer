@@ -1,0 +1,11 @@
+[Unit]
+Description=SeekHunter Company Radar every 30 min 07:00-22:00 Adelaide
+
+[Timer]
+OnCalendar=*-*-* 07..21:00,30:00 Australia/Adelaide
+OnCalendar=*-*-* 22:00:00 Australia/Adelaide
+RandomizedDelaySec=2min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

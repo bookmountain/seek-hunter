@@ -66,3 +66,10 @@ def test_skill_md_documents_enabling_city_notifications():
     assert "enable Melbourne notifications" in text
     assert "GET /api/settings" in text
     assert "PUT /api/settings" in text
+
+
+def test_skill_md_documents_company_radar():
+    text = _text()
+    assert "radar companies" in text and "add <Company> to radar" in text
+    assert "seekhunter-api GET /api/radar/companies" in text
+    assert "seekhunter-api POST /api/radar/companies" in text
