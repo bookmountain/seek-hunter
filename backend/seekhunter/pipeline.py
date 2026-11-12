@@ -15,7 +15,14 @@ from seekhunter.filters import evaluate_exclusions
 from seekhunter.http import PoliteClient, SourceBlocked
 from seekhunter.llm.base import LLMJobInput
 from seekhunter.models import Application, Job, JobEvaluation, Outbox, Run, SearchProfile, utcnow
-from seekhunter.notify import DigestItem, NotifyError, format_digest, format_market_brief, format_recap
+from seekhunter.notify import (
+    DigestItem,
+    NotifyError,
+    format_digest,
+    format_instant_alert,
+    format_market_brief,
+    format_recap,
+)
 from seekhunter.profile import Profile, load_profile
 from seekhunter.scoring import blend, score_job
 
@@ -213,6 +220,52 @@ def _retry_missing_details(session: Session, name: str, source, settings) -> int
     return done
 
 
+def ingest(session: Session, name: str, source, data: JobData, profile_location: str | None,  # noqa: ANN001
+           st: dict, fetch_details: bool = True) -> Job | None:
+    """Stores one search/feed result. Returns the Job when it's new (None for one already seen):
+    links it to an existing duplicate from another source (SEEK always becomes canonical; a radar
+    sighting that came first is remembered in `radar_first_seen_at`), and fetches its details
+    (description, contacts, insights) unless it's a duplicate or `fetch_details` is False."""
+    job, is_new = repo.upsert_job(session, data, profile_location=profile_location)
+    if not is_new:
+        return None
+    st["new"] = st.get("new", 0) + 1
+    if job.source == "radar" and job.radar_first_seen_at is None:
+        job.radar_first_seen_at = job.first_seen_at
+        session.add(job)
+        session.commit()
+    dup = repo.find_duplicate(session, job)
+    if dup:
+        other = session.get(Job, dup)
+        if job.source == "seek" and other is not None and other.source != "seek":
+            # SEEK is canonical: reverse the link instead of folding the seek job into the older
+            # jora/linkedin/indeed/radar row.
+            other.canonical_job_id = job.id
+            if other.notified_at and not job.notified_at:
+                job.notified_at = other.notified_at
+            seen_by_radar = other.radar_first_seen_at or (
+                other.first_seen_at if other.source == "radar" else None)
+            if seen_by_radar and not job.radar_first_seen_at:
+                job.radar_first_seen_at = seen_by_radar
+            session.add(other)
+            session.add(job)
+            session.commit()
+            repo.delete_evaluation(session, other.id)
+        else:
+            job.canonical_job_id = dup
+            session.add(job)
+            session.commit()
+            return job
+    if fetch_details:
+        try:
+            _apply_details(session, name, source, job, data)
+        except Exception as e:  # noqa: BLE001  one bad detail page must not abort the source
+            session.rollback()
+            log.warning("details failed for %s %s: %s", name, data.external_id, e)
+            st["error"] = f"details: {e}"
+    return job
+
+
 def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict]:  # noqa: ANN001
     status: dict = {}
     new_jobs: list[Job] = []
@@ -229,41 +282,9 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
                     continue
                 for data in source.search(profile, _max_pages_for(profile, settings, name)):
                     st["found"] += 1
-                    job, is_new = repo.upsert_job(session, data, profile_location=profile.location)
-                    if not is_new:
-                        continue
-                    st["new"] += 1
-                    new_jobs.append(job)
-                    dup = repo.find_duplicate(session, job)
-                    if dup:
-                        other = session.get(Job, dup)
-                        if job.source == "seek" and other is not None and other.source != "seek":
-                            # SEEK is canonical: reverse the link instead of folding the seek job
-                            # into the older jora row.
-                            other.canonical_job_id = job.id
-                            if other.notified_at and not job.notified_at:
-                                job.notified_at = other.notified_at
-                            session.add(other)
-                            session.add(job)
-                            session.commit()
-                            repo.delete_evaluation(session, other.id)
-                            try:
-                                _apply_details(session, name, source, job, data)
-                            except Exception as e:  # noqa: BLE001  one bad detail page mustn't abort the rest
-                                session.rollback()
-                                log.warning("details failed for %s %s: %s", name, data.external_id, e)
-                                st["error"] = f"details: {e}"
-                            continue
-                        job.canonical_job_id = dup
-                        session.add(job)
-                        session.commit()
-                        continue
-                    try:
-                        _apply_details(session, name, source, job, data)
-                    except Exception as e:  # noqa: BLE001  one bad detail page must not abort the source
-                        session.rollback()
-                        log.warning("details failed for %s %s: %s", name, data.external_id, e)
-                        st["error"] = f"details: {e}"
+                    job = ingest(session, name, source, data, profile.location, st)
+                    if job is not None:
+                        new_jobs.append(job)
             st["details_retried"] = _retry_missing_details(session, name, source, settings)
         except SourceBlocked as e:
             session.rollback()
@@ -425,6 +446,54 @@ def _refresh_insights(session: Session, sources: dict, status: dict, settings) -
             st["insights_error"] = report["error"]
 
 
+INSTANT_ALERT_MAX_AGE = timedelta(hours=24)
+
+
+def instant_alert_candidates(session: Session, jobs: list[Job], settings,  # noqa: ANN001
+                             now: datetime) -> list[tuple[Job, JobEvaluation]]:
+    """New jobs from this run worth a message right now: canonical, still listed, not yet
+    notified, in a notify city, final score >= `instant_alert_min_score`, applicants unknown or
+    <= `instant_alert_max_applicants`, and listed within the last 24 h (unknown dates pass)."""
+    out = []
+    seen: set[int] = set()
+    for job in jobs:
+        session.refresh(job)
+        if job.id in seen or job.canonical_job_id or job.notified_at or job.status == "hidden":
+            continue
+        seen.add(job.id)
+        if job.closed_at or job.city not in settings.notify_cities:
+            continue
+        ev = repo.get_evaluation(session, job.id)
+        if ev is None or (ev.excluded and not job.force_include):
+            continue
+        if ev.final_score < settings.instant_alert_min_score:
+            continue
+        if job.applicant_count is not None and job.applicant_count > settings.instant_alert_max_applicants:
+            continue
+        if job.listed_at is not None and job.listed_at < now - INSTANT_ALERT_MAX_AGE:
+            continue
+        out.append((job, ev))
+    out.sort(key=lambda pair: pair[1].final_score, reverse=True)
+    return out
+
+
+def send_instant_alerts(session: Session, jobs: list[Job], settings, notifier, public_url: str,  # noqa: ANN001
+                        now: datetime, dry_run: bool = False) -> list[int]:
+    """Sends one Telegram message per `instant_alert_candidates` job and marks them notified, so
+    the next digest doesn't repeat them. Nothing happens when notifications are off (the digest
+    path then marks them as usual). A failed send is parked in the outbox (at-least-once).
+    Returns the alerted job ids."""
+    if not settings.notify_enabled:
+        return []
+    rows = instant_alert_candidates(session, jobs, settings, now)
+    for item, (job, _) in zip(_digest_items(session, rows, now), rows, strict=True):
+        _send(session, notifier, format_instant_alert(item, job.source, public_url))
+    ids = [j.id for j, _ in rows]
+    if ids and not dry_run:
+        repo.mark_notified(session, ids, now)
+    return ids
+
+
 def _maybe_health_alert(session: Session, notifier, run: Run) -> None:  # noqa: ANN001
     recent = repo.recent_runs(session, "crawl", 3)
     if len(recent) < 3:
@@ -494,7 +563,11 @@ def run_crawl(
         flag_modified(run, "source_status")
 
         now = utcnow()
-        candidates = repo.notification_candidates(session, now, notify_cities=settings.notify_cities)
+        alerted = set(send_instant_alerts(session, new_jobs + recovered, settings, notifier, public_url,
+                                          now, dry_run=dry_run))
+        run.notified = len(alerted)
+        candidates = [(j, e) for j, e in repo.notification_candidates(
+            session, now, notify_cities=settings.notify_cities) if j.id not in alerted]
         if candidates and settings.notify_enabled:
             top = candidates[: settings.max_notify_per_run]
             degraded = [k for k, v in status.items() if v["status"] != "ok"]
@@ -506,7 +579,7 @@ def run_crawl(
                 extra=len(candidates) - len(top),
             ):
                 _send(session, notifier, text)
-            run.notified = len(top)
+            run.notified = len(alerted) + len(top)
         # Intentionally marks candidates notified even when notify_enabled is False, so that
         # re-enabling notifications later doesn't flood Telegram with a backlog of old jobs.
         # Skipped during a dry run, which must have no side effects.

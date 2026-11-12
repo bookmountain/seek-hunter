@@ -208,6 +208,19 @@ def format_digest(items: list[DigestItem], when: datetime, public_url: str, degr
     return messages
 
 
+def format_instant_alert(it: DigestItem, source: str, public_url: str) -> str:
+    """One just-posted job, sent the moment it's scored (plain text, no emoji)."""
+    work_type = WORK_TYPE_LABELS.get(it.work_type, "Not stated")
+    head = f"Just posted · #{it.job_id} · {it.score} · {it.title} — {it.company} · {work_type} · {source}"
+    second = [f"{it.applicant_count} applicants" if it.applicant_count is not None else "applicants unknown"]
+    if it.contact_phone:
+        second.append(it.contact_phone)
+    return "\n".join([
+        head, " · ".join(second), f"{_app_base(public_url)}/?job={it.job_id}",
+        f"Reply to OpenClaw: tailor {it.job_id}",
+    ])
+
+
 def _follow_up_line(follow_ups: list[dict]) -> str:
     bits = ", ".join(f"{f['company']} · {f['title']} · {f['days']}d" for f in follow_ups[:3])
     return f"Follow up: {bits}"
