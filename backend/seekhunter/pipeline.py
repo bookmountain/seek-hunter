@@ -220,6 +220,8 @@ def _collect(session: Session, sources: dict, settings) -> tuple[list[Job], dict
     for name, source in sources.items():
         if name == "linkedin" and not settings.linkedin_enabled:
             continue
+        if name == "indeed" and not settings.indeed_enabled:
+            continue
         st = {"status": "ok", "found": 0, "new": 0, "error": None}
         try:
             for profile in profiles:

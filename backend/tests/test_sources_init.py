@@ -1,9 +1,9 @@
 from seekhunter.sources import build_sources
 
 
-def test_build_sources_registers_linkedin_after_seek_and_jora():
+def test_build_sources_registers_linkedin_then_indeed_after_seek_and_jora():
     sources = build_sources()
-    assert list(sources.keys()) == ["seek", "jora", "linkedin"]
+    assert list(sources.keys()) == ["seek", "jora", "linkedin", "indeed"]
 
 
 def test_linkedin_source_has_a_dedicated_slower_client_with_extended_blocked_statuses():

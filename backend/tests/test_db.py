@@ -193,3 +193,27 @@ def test_init_db_on_fresh_database_creates_city_column(tmp_path):
     inspector = inspect(engine)
     cols = {c["name"] for c in inspector.get_columns("jobs")}
     assert "city" in cols
+
+
+def test_init_db_adds_radar_columns_and_table_to_an_old_database(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(OLD_JOBS_TABLE))
+        conn.execute(text(
+            "INSERT INTO jobs (id, source, external_id, title, company, location, work_type, url, "
+            "teaser, description_html, dedupe_key, first_seen_at, status, notes, force_include) "
+            "VALUES (1, 'seek', '1', 'Dev', 'Acme', 'Adelaide SA', 'full_time', 'u', '', '', "
+            "'dev|acme', '2026-01-01 00:00:00', 'new', '', 0)"
+        ))
+
+    init_db(engine)
+    init_db(engine)  # idempotent
+
+    inspector = inspect(engine)
+    cols = {c["name"] for c in inspector.get_columns("jobs")}
+    assert {"radar_first_seen_at", "needs_details"} <= cols
+    assert "radar_companies" in inspector.get_table_names()
+    with Session(engine) as s:
+        job = s.exec(select(Job).where(Job.id == 1)).one()
+        assert job.needs_details is False
+        assert job.radar_first_seen_at is None

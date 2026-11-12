@@ -439,6 +439,7 @@ def ensure_seed(session: Session) -> None:
         session.commit()
     _ensure_other_city_profiles(session)
     _ensure_linkedin_source(session)
+    _ensure_source(session, "indeed")
 
 
 def _ensure_other_city_profiles(session: Session) -> None:
@@ -460,10 +461,16 @@ def _ensure_linkedin_source(session: Session) -> None:
     """Adds "linkedin" to every search profile's `sources` list that doesn't already have it — the
     migration for databases seeded before LinkedIn existed as a source. Runs every time (like
     `_ensure_other_city_profiles`); idempotent, since it's a no-op once every profile has it."""
+    _ensure_source(session, "linkedin")
+
+
+def _ensure_source(session: Session, source: str) -> None:
+    """Adds `source` to every search profile that lacks it (same idempotent migration pattern as
+    `_ensure_linkedin_source`; used for "indeed")."""
     changed = False
     for p in list_search_profiles(session):
-        if "linkedin" not in p.sources:
-            p.sources = [*p.sources, "linkedin"]
+        if source not in p.sources:
+            p.sources = [*p.sources, source]
             session.add(p)
             changed = True
     if changed:

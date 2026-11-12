@@ -554,6 +554,27 @@ def test_linkedin_disabled_is_skipped_entirely(session):
     assert session.exec(select(Job).where(Job.source == "linkedin")).first() is None
 
 
+def test_indeed_jobs_are_crawled_and_fold_into_the_seek_duplicate(session):
+    seek = FakeSource("seek", [jd("seek", "1")])
+    indeed = FakeSource("indeed", [jd("indeed", "i1"), jd("indeed", "i2", title="Vue Dev", company="Other")])
+    report = run_crawl(session, {"seek": seek, "indeed": indeed}, FakeChain(), FakeNotifier(), PROFILE,
+                       "https://sh")
+    assert report.source_status["indeed"]["new"] == 2
+    jobs = {j.external_id: j for j in session.exec(select(Job)).all()}
+    assert jobs["i1"].canonical_job_id == jobs["1"].id
+    assert jobs["i2"].canonical_job_id is None
+
+
+def test_indeed_disabled_is_skipped_entirely(session):
+    settings = repo.load_settings(session)
+    settings.indeed_enabled = False
+    repo.save_settings(session, settings)
+    indeed = FakeSource("indeed", [jd("indeed", "i1")])
+    report = run_crawl(session, {"indeed": indeed}, FakeChain(), FakeNotifier(), PROFILE, "https://sh")
+    assert "indeed" not in report.source_status
+    assert session.exec(select(Job).where(Job.source == "indeed")).first() is None
+
+
 def test_max_pages_for_applies_linkedin_cap(session):
     from seekhunter.models import SearchProfile
 

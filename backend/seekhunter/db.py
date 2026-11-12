@@ -16,6 +16,7 @@ _INSIGHT_COLUMN_TYPES = {
 }
 CITY_COLUMNS = ("city",)
 LIFECYCLE_COLUMNS = ("last_seen_at", "open_checked_at", "closed_at")
+RADAR_COLUMNS = {"radar_first_seen_at": "DATETIME", "needs_details": "BOOLEAN NOT NULL DEFAULT 0"}
 
 
 @lru_cache
@@ -45,6 +46,7 @@ def init_db(engine: Engine | None = None) -> None:
     _ensure_insight_columns(eng)
     _ensure_city_column(eng)
     _ensure_columns(eng, LIFECYCLE_COLUMNS, "DATETIME")
+    _ensure_columns(eng, tuple(RADAR_COLUMNS), RADAR_COLUMNS)
 
 
 def _ensure_columns(engine: Engine, columns: tuple[str, ...], sql_type: str | dict[str, str]) -> None:

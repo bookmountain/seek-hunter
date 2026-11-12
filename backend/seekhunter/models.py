@@ -48,6 +48,36 @@ class Job(SQLModel, table=True):
     last_seen_at: NaiveDatetime | None = None
     open_checked_at: NaiveDatetime | None = None
     closed_at: NaiveDatetime | None = None
+    # Company Radar: when the employer's own ATS feed first showed this ad (copied onto the SEEK
+    # row when SEEK later takes over as canonical), and whether a radar job still needs its ad page
+    # fetched (changedetection.io diffs only give a title and maybe a link).
+    radar_first_seen_at: NaiveDatetime | None = None
+    needs_details: bool = False
+
+
+class RadarCompany(SQLModel, table=True):
+    """An employer whose own careers feed is polled directly (see seekhunter.radar)."""
+
+    __tablename__ = "radar_companies"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    company_key: str = Field(index=True, unique=True)
+    # greenhouse | lever | ashby | workable | smartrecruiters | workday | pageup | other
+    ats: str = "other"
+    # Board token / account / company id; Workday: "<tenant>.wd<N>/<site>".
+    ats_token: str | None = None
+    careers_url: str | None = None
+    city: str | None = None
+    enabled: bool = True
+    source: str = "manual"  # auto | manual
+    last_checked_at: NaiveDatetime | None = None
+    last_error: str | None = None
+    last_job_count: int | None = None
+    # Postings already looked at and rejected (not in Australia / not IT), so their detail pages
+    # aren't fetched again every poll. Capped (see radar.IGNORED_CAP).
+    ignored_ids: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: NaiveDatetime = Field(default_factory=utcnow)
 
 
 class JobEvaluation(SQLModel, table=True):
@@ -76,7 +106,8 @@ class SearchProfile(SQLModel, table=True):
     keywords: str
     location: str = "All Adelaide SA"
     work_types: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    sources: list[str] = Field(default_factory=lambda: ["seek", "jora", "linkedin"], sa_column=Column(JSON))
+    sources: list[str] = Field(
+        default_factory=lambda: ["seek", "jora", "linkedin", "indeed"], sa_column=Column(JSON))
     enabled: bool = True
 
 

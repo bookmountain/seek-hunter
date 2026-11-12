@@ -281,6 +281,33 @@ class AppSettings(BaseModel):
         ]
     )
     market_details_per_city: int = 40
+    # Indeed AU (via JobSpy) as a fourth crawl source.
+    indeed_enabled: bool = True
+    # Company Radar: polls employers' own ATS job feeds (Greenhouse, Lever, Ashby, Workable,
+    # SmartRecruiters, Workday) every 30 min, so their ads are seen before the boards repost them.
+    radar_enabled: bool = True
+    # Auto-seed looks at direct employers in jobs first seen within this many days, and probes at
+    # most `radar_seed_max_probe` new companies per seed run (each probe is ~3 small requests).
+    radar_seed_days: int = 60
+    radar_seed_max_probe: int = 80
+    # Company names containing any of these (case-insensitive) are recruitment agencies, not
+    # direct employers: never added to the radar.
+    agency_keywords: list[str] = Field(
+        default_factory=lambda: [
+            "recruit", "talent", "staffing", "consulting", "personnel", "people", "search",
+            "hays", "robert walters", "peoplebank", "akkodis", "hudson", "randstad", "adecco",
+            "michael page", "page personnel", "chandler macleod", "finite", "paxus", "u&u",
+            "talentweb", "halcyon knights", "clicks it", "davidson", "hender", "precision sourcing",
+            "aurec", "drake", "programmed", "manpower", "kelly services", "slade group",
+            "people2people", "charterhouse", "six degrees", "greythorn", "experis", "modis",
+            "talent international", "ignite", "resourcing", "placements", "labour hire",
+        ]
+    )
+    # Instant Telegram alert (one message per job, sent as soon as a crawl/radar run evaluates
+    # it) for new notify-city jobs scoring at least this, with at most this many applicants
+    # (unknown counts pass), listed within the last 24 h. Alerted jobs are left out of the digest.
+    instant_alert_min_score: int = 70
+    instant_alert_max_applicants: int = 20
 
     @field_validator(
         "clearance_patterns",
