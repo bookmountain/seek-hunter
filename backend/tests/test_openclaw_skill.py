@@ -73,3 +73,27 @@ def test_skill_md_documents_company_radar():
     assert "radar companies" in text and "add <Company> to radar" in text
     assert "seekhunter-api GET /api/radar/companies" in text
     assert "seekhunter-api POST /api/radar/companies" in text
+
+
+def test_skill_md_documents_follow_ups():
+    text = _text()
+    assert '"who should I follow up?"' in text
+    assert "seekhunter-api GET /api/follow-ups/summary" in text
+    assert "seekhunter-api POST /api/follow-ups/{key}/done" in text
+    assert "seekhunter-api POST /api/follow-ups/{key}/snooze" in text
+    assert "seekhunter-api POST /api/follow-ups/{key}/dismiss" in text
+    assert "`linkedin_reply`" in text and "`voicemail`" in text
+
+
+def test_skill_md_documents_call_script():
+    text = _text()
+    assert '"call script for #12"' in text
+    assert "seekhunter-api POST /api/jobs/12/call-script" in text
+    assert '"kind":"voicemail"' in text
+    assert "48 hours a fortnight" in text
+
+
+def test_skill_md_documents_funnel_with_honest_sample_sizes():
+    text = _text()
+    assert "seekhunter-api GET /api/funnel" in text
+    assert "fewer than 5" in text

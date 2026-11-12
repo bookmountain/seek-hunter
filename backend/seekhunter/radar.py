@@ -18,7 +18,7 @@ from selectolax.lexbor import LexborHTMLParser
 from sqlmodel import Session, col, select
 
 from seekhunter import repo
-from seekhunter.domain import JobData, company_key
+from seekhunter.domain import JobData, company_key, is_agency
 from seekhunter.filters import is_on_topic, title_on_topic
 from seekhunter.models import Job, JobEvaluation, RadarCompany, Run, utcnow
 from seekhunter.pipeline import _apply_contacts, _evaluate, ingest, send_instant_alerts
@@ -74,11 +74,6 @@ def add_company(session: Session, name: str, careers_url: str | None, http, clie
         session.commit()
         session.refresh(row)
     return row
-
-
-def is_agency(company: str, keywords: list[str]) -> bool:
-    low = (company or "").lower()
-    return any(k.strip() and k.strip().lower() in low for k in keywords)
 
 
 def seed_candidates(session: Session, settings, now: datetime) -> list[tuple[str, str | None, int]]:  # noqa: ANN001

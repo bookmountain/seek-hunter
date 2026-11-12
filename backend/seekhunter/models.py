@@ -255,7 +255,9 @@ class Interaction(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     contact_id: int | None = Field(default=None, foreign_key="contacts.id", index=True)
     application_id: int | None = Field(default=None, foreign_key="applications.id", index=True)
-    kind: str  # call | email | linkedin_invite | linkedin_accepted | linkedin_message | meeting | note
+    # call | voicemail | email | linkedin_invite | linkedin_accepted | linkedin_message | linkedin_reply
+    # | meeting | note
+    kind: str
     at: NaiveDatetime = Field(default_factory=utcnow, index=True)
     note: str = ""
     created_at: NaiveDatetime = Field(default_factory=utcnow)
@@ -271,3 +273,31 @@ class ApplicationEvent(SQLModel, table=True):
     to_stage: str | None = None
     at: NaiveDatetime = Field(default_factory=utcnow, index=True)
     note: str = ""
+
+
+class CallScript(SQLModel, table=True):
+    """Cached recruiter call script for one job (see seekhunter.call_script)."""
+
+    __tablename__ = "call_scripts"
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="jobs.id", unique=True, index=True)
+    questions: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    pitch: str = ""
+    source: str = "template"  # llm | template
+    provider: str | None = None
+    warnings: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: NaiveDatetime = Field(default_factory=utcnow)
+
+
+class FollowUpState(SQLModel, table=True):
+    """Snoozed / dismissed / done marker for one follow-up occurrence (see seekhunter.followups).
+    Keys embed the triggering activity's timestamp, so a new cycle gets a fresh key."""
+
+    __tablename__ = "follow_up_states"
+
+    id: int | None = Field(default=None, primary_key=True)
+    key: str = Field(index=True, unique=True)
+    status: str  # snoozed | dismissed | done
+    until: NaiveDatetime | None = None
+    created_at: NaiveDatetime = Field(default_factory=utcnow)

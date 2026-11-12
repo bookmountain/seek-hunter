@@ -247,6 +247,11 @@ class AppSettings(BaseModel):
     llm_providers: list[str] = Field(default_factory=lambda: ["anthropic", "openclaw"])
     notify_enabled: bool = True
     recap_enabled: bool = True
+    # Follow-up loop: an application in `applied`, a LinkedIn invite, or an unanswered LinkedIn
+    # message becomes due after this many days without activity; the digest is a daily Telegram
+    # message (skipped when nothing is due).
+    follow_up_days: int = Field(default=5, ge=1, le=60)
+    follow_up_digest_enabled: bool = True
     max_pages_per_search: int = 3
     max_notify_per_run: int = 20
     max_insights_per_run: int = 250

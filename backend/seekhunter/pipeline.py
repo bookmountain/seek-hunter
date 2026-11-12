@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session
 
-from seekhunter import market, repo
+from seekhunter import followups, market, repo
 from seekhunter.contacts import extract_contacts, is_plausible_name, normalize_phone
 from seekhunter.domain import CITY_BY_PROFILE_LOCATION, JobData, company_key
 from seekhunter.filters import evaluate_exclusions
@@ -18,6 +18,7 @@ from seekhunter.models import Application, Job, JobEvaluation, Outbox, Run, Sear
 from seekhunter.notify import (
     DigestItem,
     NotifyError,
+    _app_base,
     format_digest,
     format_instant_alert,
     format_market_brief,
@@ -610,8 +611,8 @@ def run_recap(session: Session, notifier, public_url: str, dry_run: bool = False
     rows = repo.list_jobs(session, view="active", since=since, limit=500, cities=settings.notify_cities)
     excluded = repo.count_excluded_since(session, since, cities=settings.notify_cities)
     now = utcnow()
-    due = repo.follow_ups_due(session, now)[:3]
-    follow_ups = [{"company": a.company, "title": a.title, "days": (now - a.applied_at).days} for a in due]
+    due = [f for f in followups.due(session, now) if f.kind == "application_nudge"][:3]
+    follow_ups = [{"company": f.company, "title": f.title, "days": f.days} for f in due]
     for text in format_recap(
         _digest_items(session, rows, now),
         excluded,
@@ -623,6 +624,23 @@ def run_recap(session: Session, notifier, public_url: str, dry_run: bool = False
     if not dry_run:
         session.add(Run(kind="recap", finished_at=utcnow(), new_jobs=len(rows)))
         session.commit()
+
+
+def run_follow_up_digest(session: Session, notifier, public_url: str, dry_run: bool = False) -> int:  # noqa: ANN001
+    """Daily Telegram digest of due follow-ups. Sends nothing when nothing is due (or it's disabled).
+    Returns how many items were due."""
+    settings = repo.load_settings(session)
+    if not settings.follow_up_digest_enabled:
+        return 0
+    now = utcnow()
+    items = followups.due(session, now)
+    text = followups.format_digest(items, f"{_local(now):%a %d %b}", _app_base(public_url))
+    if text:
+        _send(session, notifier, text)
+    if not dry_run:
+        session.add(Run(kind="follow_ups", finished_at=utcnow(), notified=len(items) if text else 0))
+        session.commit()
+    return len(items)
 
 
 def run_insights_brief(

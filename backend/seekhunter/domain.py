@@ -12,10 +12,12 @@ _COMPANY_SUFFIXES = re.compile(r"\b(pty|ltd|limited|inc|group|australia|au|sa|ns
 APPLICATION_STAGES = ("applied", "screening", "interview", "offer", "rejected", "withdrawn", "no_response")
 INTERACTION_KINDS = (
     "call",
+    "voicemail",
     "email",
     "linkedin_invite",
     "linkedin_accepted",
     "linkedin_message",
+    "linkedin_reply",
     "meeting",
     "note",
 )
@@ -162,6 +164,12 @@ def html_to_lines(html: str) -> str:
 
 def _norm(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def is_agency(company: str, keywords: list[str]) -> bool:
+    """Recruitment agency (vs direct employer): the name contains one of `settings.agency_keywords`."""
+    low = (company or "").lower()
+    return any(k.strip() and k.strip().lower() in low for k in keywords)
 
 
 def company_key(company: str) -> str:
