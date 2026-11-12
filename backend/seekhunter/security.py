@@ -89,6 +89,9 @@ def same_origin(request: Request, public_url: str) -> bool:
     return bool(referer) and _origin_of(referer) == expected
 
 
+WEBHOOK_PREFIX = "/api/radar/webhook/"
+
+
 def _tunnel_login_gate(request: Request, env: Env) -> JSONResponse | None:
     """Access rules for tunnel traffic when login is enabled. None means: let it through."""
     path = request.url.path
@@ -112,6 +115,11 @@ def _gate(request: Request, env: Env) -> JSONResponse | None:
     request.state.via_tunnel = via_tunnel
     request.state.client_ip = cf_ip if via_tunnel and cf_ip else remote
     if request.url.path == "/api/health":
+        return None
+    if via_tunnel and not cf_ip and request.method == "POST" \
+            and request.url.path.startswith(WEBHOOK_PREFIX):
+        # Direct LAN call from the tunnel host (changedetection.io on vm100), not from cloudflared:
+        # the webhook endpoint authenticates itself with RADAR_WEBHOOK_SECRET.
         return None
     if via_tunnel and env.login_enabled:
         if not cf_ip:

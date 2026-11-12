@@ -202,6 +202,20 @@ def test_tunnel_without_cf_header_is_forbidden(tunnel):
     assert tunnel.get("/api/jobs").status_code == 403
 
 
+def test_radar_webhook_reachable_directly_from_tunnel_host(tunnel, monkeypatch):
+    monkeypatch.setenv("RADAR_WEBHOOK_SECRET", "s" * 24)
+    del tunnel.headers["CF-Connecting-IP"]
+    r = tunnel.post("/api/radar/webhook/changedetection", json={"message": "x"})
+    assert r.status_code == 401 and r.json() == {"detail": "bad secret"}  # reached the endpoint
+    assert tunnel.get("/api/radar/webhook/changedetection").status_code == 403
+    assert tunnel.post("/api/radar/companies", json={}).status_code == 403
+
+
+def test_radar_webhook_via_cloudflare_still_needs_login(tunnel):
+    r = tunnel.post("/api/radar/webhook/changedetection", json={}, headers={"Origin": ORIGIN})
+    assert r.status_code == 401 and r.json() == {"detail": "authentication required"}
+
+
 def test_me_always_reachable(tunnel):
     assert tunnel.get("/api/auth/me").json() == ME_ANON
 
