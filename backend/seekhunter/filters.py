@@ -95,3 +95,14 @@ def _off_topic(job: JobData, settings: AppSettings) -> str | None:
         return None
     found = ", ".join(sorted(skills)) or "none"
     return f"Not an IT/software role: title '{title[:80]}', tech skills in ad: {found}"
+
+
+def title_on_topic(title: str, settings: AppSettings) -> bool:
+    """The title alone reads as an IT/software role (`it_title_patterns`)."""
+    return any(re.search(p, title or "", re.IGNORECASE) for p in settings.it_title_patterns)
+
+
+def is_on_topic(job: JobData, settings: AppSettings) -> bool:
+    """The same IT/software test as the `off_topic` exclusion (title pattern, or enough tech skills
+    in the ad)."""
+    return _off_topic(job, settings) is None

@@ -207,3 +207,16 @@ def test_off_topic_can_be_disabled():
 def test_intelligence_agencies_are_defence():
     for company in ["Australian Signals Directorate", "ASIO", "Office of National Intelligence"]:
         assert "defence" in evaluate_exclusions(job(company=company), AppSettings()).reasons, company
+
+
+def test_title_on_topic_and_is_on_topic():
+    from seekhunter.filters import is_on_topic, title_on_topic
+
+    s = AppSettings()
+    assert title_on_topic("Senior Software Engineer", s)
+    assert not title_on_topic("Retail Store Manager", s)
+    retail = JobData(source="radar", external_id="1", title="Retail Store Manager", company="C", location="",
+                     work_type="unknown", url="u", description_html="<p>Serve customers</p>")
+    assert not is_on_topic(retail, s)
+    assert is_on_topic(JobData(**{**retail.__dict__, "title": "Graduate Engineer",
+                                  "description_html": "<p>Python, React, AWS and SQL</p>"}), s)
