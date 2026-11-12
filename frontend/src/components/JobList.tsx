@@ -229,14 +229,27 @@ export function JobList({
                           TEL
                         </span>
                       )}
-                      {j.applicant_count !== null && (
-                        <span
-                          title={`${j.applicant_count} applicants on SEEK`}
-                          className="ml-2 border border-rule px-1 py-px align-[1px] font-mono text-[9.5px] font-medium tracking-[0.1em] text-ink-muted"
-                        >
-                          {j.applicant_count} APPS
-                        </span>
-                      )}
+                      {j.applicant_count !== null && (() => {
+                        const ageH = j.insights_checked_at
+                          ? (Date.now() - parseIsoUtc(j.insights_checked_at).getTime()) / 3_600_000
+                          : Infinity;
+                        const stale = ageH > 48;
+                        const checked = Number.isFinite(ageH)
+                          ? ageH < 24 ? `${Math.max(1, Math.round(ageH))}h ago` : `${Math.round(ageH / 24)}d ago`
+                          : "never";
+                        return (
+                          <span
+                            data-testid="apps-tag"
+                            title={`${j.applicant_count} applicants on ${j.source === "linkedin" ? "LinkedIn" : "SEEK"} · checked ${checked}${stale ? " · may be out of date" : ""}`}
+                            className={cn(
+                              "ml-2 border px-1 py-px align-[1px] font-mono text-[9.5px] font-medium tracking-[0.1em]",
+                              stale ? "border-dashed border-rule text-ink-faint" : "border-rule text-ink-muted",
+                            )}
+                          >
+                            {j.applicant_count} APPS{stale ? "?" : ""}
+                          </span>
+                        );
+                      })()}
                       {j.application ? (
                         <span
                           title={`Applied · ${j.application.stage.replace("_", " ")}`}
