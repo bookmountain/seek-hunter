@@ -18,10 +18,12 @@ export const stageLabel = (s: string) => STAGE_LABEL[s as ApplicationStage] ?? s
 /** Past-tense labels for the timeline ("Called Brayden"). */
 export const KIND_PAST: Record<InteractionKind, string> = {
   call: "Called",
+  voicemail: "Left a voicemail for",
   email: "Emailed",
   linkedin_invite: "LinkedIn invite to",
   linkedin_accepted: "Invite accepted by",
   linkedin_message: "LinkedIn message with",
+  linkedin_reply: "LinkedIn reply from",
   meeting: "Met",
   note: "Note on",
 };
@@ -29,9 +31,12 @@ export const KIND_PAST: Record<InteractionKind, string> = {
 /** Button labels for quick logging. */
 export const KIND_BUTTON: Partial<Record<InteractionKind, string>> = {
   call: "Called",
+  voicemail: "Left voicemail",
   email: "Emailed",
   linkedin_invite: "LinkedIn invite",
   linkedin_accepted: "Invite accepted",
+  linkedin_message: "LinkedIn message",
+  linkedin_reply: "They replied",
   meeting: "Meeting",
   note: "Note",
 };
@@ -41,7 +46,7 @@ export function useInvalidateHistory() {
   const qc = useQueryClient();
   return useCallback(
     (jobId?: number | null) => {
-      for (const key of ["jobs", "applications", "contacts", "contact", "companies", "history"]) {
+      for (const key of ["jobs", "applications", "contacts", "contact", "companies", "history", "follow-ups", "funnel", "notifications"]) {
         qc.invalidateQueries({ queryKey: [key] });
       }
       if (jobId) qc.invalidateQueries({ queryKey: ["job", jobId] });

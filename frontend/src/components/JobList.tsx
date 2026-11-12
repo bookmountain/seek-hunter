@@ -17,10 +17,12 @@ const MAX_SKILLS = 3;
 /** Short past-tense labels for logged recruiter activity in the Status column. */
 const ACTIVITY_LABEL: Record<string, string> = {
   call: "Called",
+  voicemail: "Voicemail",
   email: "Emailed",
   linkedin_invite: "Invited",
   linkedin_accepted: "Accepted",
   linkedin_message: "Messaged",
+  linkedin_reply: "Replied",
   meeting: "Met",
 };
 

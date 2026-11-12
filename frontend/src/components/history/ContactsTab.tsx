@@ -12,8 +12,19 @@ import { cn } from "@/lib/utils";
 import { KIND_BUTTON, QuickLog, StageTag, useInvalidateHistory } from "./shared";
 
 const TH = "kicker px-3 py-2 text-left text-[10.5px] font-medium text-ink-muted";
-const QUICK: InteractionKind[] = ["call", "email", "linkedin_invite", "linkedin_accepted", "meeting", "note"];
-const KIND_NAME: Record<string, string> = { ...KIND_BUTTON, linkedin_message: "LinkedIn message" };
+const QUICK: InteractionKind[] = [
+  "call",
+  "voicemail",
+  "email",
+  "linkedin_invite",
+  "linkedin_accepted",
+  "linkedin_message",
+  "linkedin_reply",
+  "meeting",
+  "note",
+];
+const KIND_NAME: Record<string, string> = { ...KIND_BUTTON };
+const LINKEDIN_LABEL: Record<string, string> = { sent: "Invite sent", accepted: "Connected", messaged: "Messaged", replied: "Replied" };
 const CONTACTS_HELP =
   "People you've contacted or applied through. Log a call, email or LinkedIn invite from a job's Recruiter block to add someone.";
 const telHref = (p: string) => `tel:${p.replace(/[^\d+]/g, "")}`;
@@ -247,7 +258,12 @@ export function ContactsTab({ initialOpen, q: urlQ, setQ: commitQ }: { initialOp
                           Profile ↗
                         </a>
                       ) : (
-                        <span className="text-ink-muted">—</span>
+                        !c.linkedin_status && <span className="text-ink-muted">—</span>
+                      )}
+                      {c.linkedin_status && (
+                        <span className={cn("kicker block text-[10px]", c.linkedin_status === "replied" ? "text-blue" : "text-ink-muted")}>
+                          {LINKEDIN_LABEL[c.linkedin_status] ?? c.linkedin_status}
+                        </span>
                       )}
                     </td>
                     <td className="num px-3 py-3 text-[12px] whitespace-nowrap">

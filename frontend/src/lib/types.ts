@@ -403,7 +403,17 @@ export interface RoleFamilyRow {
 export const APPLICATION_STAGES = ["applied", "screening", "interview", "offer", "rejected", "withdrawn", "no_response"] as const;
 export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
 
-export const INTERACTION_KINDS = ["call", "email", "linkedin_invite", "linkedin_accepted", "linkedin_message", "meeting", "note"] as const;
+export const INTERACTION_KINDS = [
+  "call",
+  "voicemail",
+  "email",
+  "linkedin_invite",
+  "linkedin_accepted",
+  "linkedin_message",
+  "linkedin_reply",
+  "meeting",
+  "note",
+] as const;
 export type InteractionKind = (typeof INTERACTION_KINDS)[number];
 
 export interface ApplicationSummary {
@@ -472,7 +482,11 @@ export interface Contact {
   interaction_count: number;
   job_count: number;
   application_count: number;
+  /** LinkedIn progress from the logged interactions; older servers omit it. */
+  linkedin_status?: LinkedInStatus | null;
 }
+
+export type LinkedInStatus = "sent" | "accepted" | "messaged" | "replied";
 
 export interface Interaction {
   id: number;
@@ -539,4 +553,61 @@ export interface NotificationsResult {
   unread_count: number;
   by_city: CityCount[];
   items: NotificationItem[];
+}
+
+// ---------------------------------------------------------------- call script, follow-ups, funnel
+
+export interface CallScript {
+  job_id: number;
+  questions: string[];
+  pitch: string;
+  /** llm = AI-written and checked against the resume; template = deterministic fallback */
+  source: "llm" | "template";
+  provider: string | null;
+  warnings: string[];
+  /** false = an instant template preview that hasn't been saved */
+  cached: boolean;
+  created_at: string | null;
+  agency: boolean;
+}
+
+export type FollowUpKind = "application_nudge" | "linkedin_invite_pending" | "linkedin_thank" | "linkedin_no_reply";
+
+export interface FollowUp {
+  key: string;
+  kind: FollowUpKind;
+  days: number;
+  since: string;
+  company: string;
+  title: string;
+  channel: "email" | "linkedin" | "phone";
+  message: string;
+  subject: string | null;
+  hint: string | null;
+  application_id: number | null;
+  job_id: number | null;
+  contact_id: number | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  contact_linkedin: string | null;
+  link: string;
+}
+
+export interface FunnelRow {
+  label: string;
+  applied: number;
+  responded: number;
+  interview: number;
+  offer: number;
+  response_rate: number | null;
+  interview_rate: number | null;
+}
+
+export interface FunnelResult {
+  total: FunnelRow;
+  by_source: FunnelRow[];
+  by_employer: FunnelRow[];
+  by_work_type: FunnelRow[];
+  by_call: FunnelRow[];
 }

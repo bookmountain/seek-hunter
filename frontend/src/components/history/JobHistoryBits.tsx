@@ -55,8 +55,8 @@ export function ApplicationRow({ jobId, app }: { jobId: number; app: Application
   );
 }
 
-const RECRUITER_KINDS: InteractionKind[] = ["call", "email", "linkedin_invite"];
-const KIND_NAME: Record<string, string> = { ...KIND_BUTTON, linkedin_message: "LinkedIn message" };
+const RECRUITER_KINDS: InteractionKind[] = ["call", "voicemail", "email", "linkedin_invite"];
+const KIND_NAME: Record<string, string> = { ...KIND_BUTTON };
 const same = (a: string | null | undefined, b: string | null | undefined) => (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
 
 /** Quick-log toggles for the ad's recruiter (creates/links the contact server-side), plus the log so far. */
@@ -71,7 +71,7 @@ export function RecruiterQuickLog({ jobId, name, company }: { jobId: number; nam
     enabled: !!contact,
   });
   const log = useMutation({
-    mutationFn: (kind: InteractionKind) => api.jobContactLog(jobId, kind),
+    mutationFn: ({ kind, note }: { kind: InteractionKind; note: string }) => api.jobContactLog(jobId, kind, note),
     onSuccess: () => invalidate(jobId),
     onError: (e: Error) => toast.error(errMsg(e)),
   });
@@ -86,9 +86,8 @@ export function RecruiterQuickLog({ jobId, name, company }: { jobId: number; nam
       <QuickLog
         kinds={RECRUITER_KINDS}
         interactions={interactions}
-        withNote={false}
         pending={log.isPending}
-        onLog={(kind) => log.mutateAsync(kind)}
+        onLog={(kind, note) => log.mutateAsync({ kind, note })}
         onRemove={(id) => remove.mutateAsync(id)}
       />
       {interactions.length > 0 && (

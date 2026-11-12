@@ -1,4 +1,5 @@
 import type { Job } from "@/lib/types";
+import { CallScript } from "./CallScript";
 import { CopyButton } from "./CopyButton";
 import { RecruiterQuickLog } from "./history/JobHistoryBits";
 
@@ -95,6 +96,7 @@ export function RecruiterBlock({ job, jobId }: { job: Contact; jobId?: number })
           {search.google && <ExtLink href={search.google}>Search Google</ExtLink>}
         </div>
       </div>
+      {jobId !== undefined && (name || phone) && <CallScript jobId={jobId} />}
       {jobId !== undefined && name && <RecruiterQuickLog jobId={jobId} name={name} company={job.company} />}
     </section>
   );

@@ -1,5 +1,8 @@
 import type {
   AppSettings,
+  CallScript,
+  FollowUp,
+  FunnelResult,
   TailoringListItem,
   CityCount,
   NotificationsResult,
@@ -165,6 +168,16 @@ export const api = {
   deleteInteraction: (id: number) => request<void>("DELETE", `/api/interactions/${id}`),
   jobContactLog: (jobId: number, kind: InteractionKind, note = "") =>
     request<Interaction>("POST", `/api/jobs/${jobId}/contact-log`, { kind, note }),
+  callScript: (jobId: number) => request<CallScript>("GET", `/api/jobs/${jobId}/call-script`),
+  generateCallScript: (jobId: number, refresh = false) =>
+    request<CallScript>("POST", `/api/jobs/${jobId}/call-script${refresh ? "?refresh=1" : ""}`),
+  followUps: () => request<FollowUp[]>("GET", "/api/follow-ups"),
+  snoozeFollowUp: (key: string, days = 3) =>
+    request<void>("POST", `/api/follow-ups/${encodeURIComponent(key)}/snooze`, { days }),
+  dismissFollowUp: (key: string) => request<void>("POST", `/api/follow-ups/${encodeURIComponent(key)}/dismiss`),
+  doneFollowUp: (key: string, note = "") =>
+    request<void>("POST", `/api/follow-ups/${encodeURIComponent(key)}/done`, { note }),
+  funnel: (days?: number) => request<FunnelResult>("GET", `/api/funnel${qs({ days: days ? String(days) : undefined })}`),
   companies: (q?: string) => request<CompanyHistory[]>("GET", `/api/companies${qs({ q })}`),
   uiPrefs: () => request<Record<string, Record<string, unknown>>>("GET", "/api/ui-prefs"),
   putUiPrefs: (page: string, prefs: Record<string, string>) =>
