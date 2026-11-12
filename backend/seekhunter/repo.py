@@ -828,7 +828,8 @@ def prune_uncontacted_contacts(session: Session) -> int:
     return removed
 
 
-ACTIVITY_KINDS = ("call", "email", "linkedin_invite", "linkedin_accepted", "linkedin_message", "meeting")
+ACTIVITY_KINDS = ("call", "voicemail", "email", "linkedin_invite", "linkedin_accepted", "linkedin_message",
+                  "linkedin_reply", "meeting")
 
 
 def contact_activity_by_job_ids(session: Session, job_ids: list[int]) -> dict[int, list[str]]:

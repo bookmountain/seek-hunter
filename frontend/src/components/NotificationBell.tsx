@@ -26,6 +26,7 @@ function BellIcon() {
 function href(i: NotificationItem): string {
   if (i.type === "job" && i.job_id) return `/?job=${i.job_id}${i.city ? `&city=${i.city}` : ""}`;
   if (i.type === "tailoring" && i.job_id) return `/jobs/${i.job_id}/tailor${i.tailoring_id ? `?run=${i.tailoring_id}` : ""}`;
+  if (i.type === "follow_up") return "/history?tab=followups"; // the ready-to-send message lives there
   return "/history?tab=applications";
 }
 

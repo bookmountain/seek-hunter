@@ -63,6 +63,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--cities", nargs="*", default=None, help="override settings.market_cities (e.g. adelaide perth)"
     )
     market.add_argument("--dry-run", action="store_true", help="search only, no database writes")
+    fups = sub.add_parser("follow-ups", help="send the daily follow-ups digest (skipped when nothing is due)")
+    fups.add_argument("--dry-run", action="store_true")
     brief = sub.add_parser("insights-brief", help="send the weekly market insights brief")
     brief.add_argument("--dry-run", action="store_true")
     tailor = sub.add_parser("tailor", help="tailor the resume + cover letter for one job")
@@ -227,6 +229,15 @@ def main(argv: list[str] | None = None) -> int:
                     session, SeekSource(PoliteClient()), settings, cities=args.cities, dry_run=args.dry_run
                 )
                 print(json.dumps(report, indent=1))
+                return 0
+
+        if args.command == "follow-ups":
+            from seekhunter.pipeline import run_follow_up_digest
+
+            # Own lock: a crawl holding the main lock must not make the daily digest skip its slot.
+            with run_lock(env.data_dir, name="follow-ups.lock"), Session(get_engine()) as session:
+                repo.ensure_seed(session)
+                print(f"{run_follow_up_digest(session, notifier, env.public_url, dry_run=args.dry_run)} due")
                 return 0
 
         blocking = args.command in ("rescore", "contacts", "insights", "check-closed")

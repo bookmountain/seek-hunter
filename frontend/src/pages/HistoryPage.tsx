@@ -1,18 +1,24 @@
+import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { ResetFilters } from "@/components/ResetFilters";
 import { usePersistedFilters } from "@/hooks/usePersistedFilters";
+import { api } from "@/lib/api";
 import type { ApplicationStage } from "@/lib/types";
 import { ApplicationsTab } from "@/components/history/ApplicationsTab";
 import { CompaniesTab } from "@/components/history/CompaniesTab";
 import { ContactsTab } from "@/components/history/ContactsTab";
+import { FollowUpsTab } from "@/components/history/FollowUpsTab";
+import { FunnelTab } from "@/components/history/FunnelTab";
 import { TimelineTab } from "@/components/history/TimelineTab";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "applications", label: "Applications" },
+  { id: "followups", label: "Follow-ups" },
   { id: "contacts", label: "Contacts" },
   { id: "companies", label: "Companies" },
   { id: "timeline", label: "Timeline" },
+  { id: "funnel", label: "Funnel" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -26,6 +32,7 @@ export function HistoryPage() {
   const tab: Tab = TABS.some((t) => t.id === raw) ? (raw as Tab) : "applications";
   const contactId = Number(params.get("contact")) || null;
   const setFilter = filters.set;
+  const { data: due } = useQuery({ queryKey: ["follow-ups"], queryFn: api.followUps });
   const select = (id: Tab) => {
     setFilter({ tab: id });
     if (contactId) setParams((prev) => { const next = new URLSearchParams(prev); next.delete("contact"); return next; }, { replace: true });
@@ -53,6 +60,11 @@ export function HistoryPage() {
               )}
             >
               {t.label}
+              {t.id === "followups" && !!due?.length && (
+                <span className="ml-1.5 bg-blue px-1 py-px font-mono text-[10px] text-white no-underline" aria-label={`${due.length} due`}>
+                  {due.length}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -68,6 +80,8 @@ export function HistoryPage() {
         )}
         {tab === "companies" && <CompaniesTab q={filters.values.q} setQ={(q) => setFilter({ q })} />}
         {tab === "timeline" && <TimelineTab />}
+        {tab === "followups" && <FollowUpsTab />}
+        {tab === "funnel" && <FunnelTab />}
       </div>
     </div>
   );

@@ -1,0 +1,9 @@
+[Unit]
+Description=SeekHunter follow-ups digest 09:00 Adelaide
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Australia/Adelaide
+Persistent=true
+
+[Install]
+WantedBy=timers.target

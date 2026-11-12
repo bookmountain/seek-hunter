@@ -10,7 +10,8 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 from sqlmodel import Session, col, select
 
-from seekhunter import auth, market, repo
+from seekhunter import auth, followups, market, repo
+from seekhunter.api_followups import router as followups_router
 from seekhunter.api_radar import router as radar_router
 from seekhunter.config import get_env
 from seekhunter.contacts import linkedin_search_urls
@@ -208,6 +209,7 @@ class ContactOut(BaseModel):
     interaction_count: int
     job_count: int
     application_count: int
+    linkedin_status: str | None = None  # sent | accepted | messaged | replied
 
 
 class ContactCreateIn(BaseModel):
@@ -567,7 +569,8 @@ def _contact_out(session: Session, c: Contact) -> ContactOut:
     stats = repo.contact_stats(session, c.id)
     return ContactOut(id=c.id, name=c.name, company=c.company, company_key=c.company_key, role=c.role,
                       phone=c.phone, email=c.email, linkedin=c.linkedin, notes=c.notes,
-                      created_at=c.created_at, updated_at=c.updated_at, **stats)
+                      created_at=c.created_at, updated_at=c.updated_at,
+                      linkedin_status=followups.linkedin_statuses(session, [c.id]).get(c.id), **stats)
 
 
 def _interaction_out(i: Interaction) -> InteractionOut:
@@ -763,7 +766,7 @@ def _notifications_payload(session: Session, now: datetime, limit: int) -> Notif
     _stored, since = repo.notifications_read_at(session, now)
     job_rows = repo.unread_job_items(session, since)
     tailoring_rows = repo.unread_tailoring_items(session, since)
-    due = repo.follow_ups_due(session, now)
+    due = followups.due(session, now)
 
     job_items = [
         NotificationItemOut(type="job", at=j.first_seen_at, title=j.title, subtitle=j.company,
@@ -784,9 +787,11 @@ def _notifications_payload(session: Session, now: datetime, limit: int) -> Notif
     combined = sorted(job_items + tailoring_items, key=lambda i: i.at, reverse=True)[:limit]
 
     follow_up_items = [
-        NotificationItemOut(type="follow_up", at=a.applied_at, title=a.title, subtitle=a.company,
-                            application_id=a.id, unread=False)
-        for a in due
+        NotificationItemOut(type="follow_up", at=f.since, title=f.title or f.contact_name or f.company,
+                            subtitle=" · ".join(x for x in (followups.KIND_LABEL[f.kind], f.contact_name,
+                                                            f.company) if x),
+                            job_id=f.job_id, application_id=f.application_id, unread=False)
+        for f in due
     ]
 
     by_city_counts: dict[str, int] = {}
@@ -1075,12 +1080,12 @@ def create_app(init: bool = True) -> FastAPI:
             note = f" — {i.note}" if i.note else ""
             lines.append(f"- {who}: {i.kind} · {age}d ago{note}")
 
-        due = repo.follow_ups_due(session, now)
+        due = followups.due(session, now)
         lines.append("")
-        lines.append(f"Follow-ups due (applied, no activity in 7d): {len(due)}")
-        for a in due[:10]:
-            age = (now - a.applied_at).days
-            lines.append(f"- {a.company} · {a.title} · {age}d")
+        lines.append(f"Follow-ups due: {len(due)} (full messages: GET /api/follow-ups/summary)")
+        for f in due[:10]:
+            what = " · ".join(x for x in (f.company, f.title or f.contact_name) if x)
+            lines.append(f"- {followups.KIND_LABEL[f.kind]}: {what} · {f.days}d")
 
         return "\n".join(lines)
 
@@ -1448,6 +1453,7 @@ def create_app(init: bool = True) -> FastAPI:
         return _current_file(hash, f"resume-{n}.png")
 
     app.include_router(radar_router)  # before the SPA catch-all below
+    app.include_router(followups_router)
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):

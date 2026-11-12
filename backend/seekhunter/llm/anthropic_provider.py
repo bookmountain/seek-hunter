@@ -33,3 +33,18 @@ class AnthropicProvider:
         if response.parsed_output is None:
             raise LLMUnavailable("anthropic: no parsed output")
         return to_scores(response.parsed_output)
+
+
+def complete_text(api_key: str, prompt: str, *, timeout: float = 75.0, max_tokens: int = 800,
+                  client: anthropic.Anthropic | None = None) -> str:
+    """One plain-text completion (used for short generated text such as call scripts)."""
+    client = client or anthropic.Anthropic(api_key=api_key, max_retries=1, timeout=timeout)
+    try:
+        response = client.messages.create(model=MODEL, max_tokens=max_tokens,
+                                          messages=[{"role": "user", "content": prompt}])
+    except anthropic.APIError as e:
+        raise LLMUnavailable(f"anthropic: {e}") from e
+    text = "".join(getattr(b, "text", "") for b in response.content or [])
+    if not text:
+        raise LLMUnavailable("anthropic: empty reply")
+    return text

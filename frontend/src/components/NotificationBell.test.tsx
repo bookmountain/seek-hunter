@@ -60,7 +60,7 @@ describe("NotificationBell", () => {
     expect(within(panel).getByTestId("bell-cities").textContent).toBe("Adelaide 1 · Melbourne 1");
     expect(within(panel).getByRole("link", { name: /React Developer/ }).getAttribute("href")).toBe("/?job=7&city=melbourne");
     expect(within(panel).getByRole("link", { name: /Tailored resume ready — Junior Dev/ }).getAttribute("href")).toBe("/jobs/5/tailor?run=9");
-    expect(within(panel).getByRole("link", { name: /Follow up: Graduate Engineer/ }).getAttribute("href")).toBe("/history?tab=applications");
+    expect(within(panel).getByRole("link", { name: /Follow up: Graduate Engineer/ }).getAttribute("href")).toBe("/history?tab=followups");
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
   });

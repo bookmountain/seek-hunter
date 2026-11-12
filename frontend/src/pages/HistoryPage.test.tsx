@@ -62,6 +62,7 @@ describe("HistoryPage", () => {
       { company: "Robert Walters", company_key: "robert walters", application_count: 1, last_applied_at: now, applications: [{ id: 3, title: APP.title, applied_at: now, stage: "applied", tailoring_id: 4 }], contacts: [{ id: 9, name: "Brayden Mackay" }] },
     ]);
     vi.spyOn(api, "contacts").mockResolvedValue([CONTACT]);
+    vi.spyOn(api, "followUps").mockResolvedValue([]);
     vi.spyOn(api, "contact").mockResolvedValue({ ...CONTACT, interactions: [], jobs: [], applications: [APP] } as ContactDetail);
     vi.spyOn(api, "history").mockResolvedValue([
       { at: now, type: "event", kind: "created", company: "Robert Walters", title: APP.title, contact_name: null, application_id: 3, contact_id: null, note: "", from_stage: null, to_stage: "applied" },
@@ -69,10 +70,10 @@ describe("HistoryPage", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders the four tabs and switches between them", async () => {
+  it("renders the tabs and switches between them", async () => {
     wrap(<HistoryPage />);
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Applications", "Contacts", "Companies", "Timeline"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Applications", "Follow-ups", "Contacts", "Companies", "Timeline", "Funnel"]);
     expect(await screen.findByRole("link", { name: APP.title })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Tailored #4" }).getAttribute("href")).toBe("/jobs/12/tailor?run=4");
     fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
@@ -125,7 +126,7 @@ describe("job-side history bits", () => {
     const log = vi.spyOn(api, "jobContactLog").mockResolvedValue({ id: 1, contact_id: 9, application_id: null, kind: "email", at: now, note: "", created_at: now });
     wrap(<RecruiterQuickLog jobId={12} name="Brayden Mackay" company="Robert Walters" />);
     fireEvent.click(screen.getByRole("button", { name: "Emailed" }));
-    await waitFor(() => expect(log).toHaveBeenCalledWith(12, "email"));
+    await waitFor(() => expect(log).toHaveBeenCalledWith(12, "email", ""));
   });
 
   it("shows the prior-application warning box", () => {
